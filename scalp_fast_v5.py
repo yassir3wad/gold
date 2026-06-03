@@ -16,11 +16,11 @@ MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
 
 # Higher-TF swing S/R map (matches the 1H/4H/Daily zones drawn on the chart). (lo, hi, label)
-HTF_R = [(4445,4450,"R 4447 (broken lvl/15m EMA50)"), (4460,4468,"R 4462-68 (1H+15m)"),
-         (4473,4478,"R 4475 (1H EMA50/15m EMA200)"), (4495,4503,"KEY R 4500 (4H EMA50/1H EMA200/fib OTE)"),
+HTF_R = [(4459,4468,"R 4459-68 (1H+15m highs)"), (4473,4478,"R 4475 (1H EMA50/15m EMA200)"),
+         (4493,4498,"KEY R 4496 (PDH + Asian-H + 4H EMA50)"), (4511,4515,"R 4513 (1H high)"),
          (4538,4545,"R 4541 (1H/4H lower high)")]
-HTF_S = [(4424,4434,"S 4426-34 (1H+15m multi-touch)"), (4398,4406,"Support 4400 (4H+1H)"),
-         (4351,4368,"BUY ZONE Daily EMA200")]
+HTF_S = [(4438,4447,"S 4438-47 (15m EMA50 + 1H lows)"), (4423,4434,"S 4423-34 (prior-day low + 15m multi-touch)"),
+         (4398,4406,"Support 4400 (4H+1H)"), (4351,4368,"BUY ZONE Daily EMA200")]
 def near_htf(price, levels, tol=4):
     for lo, hi, lab in levels:
         if lo - tol <= price <= hi + tol: return (lo, hi, lab)
@@ -34,10 +34,24 @@ NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (ma
 CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")
 COOLDOWN_MIN = 8                   # no new signal for N minutes after one fires (anti-clustering)
 
-def vwap(bars):
-    num = sum(((x['high']+x['low']+x['close'])/3) * x.get('volume', 0) for x in bars)
-    den = sum(x.get('volume', 0) for x in bars)
-    return round(num/den, 2) if den else None
+def _read_vwap_values():
+    def f(d, k):
+        try: return float(str(d.get(k)).replace(",", ""))
+        except Exception: return None
+    for s in tv("values").get("studies", []):
+        if "Volume Weighted" in s.get("name", ""):
+            v = s.get("values", {})
+            return f(v, "VWAP"), f(v, "Upper Band #1"), f(v, "Lower Band #1")
+    return None, None, None
+
+def vwap_chart():
+    """Read TradingView's session-anchored VWAP + bands from the chart (works on any TF).
+    If the indicator isn't on the chart, add it and re-read. No computed fallback."""
+    vw, up, lo = _read_vwap_values()
+    if vw is None:
+        tv("indicator", "add", "Volume Weighted Average Price")   # self-heal: re-add if removed
+        vw, up, lo = _read_vwap_values()
+    return vw, up, lo
 
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
@@ -224,22 +238,27 @@ def main():
     dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < 8
     dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < 8
 
-    # --- v2: VWAP, round#, volume, session ---
-    vw = vwap(b)
+    # --- VWAP: chart session-anchored only (self-heals if removed; no computed fallback) ---
+    vw, vw_up, vw_lo = vwap_chart()
     r10 = round(price/10)*10; near_round = r10 if abs(r10-price) < 2 else None
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
     ts = last['time']; sess_ok = in_session(ts); news = in_news(ts)
+    asian_now = not sess_ok   # overnight/Asian window (off London-NY) — Asian range still forming, don't use it as a level
     # extended level map: HTF zones + dynamic (VWAP / round# / prior-day H-L / Asian H-L) for grading
     dynR, dynS = list(HTF_R), list(HTF_S)
     if FL["extended_levels"]:
-        for lvl, lab in [(PDH,"prior-day high"), (PDL,"prior-day low"), (ASIA_H,"Asian high"),
-                         (ASIA_L,"Asian low"), (vw,"VWAP"), (near_round,f"round {near_round}")]:
+        ext = [(PDH,"prior-day high"), (PDL,"prior-day low"), (vw,"VWAP"), (near_round,f"round {near_round}")]
+        if vw_up: ext.append((vw_up, "VWAP upper band"))   # mean-reversion: tag of upper band favors shorts
+        if vw_lo: ext.append((vw_lo, "VWAP lower band"))   # tag of lower band favors longs
+        if not asian_now:   # only treat the Asian range as S/R AFTER the session completes
+            ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
+        for lvl, lab in ext:
             if lvl is None: continue
             (dynR if lvl >= price else dynS).append((lvl-2, lvl+2, lab))
     at_R = near_htf(price, dynR); at_S = near_htf(price, dynS)
     print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
-    print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}  session={'ON' if sess_ok else 'off'}")
+    print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  session={'ON' if sess_ok else 'off'}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
@@ -315,11 +334,13 @@ def main():
             setups.append(("SHORT", "VWAP rejection", last['close'], last['high']))
         if strong and bull and last['low'] <= vw and last['close'] > vw:
             setups.append(("LONG", "VWAP bounce", last['close'], last['low']))
-    # 8) Asian-range / prior-day breakout
-    for lv, lab in [(ASIA_H, "Asian-range"), (PDH, "prior-day-high")]:
+    # 8) Asian-range / prior-day breakout (Asian range only valid AFTER the session, not while forming)
+    up_lv = [(PDH, "prior-day-high")] + ([(ASIA_H, "Asian-range")] if not asian_now else [])
+    dn_lv = [(PDL, "prior-day-low")] + ([(ASIA_L, "Asian-range")] if not asian_now else [])
+    for lv, lab in up_lv:
         if strong and bull and last['open'] <= lv and last['close'] > lv:
             setups.append(("LONG", f"{lab} breakout", last['close'], lo15))
-    for lv, lab in [(ASIA_L, "Asian-range"), (PDL, "prior-day-low")]:
+    for lv, lab in dn_lv:
         if strong and not bull and last['open'] >= lv and last['close'] < lv:
             setups.append(("SHORT", f"{lab} breakdown", last['close'], hi15))
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP) exempt
@@ -333,7 +354,8 @@ def main():
         if htf:
             print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a momentum trigger here = A+. Waiting.")
             sidehint = "SHORT" if at_R else "LONG"
-            wmsg = (f"👀 GOLD — SETUP FORMING\nPrice at {htf[2]} (~{price}). Possible {sidehint}.\n"
+            wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
+            wmsg = (f"{wa} 👀 GOLD — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
             if not DRY: notify_telegram(wmsg, f"watch|{htf[2]}")
         else:
@@ -375,7 +397,8 @@ def main():
     if DRY:
         print("   [DRY RUN — no telegram/log/state]"); return
     alert_sound(3)   # audible alert
-    msg = (f"🚨 GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
+    arrow = "🟢⬆️" if side == "LONG" else "🔴⬇️"
+    msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
            f"TP1: {tp1} (+50p)\n"
