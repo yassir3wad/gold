@@ -1,0 +1,98 @@
+# XAUUSD Scalp System — Strategy Reference
+
+Auto-monitor (`scalp_fast.py`) reads the **live 1m chart** every 60s, detects setups, grades them,
+and pushes alerts to Telegram. Conventions: **1 pip = $0.10** (so 50 pips = a $5 move). 0.1 lot ≈ $1/pip.
+
+---
+
+## 1. Entry strategies (8) — each toggleable in `flags.json`
+
+| # | Strategy | Flag | Trigger (needs a "strong" momentum candle*) |
+|---|----------|------|---------|
+| 1 | **Trendline break** | `trendline_break` | Strong candle closes through a line drawn across the last 2 swing highs (LONG) / lows (SHORT) |
+| 2 | **Range / triangle breakout** | `range_breakout` | Tight 15-bar range (<35p) + strong close beyond the range high/low |
+| 3 | **Double top / bottom** | `double_top_bottom` | Two equal swing highs/lows + strong break of the neckline |
+| 4 | **Momentum impulse** | `momentum_impulse` | 2 consecutive strong same-direction candles (continuation) |
+| 5 | **Liquidity-sweep reversal** 🥇 | `liquidity_sweep` | Price spikes through a recent extreme **that sits at a real HTF zone**, then closes **≥4p back inside** (stop-hunt + reclaim). *Gold's signature.* |
+| 6 | **Break-and-retest** | `break_retest` | A broken swing level is retested from the other side and rejected |
+| 7 | **VWAP rejection / bounce** | `vwap` | Strong rejection at / bounce off VWAP |
+| 8 | **Asian-range / prior-day breakout** | `session_breakout` | Strong close beyond the Asian-session range or prior-day high/low |
+
+*\*"strong candle" = body > **1.6× the average body of the last 20 candles** (adaptive to volatility).*
+
+---
+
+## 2. Grading (A+ / A / B / C)
+
+Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic levels):
+
+- **A+** — momentum trigger **at** an HTF level in the *favourable* direction: a SHORT **rejecting** resistance, or a LONG **bouncing** off support. The best setups.
+- **A** — a **genuine break** *through* a level (candle closes beyond it): LONG closes above resistance / SHORT closes below support.
+- **B** — momentum in **open space** (no nearby level). `B+vol` if volume confirms.
+- **C-into-zone** — a LONG poking *into* resistance, or SHORT *into* support, **without** a real break → **SUPPRESSED** (not fired). *(This is the fix for the "short into support" loss.)*
+
+**Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP, round numbers, prior-day H/L, Asian-range H/L**.
+
+---
+
+## 3. Filters & gates (quality control)
+
+| Filter | Flag | What it does |
+|--------|------|--------------|
+| **Volatility gate** | (always) | No signals unless the last 10 bars span ≥ **40 pips** (skip dead tape) |
+| **Session filter** | `session_filter` | Outside London+NY (UTC 07–21), **only A+** trades pass |
+| **News blackout** | `news_filter` | Mutes during manual `NEWS_BLACKOUT` UTC windows (set around NFP/CPI/FOMC) |
+| **Volume confirmation** | `volume_filter` | Breakouts/breaks need **above-average volume**; reversals (sweep/retest/VWAP) exempt |
+| **Cooldown** | (const) | After any signal, **no new signal for 8 min** (`COOLDOWN_MIN`) — anti-clustering |
+
+---
+
+## 4. Trade levels (TP / SL)
+
+- **Entry:** the trigger candle's close
+- **SL:** just beyond the invalidating structure, **capped at 30–35 pips**
+- **TP1:** entry ± **50 pips**  ·  **TP2:** entry ± **100 pips**  *(currently fixed; adaptive-TP is planned)*
+- **Management rule:** take partial at TP1 → SL to breakeven → trail. **Exit if TP1 not hit within ~10 min.**
+
+---
+
+## 5. Alert flow (Telegram)
+
+1. **👀 SETUP FORMING** — price reaches a key zone (heads-up, prepare)
+2. **🚨 CONFIRMED [side] [grade]** — trigger fired → Entry / SL / TP1 / TP2 + chart photo
+3. **✅ TP1** → take partial / SL to BE  ·  **🎯 TP2** (+100p)  ·  **❌ SL**
+
+---
+
+## 6. Reference levels (refresh ~daily — top of `scalp_fast.py`)
+
+`HTF_R` / `HTF_S` (the drawn zones), `PDH`/`PDL` (prior-day), `ASIA_H`/`ASIA_L`, `SESSION_UTC`, `NEWS_BLACKOUT`.
+These are **hardcoded and go stale** as price moves — ask me to **"refresh"** at the start of each session.
+
+---
+
+## 7. File map
+
+| File | Purpose |
+|------|---------|
+| `scalp_fast.py` | The live 1m scanner (this doc's logic). Run with `--dry` to test, `--draw` to plot trendlines |
+| `scalp_scan.py` | Alternative 15m zone-rejection scanner (auto-derives S/R) |
+| `flags.json` | Feature flags (true/false per strategy & filter) |
+| `signals_log.csv` | Every signal + features + outcome (auto-learn dataset) |
+| `journal_trade.py` | Per-trade folder: chart + per-TF notes + `trades/journal_log.csv` |
+| `backtest_day.py` / `backtest_tp.py` | Replay over recent 1m / TP-target sweep |
+| `telegram_config.json` | Bot token + chat_id (send-only) |
+| `tg_monitor.sh` | start/stop/status the autonomous launchd monitor |
+| `~/Library/LaunchAgents/com.yassir.goldscalper.plist` | Runs the scanner every 60s on the Mac |
+
+---
+
+## 8. Known limitations / planned
+
+- **Fixed TP** (+50/+100) doesn't adapt to volatility → **adaptive-TP** planned (scale to range / cap at next structure). Also fixes the *sandwiched-long* case (long under resistance with TP set beyond it).
+- **Levels are manual/hardcoded** → scheduled auto-refresh planned.
+- **No news feed** → blackout is a manual time list.
+- **Auto-learn loop** — `signals_log.csv` collects the data; periodic win-rate/expectancy analysis + supervised tuning is the roadmap.
+- Multi-timeframe *screenshots* unreliable on this desktop build (data switches, visual sometimes sticks) — journal uses one annotated chart + written per-TF notes.
+
+*Strategy logic lives in `scalp_fast.py`; this doc summarizes it. Re-read after major changes.*

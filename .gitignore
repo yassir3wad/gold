@@ -1,0 +1,12 @@
+node_modules/
+screenshots/
+scripts/current.pine
+temp_*
+*.log
+discovery-log.json
+
+# secrets / local state (never publish)
+telegram_config.json
+*.err
+.tv_*.json
+.DS_Store

@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""
+FAST momentum scalp scanner for XAUUSD — targets ~50-100 pip bursts within ~10 min.
+Reads the ACTIVE 1m chart. Detects, with a volatility gate (silent in dead tape):
+  - Trendline break (support/resistance lines through recent swing pivots)
+  - Range / triangle breakout (tight consolidation -> impulse out)
+  - Double top / double bottom (neckline break)
+  - Momentum impulse continuation
+Outputs Entry / SL / TP1(+50) / TP2(+100).  1 pip = $0.10 (50 pips = $5 move).
+Optionally draws the active trendlines:  python3 scalp_fast.py --draw
+"""
+import subprocess, json, os, sys, time, csv as _csv, datetime as _dt
+TVDIR = os.path.expanduser("~/tradingview-mcp")
+PIP = 0.10
+MIN_TP = 50      # pips
+VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
+
+# Higher-TF swing S/R map (matches the 1H/4H/Daily zones drawn on the chart). (lo, hi, label)
+HTF_R = [(4445,4450,"R 4447 (broken lvl/15m EMA50)"), (4460,4468,"R 4462-68 (1H+15m)"),
+         (4473,4478,"R 4475 (1H EMA50/15m EMA200)"), (4495,4503,"KEY R 4500 (4H EMA50/1H EMA200/fib OTE)"),
+         (4538,4545,"R 4541 (1H/4H lower high)")]
+HTF_S = [(4424,4434,"S 4426-34 (1H+15m multi-touch)"), (4398,4406,"Support 4400 (4H+1H)"),
+         (4351,4368,"BUY ZONE Daily EMA200")]
+def near_htf(price, levels, tol=4):
+    for lo, hi, lab in levels:
+        if lo - tol <= price <= hi + tol: return (lo, hi, lab)
+    return None
+
+def alert_sound(n=3):
+    """Audible alert on a fast signal (macOS afplay)."""
+    for _ in range(n):
+        try: subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"], timeout=5)
+        except Exception: pass
+
+TG_CONF = os.path.expanduser("~/tradingview-mcp/telegram_config.json")
+TG_STATE = os.path.expanduser("~/.tv_fast_tg.json")
+TRADE_STATE = os.path.expanduser("~/.tv_fast_trade.json")
+
+def _tg_text(text):
+    """Plain text Telegram send (no dedup, no photo) — for trade-management events."""
+    try:
+        cfg = json.load(open(TG_CONF)); tok, cid = cfg.get("bot_token"), cfg.get("chat_id")
+        if tok and cid:
+            subprocess.run(["curl", "-s", f"https://api.telegram.org/bot{tok}/sendMessage",
+                            "-d", f"chat_id={cid}", "--data-urlencode", f"text={text}"], timeout=15)
+    except Exception:
+        pass
+
+SIGNALS_LOG = os.path.expanduser("~/tradingview-mcp/signals_log.csv")
+SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng10", "body_p", "htf", "result", "exit", "pips"]
+
+def log_signal(row):
+    """Upsert a row (by id) into signals_log.csv — the auto-learn dataset."""
+    rows = []
+    if os.path.exists(SIGNALS_LOG):
+        try: rows = list(_csv.DictReader(open(SIGNALS_LOG)))
+        except Exception: rows = []
+    found = False
+    for r in rows:
+        if r.get("id") == str(row["id"]):
+            r.update({k: str(v) for k, v in row.items()}); found = True
+    if not found:
+        rows.append({k: str(v) for k, v in row.items()})
+    try:
+        w = _csv.DictWriter(open(SIGNALS_LOG, "w", newline=""), fieldnames=SIG_COLS); w.writeheader()
+        for r in rows: w.writerow({k: r.get(k, "") for k in SIG_COLS})
+    except Exception: pass
+
+def set_active_trade(side, entry, sl, tp1, tp2, sid):
+    try: json.dump({"active": True, "id": sid, "side": side, "entry": entry, "sl": sl,
+                    "tp1": tp1, "tp2": tp2, "tp1_hit": False, "t0": time.time()}, open(TRADE_STATE, "w"))
+    except Exception: pass
+
+def check_active_trade(price):
+    """Alert on TP1/TP2/SL; finalize the signals_log outcome (incl. 12-min timeout)."""
+    try: t = json.load(open(TRADE_STATE))
+    except Exception: return
+    if not t.get("active"): return
+    side, e, sl, tp1, tp2 = t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"]
+    sid = t.get("id"); PP = lambda x: round((e - x)/PIP if side == "SHORT" else (x - e)/PIP)
+    label = None
+    if side == "SHORT":
+        if price >= sl: label, lvl, res = "❌ SL", sl, "SL"; t["active"] = False
+        elif price <= tp2: label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
+        elif price <= tp1 and not t.get("tp1_hit"): label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True
+    else:
+        if price <= sl: label, lvl, res = "❌ SL", sl, "SL"; t["active"] = False
+        elif price >= tp2: label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
+        elif price >= tp1 and not t.get("tp1_hit"): label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True
+    if label:
+        extra = "  → take partial, SL to breakeven." if "TP1" in label else "  → trade closed."
+        _tg_text(f"{label} — GOLD {side} hit {lvl} (entry {e}, now {price}).{extra}")
+        if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, 1), "pips": PP(lvl)})
+    elif time.time() - t.get("t0", time.time()) > 720:   # 12-min timeout
+        res = "TP1" if t.get("tp1_hit") else "timeout"
+        t["active"] = False
+        if sid: log_signal({"id": sid, "result": res, "exit": round(price, 1), "pips": PP(price)})
+    try: json.dump(t, open(TRADE_STATE, "w"))
+    except Exception: pass
+
+def notify_telegram(caption, dedup_key):
+    """Send the signal + chart photo to Telegram. De-dups so the same signal doesn't spam each bar."""
+    try:
+        cfg = json.load(open(TG_CONF)); tok, cid = cfg.get("bot_token"), cfg.get("chat_id")
+    except Exception:
+        return
+    if not tok or not cid:
+        return
+    try:
+        if json.load(open(TG_STATE)).get("key") == dedup_key:
+            return
+    except Exception:
+        pass
+    try: json.dump({"key": dedup_key}, open(TG_STATE, "w"))
+    except Exception: pass
+    shot = tv("screenshot").get("file_path")
+    try:
+        if shot and os.path.exists(shot):
+            subprocess.run(["curl", "-s", "-F", f"chat_id={cid}", "-F", f"photo=@{shot}",
+                            "-F", f"caption={caption}", f"https://api.telegram.org/bot{tok}/sendPhoto"], timeout=25)
+        else:
+            subprocess.run(["curl", "-s", f"https://api.telegram.org/bot{tok}/sendMessage",
+                            "-d", f"chat_id={cid}", "--data-urlencode", f"text={caption}"], timeout=15)
+    except Exception:
+        pass
+
+def tv(*a):
+    r = subprocess.run(["node", "src/cli/index.js", *a], cwd=TVDIR, capture_output=True, text=True, timeout=30)
+    try: return json.loads(r.stdout)
+    except Exception: return {}
+
+def pivots(b, L=3, R=3):
+    sh, sl = [], []
+    for i in range(L, len(b) - R):
+        if all(b[i]['high'] >= b[i-k]['high'] for k in range(1, L+1)) and all(b[i]['high'] >= b[i+k]['high'] for k in range(1, R+1)):
+            sh.append((i, b[i]['high']))
+        if all(b[i]['low'] <= b[i-k]['low'] for k in range(1, L+1)) and all(b[i]['low'] <= b[i+k]['low'] for k in range(1, R+1)):
+            sl.append((i, b[i]['low']))
+    return sh, sl
+
+def line_through(p1, p2):
+    (x1, y1), (x2, y2) = p1, p2
+    if x2 == x1: return None
+    m = (y2 - y1) / (x2 - x1)
+    return m, y1 - m * x1
+
+def proj(line, x): return line[0] * x + line[1]
+
+def main():
+    draw = "--draw" in sys.argv
+    tv("timeframe", "1")
+    price = tv("quote").get("last")
+    b = tv("ohlcv", "-n", "180").get("bars", [])
+    if price is None or len(b) < 40:
+        print("ERR: no data"); return
+    n = len(b); last = b[-1]
+    check_active_trade(price)   # alert TP1/TP2/SL on any live signalled trade
+    # --- volatility gate ---
+    rng10 = (max(x['high'] for x in b[-10:]) - min(x['low'] for x in b[-10:])) / PIP
+    atr = sum(x['high'] - x['low'] for x in b[-14:]) / 14 / PIP
+    # --- momentum candle ---
+    body = last['close'] - last['open']; body_pips = abs(body) / PIP
+    avgbody = sum(abs(x['close'] - x['open']) for x in b[-20:]) / 20 / PIP
+    strong = body_pips > 1.6 * max(avgbody, 0.5)
+    bull = body > 0
+    sh, sl = pivots(b)
+    # --- trendlines through last 2 swing highs / lows ---
+    res_tl = line_through(sh[-2], sh[-1]) if len(sh) >= 2 else None
+    sup_tl = line_through(sl[-2], sl[-1]) if len(sl) >= 2 else None
+    res_at = round(proj(res_tl, n-1), 2) if res_tl else None
+    sup_at = round(proj(sup_tl, n-1), 2) if sup_tl else None
+    # --- consolidation range (last 15 bars) ---
+    hi15 = max(x['high'] for x in b[-15:]); lo15 = min(x['low'] for x in b[-15:])
+    range15 = (hi15 - lo15) / PIP
+    tight = range15 < 35
+    # --- double top / bottom (last 3 swing highs/lows) ---
+    dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < 8
+    dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < 8
+
+    at_R = near_htf(price, HTF_R); at_S = near_htf(price, HTF_S)
+    print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong}")
+    print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}")
+    print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
+
+    if draw:
+        if res_tl and len(sh) >= 2:
+            tv("draw","shape","--type","trend_line","--price",str(sh[-2][1]),"--time",str(b[sh[-2][0]]['time']),
+               "--price2",str(sh[-1][1]),"--time2",str(b[sh[-1][0]]['time']))
+        if sup_tl and len(sl) >= 2:
+            tv("draw","shape","--type","trend_line","--price",str(sl[-2][1]),"--time",str(b[sl[-2][0]]['time']),
+               "--price2",str(sl[-1][1]),"--time2",str(b[sl[-1][0]]['time']))
+        print("(trendlines drawn)")
+
+    # --- volatility gate ---
+    if rng10 < VOL_MIN_RANGE10:
+        htf = at_R or at_S
+        extra = f" — but price at {htf[2]}, watch for a burst there" if htf else ""
+        print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{VOL_MIN_RANGE10}p). No fast scalp{extra}.")
+        return
+
+    setups = []
+    buf = 2 * PIP  # break buffer
+    # 1) Trendline break (with strong momentum candle)
+    if res_at and strong and bull and last['close'] > res_at + buf and last['open'] <= res_at + buf:
+        setups.append(("LONG", "resistance-trendline break", last['close'], lo15))
+    if sup_at and strong and (not bull) and last['close'] < sup_at - buf and last['open'] >= sup_at - buf:
+        setups.append(("SHORT", "support-trendline break", last['close'], hi15))
+    # 2) Range / triangle breakout
+    if tight and strong and bull and last['close'] > hi15:
+        setups.append(("LONG", "range/triangle breakout", last['close'], lo15))
+    if tight and strong and (not bull) and last['close'] < lo15:
+        setups.append(("SHORT", "range/triangle breakout", last['close'], hi15))
+    # 3) Double bottom (break above the intervening high) / double top
+    if dbot and strong and bull and last['close'] > hi15:
+        setups.append(("LONG", "double-bottom break", last['close'], min(sl[-1][1], sl[-2][1])))
+    if dtop and strong and (not bull) and last['close'] < lo15:
+        setups.append(("SHORT", "double-top break", last['close'], max(sh[-1][1], sh[-2][1])))
+    # 4) Momentum impulse (2 strong same-dir closes)
+    p2 = b[-2]
+    p2body = (p2['close'] - p2['open']) / PIP
+    if strong and bull and p2body > 1.0 * max(avgbody, 0.5):
+        setups.append(("LONG", "momentum impulse", last['close'], min(last['low'], p2['low'])))
+    if strong and (not bull) and p2body < -1.0 * max(avgbody, 0.5):
+        setups.append(("SHORT", "momentum impulse", last['close'], max(last['high'], p2['high'])))
+
+    if not setups:
+        htf = at_R or at_S
+        if htf:
+            print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a momentum trigger here = A+. Waiting.")
+            sidehint = "SHORT" if at_R else "LONG"
+            wmsg = (f"👀 GOLD — SETUP FORMING\nPrice at {htf[2]} (~{price}). Possible {sidehint}.\n"
+                    f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
+            notify_telegram(wmsg, f"watch|{htf[2]}")
+        else:
+            print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
+        return
+
+    # take the first (priority order above); build the trade
+    side, why, entry, struct = setups[0]
+    entry = round(entry, 2)
+    # grade by alignment with the higher-TF map
+    htf_note = ""; grade = "B (open space)"
+    if side == "LONG":
+        if at_S: htf_note = f" | A+ bounce at HTF support [{at_S[2]}]"; grade = "A+"
+        elif at_R: htf_note = f" | breaking HTF resistance [{at_R[2]}]"; grade = "A"
+    else:
+        if at_R: htf_note = f" | A+ rejection at HTF resistance [{at_R[2]}]"; grade = "A+"
+        elif at_S: htf_note = f" | breaking HTF support [{at_S[2]}]"; grade = "A"
+    if side == "LONG":
+        sl_lvl = round(min(struct, entry - 30*PIP), 2)   # structure or 30p, whichever is further (cap risk sense below)
+        sl_lvl = round(max(sl_lvl, entry - 35*PIP), 2)    # but never risk > 35p
+        tp1 = round(entry + 50*PIP, 2); tp2 = round(entry + 100*PIP, 2)
+    else:
+        sl_lvl = round(max(struct, entry + 30*PIP), 2)
+        sl_lvl = round(min(sl_lvl, entry + 35*PIP), 2)
+        tp1 = round(entry - 50*PIP, 2); tp2 = round(entry - 100*PIP, 2)
+    risk = abs(entry - sl_lvl) / PIP
+    print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
+    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+50p) | TP2 {tp2} (+100p)")
+    print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
+    alert_sound(3)   # audible alert
+    msg = (f"🚨 GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
+           f"Entry: {entry}\n"
+           f"SL: {sl_lvl} ({risk:.0f}p)\n"
+           f"TP1: {tp1} (+50p)\n"
+           f"TP2: {tp2} (+100p)\n\n"
+           f"Rule: exit if TP1 not hit in ~10 min.")
+    notify_telegram(msg, f"signal|{side}|{round(entry)}|{why}")
+    sid = int(time.time())
+    hz = near_htf(entry, HTF_R) or near_htf(entry, HTF_S)
+    log_signal({"id": sid, "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+                "side": side, "grade": grade, "pattern": why, "entry": entry, "sl": sl_lvl, "tp1": tp1,
+                "rng10": round(rng10), "body_p": round(body_pips), "htf": hz[2] if hz else "open",
+                "result": "PENDING", "exit": "", "pips": ""})
+    set_active_trade(side, entry, sl_lvl, tp1, tp2, sid)   # track for TP/SL + outcome logging
+
+if __name__ == "__main__":
+    main()
