@@ -43,6 +43,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 | **Session filter** | `session_filter` | Outside London+NY (UTC 07–21), **only A+** trades pass |
 | **News blackout** | `news_filter` | Mutes during manual `NEWS_BLACKOUT` UTC windows (set around NFP/CPI/FOMC) |
 | **Volume confirmation** | `volume_filter` | Breakouts/breaks need **above-average volume**; reversals (sweep/retest/VWAP) exempt |
+| **Anti-chase** | `anti_chase` | Skips a **continuation** entry (momentum/breakout/trendline/double) if price already ran **>60p** (`MAX_CHASE_P`) off the 6-bar base — stops buying the top / selling the bottom of a vertical spike. Reversals (sweep/VWAP/retest) are exempt (they fade extension). |
 | **Cooldown** | (const) | After any signal, **no new signal for 8 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 

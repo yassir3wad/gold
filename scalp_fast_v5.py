@@ -36,6 +36,8 @@ COOLDOWN_MIN = 8                   # no new signal for N minutes after one fires
 WATCH_CD_FILE = os.path.expanduser("~/.tv_fast_watch.json")
 WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same zone area for N min
 WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
+CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
+MAX_CHASE_P = 60                   # skip a continuation entry if price already ran >this many pips off the base
 
 def _num(x):
     try: return float(str(x).replace(",", ""))
@@ -97,7 +99,7 @@ FLAGS_FILE = os.path.expanduser("~/tradingview-mcp/flags.json")
 DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bottom": True,
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
-                 "session_filter": True, "news_filter": True, "volume_filter": True}
+                 "anti_chase": True, "session_filter": True, "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -382,6 +384,24 @@ def main():
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
+
+    # anti-chase: don't enter a CONTINUATION setup after price has already run far off its base
+    # (avoids buying the top / selling the bottom of a vertical spike). Reversals fade extension -> exempt.
+    if FL.get("anti_chase", True) and setups:
+        base_lo = min(x['low'] for x in b[-CHASE_LOOKBACK:]); base_hi = max(x['high'] for x in b[-CHASE_LOOKBACK:])
+        ext_up = (price - base_lo)/PIP; ext_dn = (base_hi - price)/PIP
+        def chasing(side, why):
+            if not any(k in why for k in ("trendline", "breakout", "breakdown", "impulse", "double")):
+                return False   # sweep / VWAP / retest are reversals — they trade the turn, exempt
+            return ext_up > MAX_CHASE_P if side == "LONG" else ext_dn > MAX_CHASE_P
+        kept = []
+        for s in setups:
+            if chasing(s[0], s[1]):
+                run = ext_up if s[0] == "LONG" else ext_dn
+                print(f">> SKIP CHASE: {s[0]} [{s[1]}] — price already ran {run:.0f}p off the {CHASE_LOOKBACK}-bar base (>{MAX_CHASE_P}p); too late, would be buying the top.")
+            else:
+                kept.append(s)
+        setups = kept
 
     if not setups:
         htf = at_R or at_S
