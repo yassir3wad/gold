@@ -44,6 +44,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 | **News blackout** | `news_filter` | Mutes during manual `NEWS_BLACKOUT` UTC windows (set around NFP/CPI/FOMC) |
 | **Volume confirmation** | `volume_filter` | Breakouts/breaks need **above-average volume**; reversals (sweep/retest/VWAP) exempt |
 | **Cooldown** | (const) | After any signal, **no new signal for 8 min** (`COOLDOWN_MIN`) — anti-clustering |
+| **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 
 ---
 

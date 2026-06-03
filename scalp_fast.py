@@ -33,6 +33,9 @@ SESSION_UTC = set(range(7, 22))    # London+NY active hours (UTC); outside = qui
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")
 COOLDOWN_MIN = 8                   # no new signal for N minutes after one fires (anti-clustering)
+WATCH_CD_FILE = os.path.expanduser("~/.tv_fast_watch.json")
+WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same zone area for N min
+WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
 
 def _read_vwap_values():
     def f(d, k):
@@ -354,10 +357,21 @@ def main():
         if htf:
             print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a momentum trigger here = A+. Waiting.")
             sidehint = "SHORT" if at_R else "LONG"
+            # heads-up cooldown: don't spam as price wiggles across overlapping levels (round#, zone, VWAP band).
+            # Only re-ping if WATCH_CD_MIN elapsed OR price moved to a genuinely new zone (>WATCH_NEW_ZONE_P away).
+            try: w = json.load(open(WATCH_CD_FILE))
+            except Exception: w = {}
+            new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P and htf[2] != w.get("label")
+            recent = (time.time() - w.get("t", 0)) < WATCH_CD_MIN*60
+            if recent and not new_zone:
+                print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
             wmsg = (f"{wa} 👀 GOLD — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
-            if not DRY: notify_telegram(wmsg, f"watch|{htf[2]}")
+            if not DRY:
+                notify_telegram(wmsg, f"watch|{htf[2]}")
+                try: json.dump({"t": time.time(), "price": price, "label": htf[2]}, open(WATCH_CD_FILE, "w"))
+                except Exception: pass
         else:
             print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
         return
