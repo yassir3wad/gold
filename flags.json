@@ -8,6 +8,7 @@
   "vwap": true,
   "session_breakout": true,
   "extended_levels": true,
+  "ema_levels": true,
   "session_filter": true,
   "news_filter": true,
   "volume_filter": true

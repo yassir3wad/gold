@@ -31,7 +31,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 - **B** — momentum in **open space** (no nearby level). `B+vol` if volume confirms.
 - **C-into-zone** — a LONG poking *into* resistance, or SHORT *into* support, **without** a real break → **SUPPRESSED** (not fired). *(This is the fix for the "short into support" loss.)*
 
-**Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP, round numbers, prior-day H/L, Asian-range H/L**.
+**Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP (+ bands), round numbers, prior-day H/L, Asian-range H/L**, and (when `ema_levels` on) **EMA 50 / 100 / 200**. VWAP and the EMAs are **read live from your chart indicators** (not computed); the scanner self-heals by re-adding any that get removed. EMAs are read at the chart's timeframe and labeled by length via a rank-match (the value used is always the chart's plotted value).
 
 ---
 

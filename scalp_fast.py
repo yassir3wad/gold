@@ -37,24 +37,53 @@ WATCH_CD_FILE = os.path.expanduser("~/.tv_fast_watch.json")
 WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same zone area for N min
 WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
 
-def _read_vwap_values():
-    def f(d, k):
-        try: return float(str(d.get(k)).replace(",", ""))
-        except Exception: return None
-    for s in tv("values").get("studies", []):
-        if "Volume Weighted" in s.get("name", ""):
-            v = s.get("values", {})
-            return f(v, "VWAP"), f(v, "Upper Band #1"), f(v, "Lower Band #1")
-    return None, None, None
+def _num(x):
+    try: return float(str(x).replace(",", ""))
+    except Exception: return None
 
-def vwap_chart():
-    """Read TradingView's session-anchored VWAP + bands from the chart (works on any TF).
-    If the indicator isn't on the chart, add it and re-read. No computed fallback."""
-    vw, up, lo = _read_vwap_values()
-    if vw is None:
-        tv("indicator", "add", "Volume Weighted Average Price")   # self-heal: re-add if removed
-        vw, up, lo = _read_vwap_values()
-    return vw, up, lo
+def _heal_emas():
+    """Ensure EMA 50/100/200 are all on the chart; add + set length for any that are missing."""
+    present = []
+    for s in tv("state").get("studies", []):
+        if s.get("name") == "Moving Average Exponential":
+            for inp in tv("indicator", "get", s["id"]).get("inputs", []):
+                if inp.get("id") == "in_0":
+                    try: present.append(int(inp["value"]))
+                    except Exception: pass
+    for L in (50, 100, 200):
+        if L not in present:
+            r = tv("indicator", "add", "Moving Average Exponential")
+            nid = r.get("entity_id") or r.get("id")
+            if nid: tv("indicator", "set", nid, "-i", json.dumps({"in_0": L}))
+
+def read_chart_levels(closes):
+    """One read of the data window -> session VWAP (+bands) and EMA 50/100/200, all taken from the
+    chart's OWN indicators (not computed). Self-heals: re-adds any missing indicator. A quick internal
+    EMA is used ONLY to label which plotted EMA line is which length (the VALUE used is the chart's)."""
+    def parse(studies):
+        vw = up = lo = None; emas = []
+        for s in studies:
+            n = s.get("name", ""); v = s.get("values", {})
+            if "Volume Weighted" in n:
+                vw, up, lo = _num(v.get("VWAP")), _num(v.get("Upper Band #1")), _num(v.get("Lower Band #1"))
+            elif "Moving Average" in n:
+                e = _num(v.get("EMA"))
+                if e is not None: emas.append(e)
+        return vw, up, lo, emas
+    vw, up, lo, emas = parse(tv("values").get("studies", []))
+    if vw is None or len(emas) < 3:                       # self-heal then re-read
+        if vw is None: tv("indicator", "add", "Volume Weighted Average Price")
+        if len(emas) < 3: _heal_emas()
+        vw, up, lo, emas = parse(tv("values").get("studies", []))
+    def ema(p):
+        k = 2/(p+1); e = closes[0]
+        for c in closes[1:]: e = c*k + e*(1-k)
+        return e
+    em = {50: None, 100: None, 200: None}
+    for L in (50, 100, 200):                              # nearest-match: label by length, keep chart value
+        if emas:
+            ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x-ref)), 2)
+    return vw, up, lo, em
 
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
@@ -67,8 +96,8 @@ def in_news(ts):
 FLAGS_FILE = os.path.expanduser("~/tradingview-mcp/flags.json")
 DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bottom": True,
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
-                 "session_breakout": True, "extended_levels": True, "session_filter": True,
-                 "news_filter": True, "volume_filter": True}
+                 "session_breakout": True, "extended_levels": True, "ema_levels": True,
+                 "session_filter": True, "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -241,8 +270,8 @@ def main():
     dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < 8
     dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < 8
 
-    # --- VWAP: chart session-anchored only (self-heals if removed; no computed fallback) ---
-    vw, vw_up, vw_lo = vwap_chart()
+    # --- chart indicators: session VWAP (+bands) and EMA 50/100/200, read not computed (self-heal) ---
+    vw, vw_up, vw_lo, em = read_chart_levels([x['close'] for x in b])
     r10 = round(price/10)*10; near_round = r10 if abs(r10-price) < 2 else None
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
@@ -254,6 +283,8 @@ def main():
         ext = [(PDH,"prior-day high"), (PDL,"prior-day low"), (vw,"VWAP"), (near_round,f"round {near_round}")]
         if vw_up: ext.append((vw_up, "VWAP upper band"))   # mean-reversion: tag of upper band favors shorts
         if vw_lo: ext.append((vw_lo, "VWAP lower band"))   # tag of lower band favors longs
+        if FL.get("ema_levels", True):                     # EMA 50/100/200 as dynamic S/R (read off chart)
+            ext += [(em.get(50), "EMA50"), (em.get(100), "EMA100"), (em.get(200), "EMA200")]
         if not asian_now:   # only treat the Asian range as S/R AFTER the session completes
             ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
         for lvl, lab in ext:
@@ -261,7 +292,7 @@ def main():
             (dynR if lvl >= price else dynS).append((lvl-2, lvl+2, lab))
     at_R = near_htf(price, dynR); at_S = near_htf(price, dynS)
     print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
-    print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  session={'ON' if sess_ok else 'off'}")
+    print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
