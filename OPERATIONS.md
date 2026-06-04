@@ -24,6 +24,25 @@ shown in **your local timezone** (currently UTC+2 / Amsterdam).
 
 ---
 
+## 0b. Timeframes analysed — and how each is used
+
+The scanner is **1m-native** (execution), but pulls context from higher timeframes. Importantly, the 15m and
+30m reads come from **resampling the 1m bars in hand** or a **brief cached visit** — the chart is *not* constantly
+flipped between timeframes.
+
+| Timeframe | How it's obtained | What it drives |
+|-----------|-------------------|----------------|
+| **1m** — execution | the live chart (180 bars) each tick | Every **trigger & setup**, price action, the "strong candle" test, **RSI**, **EMA 50/100/200** (read at 1m → dynamic S/R + ema-levels), **VWAP + bands**, **ATR**, the 10-bar range, and entry/SL placement. This is where trades are taken. |
+| **15m** — chop/range gate | **resampled from the 1m bars in hand — no TF switch** | The **15m efficiency ratio (ER)**: 1 = clean trend, 0 = chop. ER < 0.3 ⇒ "chop" ⇒ breakout/momentum setups are suppressed (reversals stay). Also the **CRT "range candle"** = the prior ~15-bar (≈15m) block whose high/low get swept. |
+| **30m** — trend bias / regime | a **brief cached visit** (~20-min cache), then restores 1m | The **trend regime** from the 30m EMA stack (50>100>200 = UP, reverse = DOWN, else flat). Execution is 1m but **bias is 30m**, so it's immune to 1m pullbacks — *counter-trend trades (vs the 30m regime) need A+*. The same visit reads the **value-area** (VPOC / VAH / VAL — gold reads its TPO here; others compute it). |
+| **D / 4H / 1H / 15m** — structure | `refresh_zones.py`, run separately (~every 6h or on demand) | The **HTF support/resistance zones** in `zones_<sym>.json`: swing pivots + EMAs + PDH/PDL + round numbers clustered into multi-touch bands, plus the chart's session H/L ranges. The scanner **reads** these each tick (it doesn't recompute them live). The drawn boxes come from here. |
+
+**In one line:** **trade on 1m**, **gate chop on 15m**, **take trend bias from 30m**, **map structure from the
+D/4H/1H/15m zones**. The 1m chart is execution-only; the higher TFs supply context — the readout each tick shows
+all of it: `range10`/`atr`/`strong` (1m), `15m-ER` (15m), `regime`/`VPOC/VAH/VAL` (30m), `HTF @R/@S … nextR/nextS` (zones).
+
+---
+
 ## 1. EVERY MINUTE — the orchestration tick
 
 Driven by the per-minute cron → runs `bash orchestrate.sh` (= `orchestrate.py`). One tick:
