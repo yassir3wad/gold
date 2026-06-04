@@ -75,8 +75,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 
 ## 6. Reference levels (refresh ~daily — top of `scalp_fast.py`)
 
-`HTF_R` / `HTF_S` (the drawn zones), `PDH`/`PDL` (prior-day), `ASIA_H`/`ASIA_L`, `SESSION_UTC`, `NEWS_BLACKOUT`.
-These are **hardcoded and go stale** as price moves — ask me to **"refresh"** at the start of each session.
+`HTF_R` / `HTF_S` are now **auto-refreshed**: `refresh_zones.py` derives them from D/4H/1H/15m swing pivots + EMAs + PDH/PDL + round numbers, clusters them into multi-touch zones, and writes `zones.json`. The scanner loads `zones.json` and **rebuilds it automatically every ~6h** (`ZONES_TTL`), falling back to the hardcoded `HTF_R`/`HTF_S` only if no file exists. Zone labels show touch counts, e.g. `4459.8 (15m+1H+round, x6)`. You can still force a rebuild any time: `python3 refresh_zones.py`. `ASIA_H`/`ASIA_L`, `SESSION_UTC`, `NEWS_BLACKOUT` remain manual.
 
 ---
 

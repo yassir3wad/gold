@@ -44,6 +44,9 @@ TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of t
 MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
+ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
+ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
+ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
 
 def _num(x):
     try: return float(str(x).replace(",", ""))
@@ -137,6 +140,25 @@ def volume_profile():
     try: json.dump({"t": time.time(), "vpoc": vpoc, "vah": vah, "val": val}, open(VP_FILE, "w"))
     except Exception: pass
     return vpoc, vah, val
+
+def load_zones():
+    """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
+    when stale (>ZONES_TTL); falls back to the hardcoded constants if no usable file exists.
+    Each scan is a fresh process, so this re-applies every run."""
+    z = None
+    try:
+        z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
+    except Exception:
+        age = 1e12
+    if age > ZONES_TTL:   # stale -> rebuild inline (only happens ~every 6h; switches TFs then restores 1m)
+        try:
+            subprocess.run(["python3", "refresh_zones.py"], cwd=TVDIR, capture_output=True, timeout=150)
+            z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
+        except Exception: pass
+    if z and z.get("htf_r") and age < ZONES_MAX_AGE:
+        return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
+                z.get("pdh") or PDH, z.get("pdl") or PDL)
+    return list(HTF_R), list(HTF_S), PDH, PDL
 
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
@@ -335,6 +357,8 @@ def main():
     draw = "--draw" in sys.argv
     DRY = "--dry" in sys.argv   # test mode: compute + print only, NO telegram/log/sound/state
     FL = load_flags()
+    global HTF_R, HTF_S, PDH, PDL
+    HTF_R, HTF_S, PDH, PDL = load_zones()   # auto-derived zones (rebuilt every ~6h) override the hardcoded fallback
     tv("timeframe", "1")
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
