@@ -20,5 +20,6 @@
   "volume_filter": true,
   "zone_reclaim": false,
   "range_filter": true,
-  "session_sweep": true
+  "session_sweep": true,
+  "ai_decide": true
 }

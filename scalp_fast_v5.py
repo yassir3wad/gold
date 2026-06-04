@@ -214,7 +214,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "range_filter": True, "session_sweep": True, "session_filter": True,
-                 "news_filter": True, "volume_filter": True}
+                 "news_filter": True, "volume_filter": True, "ai_decide": False}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -410,6 +410,7 @@ def main():
     DRY = "--dry" in sys.argv   # test mode: compute + print only, NO telegram/log/sound/state
     REVIEW = "--review" in sys.argv   # AI-review gate: hold confirmed trades for approval (TP/SL + heads-ups still go)
     FL = load_flags()
+    AI = FL.get("ai_decide", False)   # AI-decides mode: bypass ALL blocking filters, surface every setup + context for Claude to judge
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
     tv("timeframe", "1")
@@ -494,7 +495,7 @@ def main():
         print("(trendlines drawn)")
 
     # --- volatility gate ---
-    if rng10 < VOL_MIN_RANGE10:
+    if rng10 < VOL_MIN_RANGE10 and not AI:
         htf = at_R or at_S
         extra = f" — but price at {htf[2]}, watch for a burst there" if htf else ""
         print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{VOL_MIN_RANGE10}p). No fast scalp{extra}.")
@@ -506,7 +507,7 @@ def main():
     try: cd_t = json.load(open(CD_FILE)).get("t", 0)
     except Exception: cd_t = 0
     cd_left = COOLDOWN_MIN*60 - (time.time() - cd_t)
-    if cd_left > 0:
+    if cd_left > 0 and not AI:
         print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
 
     setups = []
@@ -599,14 +600,14 @@ def main():
             if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + 4*PIP:
                 setups.append(("LONG", f"{nm} liq sweep", last['close'], last['low'])); break
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim) exempt
-    if FL["volume_filter"] and not vol_ok:
+    if FL["volume_filter"] and not vol_ok and not AI:
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
     # range filter: in 15m chop, suppress BREAKOUT/CONTINUATION setups (false breaks in a range).
     # Reversals (sweep/VWAP/retest/reclaim) stay — fading the range is the right play when chopping.
-    if FL.get("range_filter", True) and is_chop and setups:
+    if FL.get("range_filter", True) and is_chop and setups and not AI:
         kept = []
         for s in setups:
             if any(k in s[1] for k in ("trendline", "breakout", "breakdown", "impulse", "double")):
@@ -617,7 +618,7 @@ def main():
 
     # anti-chase: don't enter a CONTINUATION setup after price has already run far off its base
     # (avoids buying the top / selling the bottom of a vertical spike). Reversals fade extension -> exempt.
-    if FL.get("anti_chase", True) and setups:
+    if FL.get("anti_chase", True) and setups and not AI:
         base_lo = min(x['low'] for x in b[-CHASE_LOOKBACK:]); base_hi = max(x['high'] for x in b[-CHASE_LOOKBACK:])
         ext_up = (price - base_lo)/PIP; ext_dn = (base_hi - price)/PIP
         def chasing(side, why):
@@ -634,7 +635,7 @@ def main():
         setups = kept
 
     # RSI exhaustion gate: don't chase a continuation into an overbought/oversold blow-off (reversals exempt)
-    if FL.get("rsi_filter", True) and rsi is not None and setups:
+    if FL.get("rsi_filter", True) and rsi is not None and setups and not AI:
         kept = []
         for s in setups:
             cont = any(k in s[1] for k in ("trendline", "breakout", "breakdown", "impulse", "double"))
@@ -691,7 +692,7 @@ def main():
         elif at_S:
             if last['close'] < at_S[0]: htf_note = f" | A break below HTF support [{at_S[2]}]"; grade = "A"
             else: htf_note = f" | SHORT into HTF support [{at_S[2]}]"; grade = "C-into-zone"
-    if grade == "C-into-zone":
+    if grade == "C-into-zone" and not AI:
         print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality)."); return
 
     is_rev = any(k in why for k in ("sweep", "VWAP", "retest"))
@@ -708,13 +709,13 @@ def main():
     if FL.get("trend_regime", True) and regime != "flat":
         counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
         with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
-        if counter and not grade.startswith("A+"):
+        if counter and not grade.startswith("A+") and not AI:
             print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
         if counter: htf_note += f" | counter-{regime} (A+ only)"
         elif with_trend:
             htf_note += f" | with {regime} trend"
             if grade.startswith("B"): grade = "A"
-    if FL["session_filter"] and not sess_ok and not grade.startswith("A+"):
+    if FL["session_filter"] and not sess_ok and not grade.startswith("A+") and not AI:
         print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
 
@@ -725,9 +726,11 @@ def main():
         sl_lvl = round(min(max(struct, entry + 30*PIP), entry + 35*PIP), 2); wall = nextS
     if FL.get("adaptive_tp", True) and wall is not None:
         room = abs(wall - entry)/PIP - TP_BUFFER_P
-        if room < MIN_ROOM_P:
+        if room < MIN_ROOM_P and not AI:
             print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{MIN_ROOM_P}p R:R too poor)."); return
-        tp2_p = min(100, room); tp1_p = min(50, tp2_p*0.6)
+        if room < MIN_ROOM_P:   # AI mode: surface but flag the tight room
+            print(f"   ⚠ CRAMPED: only {room:.0f}p clean room to next structure {wall} — poor R:R, judge carefully.")
+        tp2_p = max(20, min(100, room)); tp1_p = min(50, tp2_p*0.6)
     else:
         tp2_p, tp1_p = 100, 50
     if side == "LONG":
