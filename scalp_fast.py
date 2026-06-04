@@ -224,6 +224,7 @@ def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
     except Exception: pass
+    f.update(SYMBOL_FLAGS or {})   # per-symbol overrides from instruments.json (e.g. disable mean-reversion on indices)
     return f
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
@@ -258,11 +259,44 @@ def _tg_text(text):
 SIGNALS_LOG = os.path.expanduser("~/tradingview-mcp/signals_log.csv")
 SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng10", "body_p", "htf", "result", "exit", "pips"]
 
+SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
+INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
+def init_symbol(sym):
+    """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
+    SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
+    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF
+    global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
+    SYMBOL = (sym or "XAUUSD").upper()
+    cfg = {}
+    try:
+        allc = json.load(open(INSTRUMENTS_FILE)); cfg = {**allc.get("_default", {}), **allc.get(SYMBOL, {})}
+    except Exception: pass
+    PIP = cfg.get("pip", PIP); ATR_REF = cfg.get("atr_ref", ATR_REF)
+    TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
+    if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
+    s = SYMBOL.lower()
+    CD_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_cd.json")
+    WATCH_CD_FILE = os.path.expanduser(f"~/.tv_fast_{s}_watch.json")
+    VP_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_vp.json")
+    TG_STATE      = os.path.expanduser(f"~/.tv_fast_{s}_tg.json")
+    TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
+    PENDING_FILE  = os.path.expanduser(f"~/.tv_fast_{s}_pending.json")
+    ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{s}.json")
+
+def _log_path():
+    """Per-pair-per-day log: logs/<symbol>/<YYYY-MM-DD>.csv (the auto-learn dataset, split by instrument & day)."""
+    d = os.path.expanduser(f"~/tradingview-mcp/logs/{SYMBOL.lower()}")
+    try: os.makedirs(d, exist_ok=True)
+    except Exception: pass
+    return os.path.join(d, _dt.datetime.utcnow().strftime("%Y-%m-%d") + ".csv")
+
 def log_signal(row):
-    """Upsert a row (by id) into signals_log.csv — the auto-learn dataset."""
+    """Upsert a row (by id) into today's per-symbol log. (A trade opened pre-midnight and finalized after
+    lands in the new day's file as a fresh row — acceptable; intraday upserts stay intact.)"""
+    path = _log_path()
     rows = []
-    if os.path.exists(SIGNALS_LOG):
-        try: rows = list(_csv.DictReader(open(SIGNALS_LOG)))
+    if os.path.exists(path):
+        try: rows = list(_csv.DictReader(open(path)))
         except Exception: rows = []
     found = False
     for r in rows:
@@ -271,7 +305,7 @@ def log_signal(row):
     if not found:
         rows.append({k: str(v) for k, v in row.items()})
     try:
-        w = _csv.DictWriter(open(SIGNALS_LOG, "w", newline=""), fieldnames=SIG_COLS); w.writeheader()
+        w = _csv.DictWriter(open(path, "w", newline=""), fieldnames=SIG_COLS); w.writeheader()
         for r in rows: w.writerow({k: r.get(k, "") for k in SIG_COLS})
     except Exception: pass
 
@@ -307,7 +341,7 @@ def check_active_trade(price):
     be_moved = t.get("be_moved", False)
     if not tp1_hit and not be_moved and t.get("mfe", 0) >= t.get("be_trig", BE_TRIGGER_P):
         sl = t["sl"] = e; t["be_moved"] = be_moved = True
-        _tg_text(f"🛡️ XAUUSD {side} — stop to BREAKEVEN ({e}). Ran +{t['mfe']:.0f}p; protecting the scratch. Move your stop to entry.")
+        _tg_text(f"🛡️ {SYMBOL} {side} — stop to BREAKEVEN ({e}). Ran +{t['mfe']:.0f}p; protecting the scratch. Move your stop to entry.")
     hit_sl  = price >= sl  if side == "SHORT" else price <= sl
     hit_tp2 = price <= tp2 if side == "SHORT" else price >= tp2
     hit_tp1 = price <= tp1 if side == "SHORT" else price >= tp1
@@ -330,7 +364,7 @@ def check_active_trade(price):
         elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +{PP(tp1):.0f}p partial kept."
         elif res == "TP1":         extra = "  → take partial, SL to breakeven."
         else:                      extra = "  → trade closed."
-        _tg_text(f"{label} — XAUUSD {side} hit {lvl} (entry {e}, now {price}).{extra}")
+        _tg_text(f"{label} — {SYMBOL} {side} hit {lvl} (entry {e}, now {price}).{extra}")
         if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, 1), "pips": PP(lvl)})
     elif time.time() - t.get("t0", time.time()) > 720:   # 12-min timeout
         t["active"] = False
@@ -732,7 +766,7 @@ def main():
             if recent and not new_zone:
                 print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
-            wmsg = (f"{wa} 👀 XAUUSD — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
+            wmsg = (f"{wa} 👀 {SYMBOL} — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
             if not DRY:
                 notify_telegram(wmsg, f"watch|{htf[2]}")
@@ -817,7 +851,7 @@ def main():
            f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence\n"
            f"• Room to next structure: {str(room_p)+'p' if room_p is not None else 'open'}"
            f"{' ⚠tight' if room_p is not None and room_p < room_min else ''}")
-    msg = (f"{arrow} XAUUSD — CONFIRMED {side} [{grade}]\n\n"
+    msg = (f"{arrow} {SYMBOL} — CONFIRMED {side} [{grade}]\n\n"
            f"{ctx}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
@@ -863,6 +897,12 @@ def _read_pending():
     except Exception: return None
 
 if __name__ == "__main__":
+    # --symbol SYM picks the instrument (config + window + state/zones/logs); default XAUUSD = unchanged.
+    if "--symbol" in sys.argv:
+        try: init_symbol(sys.argv[sys.argv.index("--symbol")+1])
+        except Exception: init_symbol("XAUUSD")
+    else:
+        init_symbol("XAUUSD")
     if "--approve" in sys.argv:   # send the held trade + start tracking. Optional note = Claude's reasoning.
         t = _read_pending()
         if t:
@@ -886,8 +926,8 @@ if __name__ == "__main__":
             print(f"🚫 REJECTED & LOGGED: {t['side']} {t['grade']} @ {t['entry']}  ({reason})")
         else: print("no pending trade to reject")
         sys.exit()
-    # single-instance lock: never let two scans overlap and fight over the chart timeframe
-    LOCK = os.path.expanduser("~/.tv_fast.lock")
+    # single-instance lock (per-symbol: gold & GBPUSD scanners run concurrently, each locks only its own symbol)
+    LOCK = os.path.expanduser(f"~/.tv_fast_{SYMBOL.lower()}.lock")
     if os.path.exists(LOCK):
         try:
             if time.time() - os.path.getmtime(LOCK) < 50:
