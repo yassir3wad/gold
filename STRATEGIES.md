@@ -97,10 +97,11 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 
 ## 8. Known limitations / planned
 
-- **Fixed TP** (+50/+100) doesn't adapt to volatility → **adaptive-TP** planned (scale to range / cap at next structure). Also fixes the *sandwiched-long* case (long under resistance with TP set beyond it).
-- **Levels are manual/hardcoded** → scheduled auto-refresh planned.
+- **Auto-learn loop** — `signals_log.csv` collects the data; periodic win-rate/expectancy analysis + supervised tuning is the roadmap. **Collect ~20–30 real trades before tuning from outcomes.**
+- **Zone-reclaim / gradual-bounce trigger** *(roadmap)* — current triggers all need a "strong" momentum candle, so a slow grind-bounce off a high-grade zone is skipped (heads-up fires, confirmation never does). Planned: a non-impulse trigger (e.g. 3 consecutive closes / cumulative 3-bar body) gated to **A/A+ zones, London/NY only**, behind a `zone_reclaim` flag, default-off until backtested. *Deferred deliberately — don't add a rule per missed trade; wait for repeated evidence.*
+- **Trend regime is read from 1m EMAs** *(roadmap)* — noisy; a pullback can flip the 1m stack and misread a correction as a trend change. Planned: derive `regime` from a **higher-TF EMA stack (15m/1H)** so bias is stable through 1m pullbacks. (Heads-ups and the counter-trend gate are only as good as this regime.)
 - **No news feed** → blackout is a manual time list.
-- **Auto-learn loop** — `signals_log.csv` collects the data; periodic win-rate/expectancy analysis + supervised tuning is the roadmap.
-- Multi-timeframe *screenshots* unreliable on this desktop build (data switches, visual sometimes sticks) — journal uses one annotated chart + written per-TF notes.
+- **Asian range** (`ASIA_H`/`ASIA_L`) still manual — set near London open.
+- Multi-timeframe *screenshots* unreliable on this desktop build — journal uses one annotated chart + written per-TF notes.
 
 *Strategy logic lives in `scalp_fast.py`; this doc summarizes it. Re-read after major changes.*

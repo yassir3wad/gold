@@ -582,10 +582,16 @@ def main():
         setups = kept
 
     if not setups:
-        htf = at_R or at_S
-        if htf:
-            print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a momentum trigger here = A+. Waiting.")
-            sidehint = "SHORT" if at_R else "LONG"
+        # trend-aware heads-up side: in a trending regime, only warn WITH the trend (a counter-trend
+        # heads-up needs an A+ confirmed trigger anyway, so don't pre-alert shorts in an uptrend).
+        cands = ([("LONG", at_S)] if at_S else []) + ([("SHORT", at_R)] if at_R else [])
+        if FL.get("trend_regime", True) and regime == "UP":   cands = [c for c in cands if c[0] != "SHORT"]
+        if FL.get("trend_regime", True) and regime == "DOWN": cands = [c for c in cands if c[0] != "LONG"]
+        if not cands and (at_R or at_S):
+            print(f">> heads-up suppressed: price at {(at_R or at_S)[2]} but it's counter to the {regime} trend (A+ confirmation can still fire)."); return
+        if cands:
+            sidehint, htf = cands[0]
+            print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a {sidehint.lower()} trigger here = A+. Waiting.")
             # heads-up cooldown: don't spam as price wiggles across overlapping levels (round#, zone, VWAP band).
             # Only re-ping if WATCH_CD_MIN elapsed OR price moved to a genuinely new zone (>WATCH_NEW_ZONE_P away).
             try: w = json.load(open(WATCH_CD_FILE))
