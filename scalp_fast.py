@@ -792,6 +792,11 @@ def _fire(t, note=""):
     """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown.
     `note` = Claude's one-line review reasoning, appended so the user sees WHY it was approved."""
     alert_sound(3)
+    # Telegram photo caption hard-limits at 1024 chars; cap the review note so the send never fails.
+    if note:
+        budget = 1000 - len(t["msg"]) - len("\n\n🤖 Review: ")
+        if budget < len(note):
+            note = (note[:max(0, budget - 1)].rstrip() + "…") if budget > 1 else ""
     msg = t["msg"] + (f"\n\n🤖 Review: {note}" if note else "")
     notify_telegram(msg, f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
     sid = int(time.time())
