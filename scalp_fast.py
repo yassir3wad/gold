@@ -165,7 +165,7 @@ def volume_profile():
             return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat")
     except Exception: pass
     tid = next((s["id"] for s in tv("state").get("studies", [])
-                if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None)
+                if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None) if USE_TPO else None
     poc = vah = val = None; regime = "flat"
     try:
         tv("timeframe", VP_TF)
@@ -262,11 +262,12 @@ SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng
 SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
 RISK_USD = 20.0      # fixed $ risk per trade → lot = RISK_USD / (PIP_VALUE × stop_pips)
 PIP_VALUE = 10.0     # $ P/L per 1 pip per 1.0 lot (gold & USD-quoted forex ≈ 10; JPY/indices differ — set per symbol)
+USE_TPO = False      # read the Kioseff TPO indicator for VPOC/value-area (gold only); others use the computed profile
 INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
 def init_symbol(sym):
     """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
-    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE
+    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
     global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
@@ -275,6 +276,7 @@ def init_symbol(sym):
     except Exception: pass
     PIP = cfg.get("pip", PIP); ATR_REF = cfg.get("atr_ref", ATR_REF)
     RISK_USD = cfg.get("risk_usd", RISK_USD); PIP_VALUE = cfg.get("pip_value", PIP_VALUE)
+    USE_TPO = bool(cfg.get("use_tpo", False))
     TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
     if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
     s = SYMBOL.lower()
