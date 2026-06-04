@@ -768,7 +768,11 @@ def main():
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
             wmsg = (f"{wa} 👀 {SYMBOL} — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
-            if not DRY:
+            # In AI-review mode, DON'T auto-ping heads-ups to Telegram — they fire on every zone touch and
+            # mostly never become trades (user: too many "forming" pings, no trade after). The readout still
+            # prints "HTF WATCH" so Claude/AI can ping a heads-up ONLY when it judges the setup high-probability.
+            # Only AI-approved CONFIRMED entries (+ TP/SL/BE) reach the phone. (Autonomous non-review mode still pings.)
+            if not DRY and not REVIEW:
                 notify_telegram(wmsg, f"watch|{htf[2]}")
                 try: json.dump({"t": time.time(), "price": price, "label": htf[2]}, open(WATCH_CD_FILE, "w"))
                 except Exception: pass
