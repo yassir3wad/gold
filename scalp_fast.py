@@ -583,12 +583,13 @@ def main():
         try: _z = json.load(open(ZONES_FILE))
         except Exception: _z = {}
         h = _dt.datetime.utcfromtimestamp(ts).hour
-        # only the genuinely-prior session's pool is live: prior-day always; Asian once it's done (h>=7,
-        # i.e. during London/NY); London once done (h>=16); NY once done (overnight). Avoids stale pools.
+        # only the genuinely-prior session's pool is live, gated by each session's real UTC end-hour
+        # (from the indicator config, DST-correct): prior-day always; Asian/London once done; NY overnight.
+        ae = _z.get("asia_end", 7); le = _z.get("london_end", 16); ne = _z.get("ny_end", 22)
         pools_hi = [(PDH, "PDH")]; pools_lo = [(PDL, "PDL")]
-        if h >= 7:            pools_hi.append((ASIA_H, "Asian-H"));         pools_lo.append((ASIA_L, "Asian-L"))
-        if h >= 16:           pools_hi.append((_z.get("london_h"), "London-H")); pools_lo.append((_z.get("london_l"), "London-L"))
-        if h >= 22 or h < 7:  pools_hi.append((_z.get("ny_h"), "NY-H"));    pools_lo.append((_z.get("ny_l"), "NY-L"))
+        if ae is not None and h >= ae:                pools_hi.append((ASIA_H, "Asian-H"));         pools_lo.append((ASIA_L, "Asian-L"))
+        if le is not None and h >= le:                pools_hi.append((_z.get("london_h"), "London-H")); pools_lo.append((_z.get("london_l"), "London-L"))
+        if ne is not None and (h >= ne or h < (ae or 7)): pools_hi.append((_z.get("ny_h"), "NY-H"));    pools_lo.append((_z.get("ny_l"), "NY-L"))
         for lvl, nm in pools_hi:   # raid buy-side liquidity above, reject -> SHORT
             if lvl and strong and not bull and last['high'] > lvl and last['close'] < lvl - 4*PIP:
                 setups.append(("SHORT", f"{nm} liq sweep", last['close'], last['high'])); break
