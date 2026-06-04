@@ -128,18 +128,48 @@ def _calc_vp(bars, bins=60):
     at = lambda i: round(lo + (i+0.5)*w, 1)
     return (at(poc), at(z), at(a))   # vpoc, vah (value-area high), val (value-area low)
 
+def _tpo_levels():
+    """Read the Kioseff TPO profile rows from its labels (each carries the TPO letters at that price).
+    POC = price with the most letters; value area = the 70% band around it. (None,None,None) if empty."""
+    rows = []
+    for s in tv("data", "labels", "--study-filter", "TPO").get("studies", []):
+        for lb in s.get("labels", []):
+            p = lb.get("price"); cnt = len(str(lb.get("text", "")).replace(" ", ""))
+            if p and cnt: rows.append((round(p, 2), cnt))
+    if not rows: return (None, None, None)
+    rows.sort()
+    idx = max(range(len(rows)), key=lambda i: rows[i][1])    # POC row
+    target = sum(c for _, c in rows)*0.70; a = z = idx; acc = rows[idx][1]
+    while acc < target and (a > 0 or z < len(rows)-1):
+        left = rows[a-1][1] if a > 0 else -1; right = rows[z+1][1] if z < len(rows)-1 else -1
+        if right >= left and z < len(rows)-1: z += 1; acc += rows[z][1]
+        elif a > 0: a -= 1; acc += rows[a][1]
+        else: break
+    return (rows[idx][0], rows[z][0], rows[a][0])            # poc, vah, val
+
 def volume_profile():
-    """VPOC + value-area edges from VP_BARS of VP_TF bars. The chart's TPO levels aren't machine-
-    readable, so we build an equivalent volume profile. Cached (VP_TTL) to limit chart TF switches."""
+    """POC + value-area for confluence. The Kioseff TPO only renders on a high TF, so flip to VP_TF,
+    SHOW the TPO, read it, HIDE it, restore 1m; fall back to a computed 30m volume profile if unread.
+    Cached (VP_TTL). try/finally guarantees the chart is always restored to 1m (never stuck on 30m)."""
     try:
         c = json.load(open(VP_FILE))
         if time.time() - c.get("t", 0) < VP_TTL: return c.get("vpoc"), c.get("vah"), c.get("val")
     except Exception: pass
-    tv("timeframe", VP_TF); bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", []); tv("timeframe", "1")
-    vpoc, vah, val = _calc_vp(bars)
-    try: json.dump({"t": time.time(), "vpoc": vpoc, "vah": vah, "val": val}, open(VP_FILE, "w"))
+    tid = next((s["id"] for s in tv("state").get("studies", [])
+                if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None)
+    poc = vah = val = None
+    try:
+        tv("timeframe", VP_TF)
+        if tid: tv("indicator", "toggle", tid, "--show"); time.sleep(4)   # let the TPO render on 30m
+        if tid: poc, vah, val = _tpo_levels()
+        if poc is None:   # fallback: compute a volume profile from 30m bars
+            poc, vah, val = _calc_vp(tv("ohlcv", "-n", str(VP_BARS)).get("bars", []))
+        if tid: tv("indicator", "toggle", tid, "--hide")
+    finally:
+        tv("timeframe", "1")
+    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val}, open(VP_FILE, "w"))
     except Exception: pass
-    return vpoc, vah, val
+    return poc, vah, val
 
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
@@ -427,7 +457,7 @@ def main():
     S_refs = [v for lo,hi,_ in HTF_S for v in (lo,hi)] + [p for p,_,lab in ptS if is_wall(lab)]
     nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
     nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
-    print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
+    print(f"\n[{_dt.datetime.utcnow():%Y-%m-%d %H:%M:%S}Z]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"RSI={rsi}  regime={regime}(EMA stack)  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
@@ -659,4 +689,15 @@ def main():
     except Exception: pass
 
 if __name__ == "__main__":
-    main()
+    # single-instance lock: never let two scans overlap and fight over the chart timeframe
+    LOCK = os.path.expanduser("~/.tv_fast.lock")
+    if os.path.exists(LOCK):
+        try:
+            if time.time() - os.path.getmtime(LOCK) < 50:
+                print("skip: another scan is active"); sys.exit()
+        except Exception: pass
+    try:
+        open(LOCK, "w").close(); main()
+    finally:
+        try: os.remove(LOCK)
+        except Exception: pass
