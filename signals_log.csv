@@ -11,3 +11,4 @@ id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
 1780541879,2026-06-04 02:57,SHORT,A+,liquidity-sweep reversal,4472.56,4475.62,4467.56,97,31,"4469.1 (15m+15mEMA+1H+1HEMA, x7)",SL,4475.6,-31
 1780555744,2026-06-04 06:49,LONG,A+,liquidity-sweep reversal,4466.76,4463.53,4471.4,107,32,"4470.1 (15mEMA+1H+1HEMA+round, x4)",timeout,4465.9,-9
 1780560188,2026-06-04 08:03,LONG,A+,momentum impulse,4465.09,4461.59,4470.09,56,22,EMA100,SL,4461.6,-35
+1780568595,2026-06-04 10:23,SHORT,A+,momentum impulse,4465.15,4468.55,4463.95,69,22,"4469.6 (15m+15mEMA+1H+1HEMA, x5)",rejected,,neg R:R 32p risk/20p into x7 support; RSI31 oversold; dead chop ER0.01; counter-trend

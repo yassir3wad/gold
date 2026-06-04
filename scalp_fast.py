@@ -742,16 +742,27 @@ def main():
     print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
     arrow = "🟢⬆️" if side == "LONG" else "🔴⬇️"
-    msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
+    hz = at_R or at_S   # the actual extended level that drove the grade (incl. VWAP/round#/PDH/Asian)
+    conf = conf_S if side == "LONG" else conf_R
+    room_p = round(abs(wall - entry)/PIP) if wall else None
+    bias = ("with-trend" if (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
+            else "COUNTER-trend" if regime in ("UP", "DOWN") else "no clear trend")
+    ctx = (f"📊 {why} @ {hz[2] if hz else 'open space'}\n"
+           f"• Trend: 30m {regime} ({bias})\n"
+           f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence\n"
+           f"• Room to next structure: {str(room_p)+'p' if room_p is not None else 'open'}"
+           f"{' ⚠tight' if room_p is not None and room_p < MIN_ROOM_P else ''}")
+    msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n\n"
+           f"{ctx}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
            f"TP1: {tp1} (+{tp1_p:.0f}p)\n"
            f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
-    hz = at_R or at_S   # the actual extended level that drove the grade (incl. VWAP/round#/PDH/Asian)
     trade = {"side": side, "entry": entry, "sl": sl_lvl, "tp1": tp1, "tp2": tp2, "tp1_p": tp1_p, "tp2_p": tp2_p,
              "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
-             "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi}
+             "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
+             "chop_er": chop_er, "conf": conf, "room": room_p, "bias": bias}
     if DRY:
         print("   [DRY RUN — no telegram/log/state]"); return
     if REVIEW:   # AI-review gate: hold the trade, don't send. (approve: --approve  ·  reject: --reject)
@@ -761,10 +772,12 @@ def main():
         return
     _fire(trade)
 
-def _fire(t):
-    """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown."""
+def _fire(t, note=""):
+    """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown.
+    `note` = Claude's one-line review reasoning, appended so the user sees WHY it was approved."""
     alert_sound(3)
-    notify_telegram(t["msg"], f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
+    msg = t["msg"] + (f"\n\n🤖 Review: {note}" if note else "")
+    notify_telegram(msg, f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
     sid = int(time.time())
     log_signal({"id": sid, "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
                 "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"], "sl": t["sl"],
@@ -779,13 +792,14 @@ def _read_pending():
     except Exception: return None
 
 if __name__ == "__main__":
-    if "--approve" in sys.argv:   # send the held trade + start tracking
+    if "--approve" in sys.argv:   # send the held trade + start tracking. Optional note = Claude's reasoning.
         t = _read_pending()
         if t:
-            _fire(t)
+            note = " ".join(a for a in sys.argv[sys.argv.index("--approve")+1:] if not a.startswith("--"))
+            _fire(t, note)
             try: os.remove(PENDING_FILE)
             except Exception: pass
-            print(f"✅ APPROVED & SENT: {t['side']} {t['grade']} @ {t['entry']}")
+            print(f"✅ APPROVED & SENT: {t['side']} {t['grade']} @ {t['entry']}  (note: {note or '—'})")
         else: print("no pending trade to approve")
         sys.exit()
     if "--reject" in sys.argv:    # log the rejection (feeds the learn dataset), don't send
