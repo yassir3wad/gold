@@ -299,7 +299,7 @@ def _log_path():
     d = os.path.expanduser(f"~/tradingview-mcp/logs/{SYMBOL.lower()}")
     try: os.makedirs(d, exist_ok=True)
     except Exception: pass
-    return os.path.join(d, _dt.datetime.utcnow().strftime("%Y-%m-%d") + ".csv")
+    return os.path.join(d, _dt.datetime.now().astimezone().strftime("%Y-%m-%d") + ".csv")
 
 def log_signal(row):
     """Upsert a row (by id) into today's per-symbol log. (A trade opened pre-midnight and finalized after
@@ -905,7 +905,7 @@ def _fire(t, note=""):
     msg = t["msg"] + (f"\n\n🤖 Review: {note}" if note else "")
     notify_telegram(msg, f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
     sid = int(time.time())
-    log_signal({"id": sid, "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+    log_signal({"id": sid, "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
                 "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"], "sl": t["sl"],
                 "tp1": t["tp1"], "rng10": t.get("rng10", ""), "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"),
                 "result": "PENDING", "exit": "", "pips": ""})
@@ -938,7 +938,7 @@ if __name__ == "__main__":
         t = _read_pending()
         if t:
             reason = next((a for a in sys.argv[sys.argv.index("--reject")+1:] if not a.startswith("--")), "")
-            log_signal({"id": int(time.time()), "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+            log_signal({"id": int(time.time()), "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
                         "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"],
                         "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""), "body_p": t.get("body_p",""),
                         "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason})
