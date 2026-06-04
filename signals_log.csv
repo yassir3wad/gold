@@ -6,3 +6,4 @@ id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
 1780527290,2026-06-03 22:54,SHORT,A+,liquidity-sweep reversal,4439.11,4442.11,4434.11,51,17,open,SL,4442.1,-30
 1780527422,2026-06-03 22:57,LONG,A+,momentum impulse,4445.59,4442.09,4450.59,85,52,R 4447 (broken lvl/15m EMA50),timeout,4448.2,27
 1780530401,2026-06-03 23:46,LONG,A+,momentum impulse,4462.97,4459.47,4467.97,185,33,R 4459-68 (1H+15m highs),SL,4459.5,-35
+1780535452,2026-06-04 01:10,LONG,A+,zone-reclaim bounce,4460.32,4457.32,4462.53,139,8,"4459.8 (15m+15mEMA+1H+round, x6)",TP2,4464.0,37

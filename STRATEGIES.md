@@ -98,7 +98,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 ## 8. Known limitations / planned
 
 - **Auto-learn loop** — `signals_log.csv` collects the data; periodic win-rate/expectancy analysis + supervised tuning is the roadmap. **Collect ~20–30 real trades before tuning from outcomes.**
-- **Zone-reclaim / gradual-bounce trigger** *(roadmap)* — current triggers all need a "strong" momentum candle, so a slow grind-bounce off a high-grade zone is skipped (heads-up fires, confirmation never does). Planned: a non-impulse trigger (e.g. 3 consecutive closes / cumulative 3-bar body) gated to **A/A+ zones, London/NY only**, behind a `zone_reclaim` flag, default-off until backtested. *Deferred deliberately — don't add a rule per missed trade; wait for repeated evidence.*
+- **Zone-reclaim trigger** (`zone_reclaim`, **default OFF**) — built + backtested. A non-impulse dip-into-zone-then-reclaim trigger. Backtest finding: confirmation **inherently lags** — by the time a gradual bounce closes back out of the zone it's already ~80–110p extended, where **anti-chase blocks it** and the entry sits in the next resistance. So a *confirmed* reclaim can't catch the dip. **The real fix is an anticipatory zone-touch entry** (buy the A+ support touch with a tight stop, before confirmation) — a different risk model (more failed-bounce losses, but catches the move from the bottom). Pending user's call on confirmed-vs-anticipatory.
 - **No news feed** → blackout is a manual time list.
 - **Asian range** (`ASIA_H`/`ASIA_L`) still manual — set near London open.
 - Multi-timeframe *screenshots* unreliable on this desktop build — journal uses one annotated chart + written per-TF notes.

@@ -44,6 +44,7 @@ TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of t
 MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
+RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
 ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
@@ -210,7 +211,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
-                 "confluence": True, "volume_profile": True,
+                 "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "session_filter": True, "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
@@ -549,9 +550,22 @@ def main():
     for lv, lab in dn_lv:
         if strong and not bull and last['open'] >= lv and last['close'] < lv:
             setups.append(("SHORT", f"{lab} breakdown", last['close'], hi15))
-    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP) exempt
+    # 9) Zone-reclaim — dip INTO a structural zone then close back OUT of it with net 3-bar momentum
+    # (gradual bounce, no single strong candle). NOTE: confirmation lags — it tends to fire already
+    # extended, where anti-chase blocks it. Default OFF; the real fix for catching the dip is an
+    # anticipatory zone-touch entry (separate mode). Kept here, selective, for experimentation.
+    if FL.get("zone_reclaim", False) and len(b) >= 6:
+        cum3 = (last['close'] - b[-3]['open']) / PIP
+        lo5 = min(x['low'] for x in b[-5:]); hi5 = max(x['high'] for x in b[-5:])
+        for zlo, zhi, lab in HTF_S:
+            if lo5 <= zhi and last['close'] > zhi + 5*PIP and bull and cum3 >= 20:
+                setups.append(("LONG", "zone-reclaim bounce", last['close'], zlo)); break
+        for zlo, zhi, lab in HTF_R:
+            if hi5 >= zlo and last['close'] < zlo - 5*PIP and (not bull) and cum3 <= -20:
+                setups.append(("SHORT", "zone-reclaim rejection", last['close'], zhi)); break
+    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim) exempt
     if FL["volume_filter"] and not vol_ok:
-        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP"))]
+        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
