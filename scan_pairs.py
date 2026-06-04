@@ -61,7 +61,7 @@ def main():
         r = score_pair(sym, cfg)
         if r: rows.append(r)
     rows.sort(key=lambda r: -r["score"])
-    print(f"\n=== Pair tradeability  {dt.datetime.utcnow():%Y-%m-%d %H:%M}Z ===")
+    print(f"\n=== Pair tradeability  {dt.datetime.now().astimezone():%Y-%m-%d %H:%M %Z} ===")
     print(f"{'PAIR':8}{'SCORE':>6}{'VS':>6}{'ER':>6}{'lvl(ATR)':>9}{'session':>9}   price")
     for r in rows:
         print(f"{r['sym']:8}{r['score']:>6}{r['vs']:>6}{r['er']:>6}{r['near']:>9}{r['sess']:>9}   {r['price']}")

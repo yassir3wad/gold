@@ -28,6 +28,12 @@ def _tg(msg):
         urllib.request.urlopen("https://api.telegram.org/bot"+tok+"/sendMessage", data=d, timeout=20)
     except Exception as e: print("tg err:", e)
 
+def _local(d):   # UTC-aware datetime -> the Mac's local timezone (what the user sees)
+    return d.astimezone() if d else d
+def _loclabel():
+    h = dt.datetime.now().astimezone().utcoffset().total_seconds()/3600
+    return f"UTC{h:+.0f}" if h == int(h) else f"UTC{h:+.1f}"
+
 def _parse_dt(s):
     try: return dt.datetime.fromisoformat(s).astimezone(dt.timezone.utc)
     except Exception:
@@ -59,11 +65,11 @@ def _load():
     return ev if ev else fetch()
 
 def _today_hi_med(ev):
-    today = dt.datetime.utcnow().date()
+    today = dt.datetime.now().astimezone().date()   # the user's LOCAL today
     out = []
     for e in ev:
         d = _parse_dt(e["t"]) if e.get("t") else None
-        if d and d.date() == today and e.get("impact") in ("High", "Medium"):
+        if d and _local(d).date() == today and e.get("impact") in ("High", "Medium"):
             out.append((d, e))
     return sorted(out, key=lambda x: x[0])
 
@@ -71,11 +77,11 @@ def brief():
     ev = fetch()
     rows = _today_hi_med(ev)
     if not rows:
-        print("No High/Medium events today (or feed dates don't match this env)."); return
-    lines = ["📰 Today's news (UTC):"]
+        print("No High/Medium events today."); return
+    lines = [f"📰 Today's news ({_loclabel()}):"]
     for d, e in rows:
         imp = "🔴" if e["impact"] == "High" else "🟠"
-        lines.append(f"{imp} {d:%H:%M} {e['cur']} — {e['title']}  (F:{e.get('forecast') or '–'} P:{e.get('previous') or '–'})")
+        lines.append(f"{imp} {_local(d):%H:%M} {e['cur']} — {e['title']}  (F:{e.get('forecast') or '–'} P:{e.get('previous') or '–'})")
     msg = "\n".join(lines)
     print(msg); _tg(msg)
 
@@ -88,7 +94,7 @@ def is_blackout(sym, mins=BLACKOUT_MIN):
         if sym not in AFFECTS.get(e.get("cur"), []): continue
         d = _parse_dt(e["t"]) if e.get("t") else None
         if d and abs((now - d).total_seconds()) <= mins*60:
-            return True, f"{e['cur']} {e['title']} @ {d:%H:%M}Z"
+            return True, f"{e['cur']} {e['title']} @ {_local(d):%H:%M} {_loclabel()}"
     return False, ""
 
 def blackout(sym):

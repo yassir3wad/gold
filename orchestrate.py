@@ -40,7 +40,7 @@ def main():
     act = set(active_pairs())
     focus = set(r["sym"] for r in rows[:TOP_N]) | set(r["sym"] for r in rows if r["score"] >= FOCUS_MIN) | act
 
-    print(f"=== ORCH {dt.datetime.utcnow():%Y-%m-%d %H:%M}Z ===")
+    print(f"=== ORCH {dt.datetime.now().astimezone():%Y-%m-%d %H:%M %Z} ===")
     print("scores: " + "  ".join(f"{r['sym']}:{r['score']}({'in '+r['sess'] if r['sess']!='—' else 'off'},ER{r['er']})" for r in rows))
     held = []
     for sym in sorted(focus):
