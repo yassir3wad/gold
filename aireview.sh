@@ -1,5 +1,6 @@
 #!/bin/bash
-# AI-review loop: scan + hold confirmed trades for Claude's decision (one clean command for the allowlist)
+# AI-review loop for one pair: bash aireview.sh [SYMBOL]   (default XAUUSD)
 cd ~/tradingview-mcp || exit 1
-rm -f ~/.tv_fast.lock
-exec python3 scalp_fast.py --review 2>&1
+SYM="${1:-XAUUSD}"
+rm -f ~/.tv_fast_$(echo "$SYM" | tr 'A-Z' 'a-z').lock
+exec python3 scalp_fast.py --symbol "$SYM" --review 2>&1
