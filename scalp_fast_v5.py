@@ -40,6 +40,10 @@ WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a 
 CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
 MAX_CHASE_P = 60                   # skip a continuation entry if price already ran >this many pips off the base
 DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
+TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of the next structure (don't aim into the wall)
+MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
+RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
+VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 
 def _num(x):
     try: return float(str(x).replace(",", ""))
@@ -65,7 +69,7 @@ def read_chart_levels(closes):
     chart's OWN indicators (not computed). Self-heals: re-adds any missing indicator. A quick internal
     EMA is used ONLY to label which plotted EMA line is which length (the VALUE used is the chart's)."""
     def parse(studies):
-        vw = up = lo = None; emas = []
+        vw = up = lo = rsi = None; emas = []
         for s in studies:
             n = s.get("name", ""); v = s.get("values", {})
             if "Volume Weighted" in n:
@@ -73,12 +77,15 @@ def read_chart_levels(closes):
             elif "Moving Average" in n:
                 e = _num(v.get("EMA"))
                 if e is not None: emas.append(e)
-        return vw, up, lo, emas
-    vw, up, lo, emas = parse(tv("values").get("studies", []))
-    if vw is None or len(emas) < 3:                       # self-heal then re-read
+            elif "Relative Strength" in n:
+                rsi = _num(v.get("RSI"))
+        return vw, up, lo, emas, rsi
+    vw, up, lo, emas, rsi = parse(tv("values").get("studies", []))
+    if vw is None or len(emas) < 3 or rsi is None:        # self-heal then re-read
         if vw is None: tv("indicator", "add", "Volume Weighted Average Price")
         if len(emas) < 3: _heal_emas()
-        vw, up, lo, emas = parse(tv("values").get("studies", []))
+        if rsi is None: tv("indicator", "add", "Relative Strength Index")
+        vw, up, lo, emas, rsi = parse(tv("values").get("studies", []))
     def ema(p):
         k = 2/(p+1); e = closes[0]
         for c in closes[1:]: e = c*k + e*(1-k)
@@ -94,7 +101,42 @@ def read_chart_levels(closes):
     elif emas:                                            # fallback (extra/missing EMAs): absolute nearest
         for L in (50, 100, 200):
             ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x - ref)), 2)
-    return vw, up, lo, em
+    return vw, up, lo, em, rsi
+
+VP_FILE = os.path.expanduser("~/.tv_fast_vp.json")
+VP_TTL = 1200   # recompute the volume profile every 20 min (brief TF switch); cached in between
+
+def _calc_vp(bars, bins=60):
+    if len(bars) < 10: return (None, None, None)
+    lo = min(x['low'] for x in bars); hi = max(x['high'] for x in bars)
+    if hi <= lo: return (None, None, None)
+    w = (hi - lo) / bins; vol = [0.0]*bins
+    for x in bars:   # spread each bar's volume across the price bins it spans
+        a = max(0, min(bins-1, int((x['low']-lo)/w))); z = max(0, min(bins-1, int((x['high']-lo)/w)))
+        v = x.get('volume', 0) / (z-a+1)
+        for i in range(a, z+1): vol[i] += v
+    poc = max(range(bins), key=lambda i: vol[i])
+    target = sum(vol)*0.70; a = z = poc; acc = vol[poc]
+    while acc < target and (a > 0 or z < bins-1):   # grow value area toward the heavier side
+        left = vol[a-1] if a > 0 else -1; right = vol[z+1] if z < bins-1 else -1
+        if right >= left and z < bins-1: z += 1; acc += vol[z]
+        elif a > 0: a -= 1; acc += vol[a]
+        else: break
+    at = lambda i: round(lo + (i+0.5)*w, 1)
+    return (at(poc), at(z), at(a))   # vpoc, vah (value-area high), val (value-area low)
+
+def volume_profile():
+    """VPOC + value-area edges from VP_BARS of VP_TF bars. The chart's TPO levels aren't machine-
+    readable, so we build an equivalent volume profile. Cached (VP_TTL) to limit chart TF switches."""
+    try:
+        c = json.load(open(VP_FILE))
+        if time.time() - c.get("t", 0) < VP_TTL: return c.get("vpoc"), c.get("vah"), c.get("val")
+    except Exception: pass
+    tv("timeframe", VP_TF); bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", []); tv("timeframe", "1")
+    vpoc, vah, val = _calc_vp(bars)
+    try: json.dump({"t": time.time(), "vpoc": vpoc, "vah": vah, "val": val}, open(VP_FILE, "w"))
+    except Exception: pass
+    return vpoc, vah, val
 
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
@@ -108,7 +150,9 @@ FLAGS_FILE = os.path.expanduser("~/tradingview-mcp/flags.json")
 DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bottom": True,
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
-                 "anti_chase": True, "session_filter": True, "news_filter": True, "volume_filter": True}
+                 "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
+                 "confluence": True, "volume_profile": True,
+                 "session_filter": True, "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -254,6 +298,31 @@ def pivots(b, L=3, R=3):
             sl.append((i, b[i]['low']))
     return sh, sl
 
+def rsi_series(closes, n=14):
+    """Wilder RSI aligned to `closes` (None during warmup). Used only to detect divergence —
+    the live RSI value for the exhaustion gate is read from the chart indicator."""
+    N = len(closes); out = [None]*N
+    if N < n+1: return out
+    gains = [max(closes[i]-closes[i-1], 0.0) for i in range(1, N)]
+    losses = [max(closes[i-1]-closes[i], 0.0) for i in range(1, N)]
+    ag = sum(gains[:n])/n; al = sum(losses[:n])/n
+    out[n] = 100 - 100/(1 + (ag/al if al else 999))
+    for i in range(n+1, N):
+        ag = (ag*(n-1)+gains[i-1])/n; al = (al*(n-1)+losses[i-1])/n
+        out[i] = 100 - 100/(1 + (ag/al if al else 999))
+    return out
+
+def rsi_divergence(b, side):
+    """Bullish div (LONG): price lower-low but RSI higher-low at the last 2 swing lows. Mirror for SHORT."""
+    rs = rsi_series([x['close'] for x in b]); sh, sl = pivots(b)
+    if side == "LONG" and len(sl) >= 2:
+        (i1, p1), (i2, p2) = sl[-2], sl[-1]
+        return bool(rs[i1] and rs[i2] and p2 < p1 and rs[i2] > rs[i1])
+    if side == "SHORT" and len(sh) >= 2:
+        (i1, p1), (i2, p2) = sh[-2], sh[-1]
+        return bool(rs[i1] and rs[i2] and p2 > p1 and rs[i2] < rs[i1])
+    return False
+
 def line_through(p1, p2):
     (x1, y1), (x2, y2) = p1, p2
     if x2 == x1: return None
@@ -295,8 +364,13 @@ def main():
     dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < 8
     dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < 8
 
-    # --- chart indicators: session VWAP (+bands) and EMA 50/100/200, read not computed (self-heal) ---
-    vw, vw_up, vw_lo, em = read_chart_levels([x['close'] for x in b])
+    # --- chart indicators: session VWAP (+bands), EMA 50/100/200, RSI — read not computed (self-heal) ---
+    vw, vw_up, vw_lo, em, rsi = read_chart_levels([x['close'] for x in b])
+    e50, e100, e200 = em.get(50), em.get(100), em.get(200)
+    up_stack = bool(e50 and e100 and e200 and e50 > e100 > e200)   # EMA stack = uptrend regime
+    dn_stack = bool(e50 and e100 and e200 and e50 < e100 < e200)   # EMA stack = downtrend regime
+    regime = "UP" if up_stack else ("DOWN" if dn_stack else "flat")
+    vpoc, vah, val = volume_profile() if FL.get("volume_profile", True) else (None, None, None)
     r10 = round(price/10)*10; near_round = r10 if abs(r10-price) < 2 else None
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
@@ -309,7 +383,8 @@ def main():
         if vw_up: ext.append((vw_up, "VWAP upper band"))   # mean-reversion: tag of upper band favors shorts
         if vw_lo: ext.append((vw_lo, "VWAP lower band"))   # tag of lower band favors longs
         if FL.get("ema_levels", True):                     # EMA 50/100/200 as dynamic S/R (read off chart)
-            ext += [(em.get(50), "EMA50"), (em.get(100), "EMA100"), (em.get(200), "EMA200")]
+            ext += [(e50, "EMA50"), (e100, "EMA100"), (e200, "EMA200")]
+        ext += [(vpoc, "VPOC"), (vah, "value-area high"), (val, "value-area low")]   # volume-profile levels
         if not asian_now:   # only treat the Asian range as S/R AFTER the session completes
             ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
         for lvl, lab in ext:
@@ -318,8 +393,19 @@ def main():
     # HTF zones keep their intended wide tolerance; dynamic point-levels get the tight one
     at_R = near_htf(price, HTF_R) or near_htf(price, ptR, tol=DYN_TOL)
     at_S = near_htf(price, HTF_S) or near_htf(price, ptS, tol=DYN_TOL)
+    # confluence: how many distinct levels sit right at price (used to strengthen/justify the grade)
+    conf_R = len([1 for lo,hi,_ in HTF_R if lo-4<=price<=hi+4] + [1 for p,_,_ in ptR if abs(p-price)<=DYN_TOL])
+    conf_S = len([1 for lo,hi,_ in HTF_S if lo-4<=price<=hi+4] + [1 for p,_,_ in ptS if abs(p-price)<=DYN_TOL])
+    # next structure above / below entry (for adaptive TP) — horizontal walls only.
+    # EMAs and VWAP are dynamic lines price flows THROUGH, so they don't cap a target.
+    is_wall = lambda lab: not ("EMA" in lab or "VWAP" in lab)
+    R_refs = [v for lo,hi,_ in HTF_R for v in (lo,hi)] + [p for p,_,lab in ptR if is_wall(lab)]
+    S_refs = [v for lo,hi,_ in HTF_S for v in (lo,hi)] + [p for p,_,lab in ptS if is_wall(lab)]
+    nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
+    nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
     print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
+    print(f"RSI={rsi}  regime={regime}(EMA stack)  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
@@ -428,6 +514,19 @@ def main():
                 kept.append(s)
         setups = kept
 
+    # RSI exhaustion gate: don't chase a continuation into an overbought/oversold blow-off (reversals exempt)
+    if FL.get("rsi_filter", True) and rsi is not None and setups:
+        kept = []
+        for s in setups:
+            cont = any(k in s[1] for k in ("trendline", "breakout", "breakdown", "impulse", "double"))
+            if cont and s[0] == "LONG" and rsi > RSI_OB:
+                print(f">> SKIP RSI: LONG [{s[1]}] blocked — RSI {rsi:.0f} > {RSI_OB} (overbought blow-off).")
+            elif cont and s[0] == "SHORT" and rsi < RSI_OS:
+                print(f">> SKIP RSI: SHORT [{s[1]}] blocked — RSI {rsi:.0f} < {RSI_OS} (oversold capitulation).")
+            else:
+                kept.append(s)
+        setups = kept
+
     if not setups:
         htf = at_R or at_S
         if htf:
@@ -469,20 +568,50 @@ def main():
             else: htf_note = f" | SHORT into HTF support [{at_S[2]}]"; grade = "C-into-zone"
     if grade == "C-into-zone":
         print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality)."); return
+
+    is_rev = any(k in why for k in ("sweep", "VWAP", "retest"))
+    # #4 confluence — multiple stacked levels at price strengthen the grade
+    conf = conf_S if side == "LONG" else conf_R
+    if FL.get("confluence", True) and conf >= 2:
+        htf_note += f" | x{conf} confluence"
+        if grade == "A": grade = "A+"
+        elif grade.startswith("B"): grade = "A"
+    # #2b RSI divergence at a level upgrades a reversal to A+
+    if FL.get("rsi_filter", True) and is_rev and rsi is not None and rsi_divergence(b, side):
+        htf_note += " | RSI divergence"; grade = "A+" if not grade.startswith("A+") else grade
+    # #3 trend-regime — counter-trend needs A+; with-trend pullback gets a boost
+    if FL.get("trend_regime", True) and regime != "flat":
+        counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
+        with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
+        if counter and not grade.startswith("A+"):
+            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
+        if counter: htf_note += f" | counter-{regime} (A+ only)"
+        elif with_trend:
+            htf_note += f" | with {regime} trend"
+            if grade.startswith("B"): grade = "A"
     if FL["session_filter"] and not sess_ok and not grade.startswith("A+"):
         print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
+
+    # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     if side == "LONG":
-        sl_lvl = round(min(struct, entry - 30*PIP), 2)   # structure or 30p, whichever is further (cap risk sense below)
-        sl_lvl = round(max(sl_lvl, entry - 35*PIP), 2)    # but never risk > 35p
-        tp1 = round(entry + 50*PIP, 2); tp2 = round(entry + 100*PIP, 2)
+        sl_lvl = round(max(min(struct, entry - 30*PIP), entry - 35*PIP), 2); wall = nextR
     else:
-        sl_lvl = round(max(struct, entry + 30*PIP), 2)
-        sl_lvl = round(min(sl_lvl, entry + 35*PIP), 2)
-        tp1 = round(entry - 50*PIP, 2); tp2 = round(entry - 100*PIP, 2)
+        sl_lvl = round(min(max(struct, entry + 30*PIP), entry + 35*PIP), 2); wall = nextS
+    if FL.get("adaptive_tp", True) and wall is not None:
+        room = abs(wall - entry)/PIP - TP_BUFFER_P
+        if room < MIN_ROOM_P:
+            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{MIN_ROOM_P}p R:R too poor)."); return
+        tp2_p = min(100, room); tp1_p = min(50, tp2_p*0.6)
+    else:
+        tp2_p, tp1_p = 100, 50
+    if side == "LONG":
+        tp1 = round(entry + tp1_p*PIP, 2); tp2 = round(entry + tp2_p*PIP, 2)
+    else:
+        tp1 = round(entry - tp1_p*PIP, 2); tp2 = round(entry - tp2_p*PIP, 2)
     risk = abs(entry - sl_lvl) / PIP
     print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
-    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+50p) | TP2 {tp2} (+100p)")
+    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
     if DRY:
         print("   [DRY RUN — no telegram/log/state]"); return
@@ -491,8 +620,8 @@ def main():
     msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
-           f"TP1: {tp1} (+50p)\n"
-           f"TP2: {tp2} (+100p)\n\n"
+           f"TP1: {tp1} (+{tp1_p:.0f}p)\n"
+           f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
     notify_telegram(msg, f"signal|{side}|{round(entry)}|{why}")
     sid = int(time.time())

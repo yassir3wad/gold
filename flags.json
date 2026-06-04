@@ -10,6 +10,11 @@
   "extended_levels": true,
   "ema_levels": true,
   "anti_chase": true,
+  "adaptive_tp": true,
+  "rsi_filter": true,
+  "trend_regime": true,
+  "confluence": true,
+  "volume_profile": true,
   "session_filter": true,
   "news_filter": true,
   "volume_filter": true

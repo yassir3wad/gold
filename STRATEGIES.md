@@ -44,6 +44,11 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 | **News blackout** | `news_filter` | Mutes during manual `NEWS_BLACKOUT` UTC windows (set around NFP/CPI/FOMC) |
 | **Volume confirmation** | `volume_filter` | Breakouts/breaks need **above-average volume**; reversals (sweep/retest/VWAP) exempt |
 | **Anti-chase** | `anti_chase` | Skips a **continuation** entry (momentum/breakout/trendline/double) if price already ran **>60p** (`MAX_CHASE_P`) off the 6-bar base — stops buying the top / selling the bottom of a vertical spike. Reversals (sweep/VWAP/retest) are exempt (they fade extension). |
+| **RSI exhaustion** | `rsi_filter` | Reads the chart RSI; blocks continuation **longs at RSI>78** / **shorts at RSI<22** (`RSI_OB`/`RSI_OS`) — don't chase a blow-off. Also: RSI **divergence** at a level upgrades a reversal to A+. |
+| **Trend regime** | `trend_regime` | EMA stack (50>100>200) sets bias. **Counter-trend trades require A+**; with-trend pullbacks get a grade boost. Stops fighting strong trends with weak signals. |
+| **Adaptive TP/SL** | `adaptive_tp` | TP caps **8p short of the next horizontal structure** (`TP_BUFFER_P`); trade is **skipped if <25p clean room** (`MIN_ROOM_P`) — no more aiming +50 into a wall. EMAs/VWAP don't count as walls (price flows through them). |
+| **Volume profile** | `volume_profile` | Computes **VPOC + value-area** (VAH/VAL) from 30m bars (`VP_TF`/`VP_BARS`, cached 20m) — added as confluence levels. (The chart's TPO indicator isn't machine-readable, so we build an equivalent profile.) |
+| **Confluence** | `confluence` | When **≥2 levels stack** at price (e.g. VWAP+EMA+zone), the grade is strengthened (A→A+, B→A). Lone touches earn less. |
 | **Cooldown** | (const) | After any signal, **no new signal for 5 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 
