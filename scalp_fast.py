@@ -604,13 +604,15 @@ def main():
     # Catches the gradual bounce/fade the impulse triggers miss: long lower-wick close-up at support, or
     # upper-wick close-down at resistance. Tight stop just beyond the zone. Gated to confluent (conf>=2) zones.
     if FL.get("zone_bounce", True):
-        # LONG: wick pierced the support-zone floor and closed back above it, with a real (>=ZONE_WICK_P) wick.
+        # LONG: wick dipped anywhere INTO the support band (floor OR upper edge of a wide zone) and closed back
+        # above the floor with a real (>=ZONE_WICK_P) rejection wick. Widened 06-04 from floor-pierce-only so it
+        # also catches upper-edge reclaims of wide zones (the ~4500 bounce inside 4486-4503 it used to miss).
         if (at_S and at_S[1] > at_S[0]                                  # a structural zone (not a clingy EMA/point)
-                and last['low'] <= at_S[0] and last['close'] >= at_S[0]  # pierced the floor, reclaimed it
+                and last['low'] <= at_S[1] and last['close'] >= at_S[0]  # wick into the band, close didn't lose the floor
                 and (last['close'] - last['low']) >= ZONE_WICK_P*PIP and last['close'] > last['open']):
             setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - 2*PIP, 2)))
         if (at_R and at_R[1] > at_R[0]
-                and last['high'] >= at_R[1] and last['close'] <= at_R[1]
+                and last['high'] >= at_R[0] and last['close'] <= at_R[1]  # wick into the band, close didn't break the top
                 and (last['high'] - last['close']) >= ZONE_WICK_P*PIP and last['close'] < last['open']):
             setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + 2*PIP, 2)))
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce) exempt
