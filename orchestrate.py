@@ -17,6 +17,11 @@ TOP_N = 1               # always review at least the top-N scored pairs
 def _state(sym, kind):
     return os.path.expanduser(f"~/.tv_fast_{sym.lower()}_{kind}.json")
 
+def pinned_pairs():
+    """Pairs to ALWAYS review regardless of score (e.g. 'keep an eye on gold'). Clear by emptying the file."""
+    try: return [s.upper() for s in json.load(open(os.path.expanduser("~/.tv_fast_pinned.json")))]
+    except Exception: return []
+
 def active_pairs():
     out = []
     for sym in INSTR:
@@ -37,15 +42,15 @@ def main():
         s = scan_pairs.score_pair(sym, cfg)
         if s: rows.append(s)
     rows.sort(key=lambda r: -r["score"])
-    act = set(active_pairs())
-    focus = set(r["sym"] for r in rows[:TOP_N]) | set(r["sym"] for r in rows if r["score"] >= FOCUS_MIN) | act
+    act = set(active_pairs()); pin = set(pinned_pairs())
+    focus = set(r["sym"] for r in rows[:TOP_N]) | set(r["sym"] for r in rows if r["score"] >= FOCUS_MIN) | act | pin
 
     print(f"=== ORCH {dt.datetime.now().astimezone():%Y-%m-%d %H:%M %Z} ===")
     print("scores: " + "  ".join(f"{r['sym']}:{r['score']}({'in '+r['sess'] if r['sess']!='—' else 'off'},ER{r['er']})" for r in rows))
     held = []
     for sym in sorted(focus):
         is_held = review(sym)
-        tag = "ACTIVE-TRADE" if sym in act else "focus"
+        tag = "ACTIVE-TRADE" if sym in act else ("pinned" if sym in pin else "focus")
         print(f"-- reviewed {sym} [{tag}]" + ("  *** HELD — REVIEW ***" if is_held else "  (nothing held)"))
         if is_held: held.append(sym)
     if held:
