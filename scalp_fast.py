@@ -266,11 +266,13 @@ SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
 RISK_USD = 20.0      # fixed $ risk per trade → lot = RISK_USD / (PIP_VALUE × stop_pips)
 PIP_VALUE = 10.0     # $ P/L per 1 pip per 1.0 lot (gold & USD-quoted forex ≈ 10; JPY/indices differ — set per symbol)
 USE_TPO = False      # read the Kioseff TPO indicator for VPOC/value-area (gold only); others use the computed profile
+LOT_MIN, LOT_MAX, LOT_STEP = 0.01, 100.0, 0.01   # broker volume constraints (per-instrument; sized lot is rounded to step + clamped)
 INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
 def init_symbol(sym):
     """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
     global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
+    global LOT_MIN, LOT_MAX, LOT_STEP
     global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
@@ -280,6 +282,7 @@ def init_symbol(sym):
     PIP = cfg.get("pip", PIP); ATR_REF = cfg.get("atr_ref", ATR_REF)
     RISK_USD = cfg.get("risk_usd", RISK_USD); PIP_VALUE = cfg.get("pip_value", PIP_VALUE)
     USE_TPO = bool(cfg.get("use_tpo", False))
+    LOT_MIN = cfg.get("lot_min", LOT_MIN); LOT_MAX = cfg.get("lot_max", LOT_MAX); LOT_STEP = cfg.get("lot_step", LOT_STEP)
     TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
     if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
     s = SYMBOL.lower()
@@ -850,8 +853,10 @@ def main():
     else:
         tp1 = round(entry - tp1_p*PIP, 2); tp2 = round(entry - tp2_p*PIP, 2)
     risk = abs(entry - sl_lvl) / PIP
-    # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), floored at broker min 0.01
-    lot = max(0.01, round(RISK_USD / (PIP_VALUE * risk), 2)) if (risk > 0 and PIP_VALUE > 0) else 0.01
+    # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), rounded to broker step + clamped
+    _raw = RISK_USD / (PIP_VALUE * risk) if (risk > 0 and PIP_VALUE > 0) else LOT_MIN
+    lot = round(round(_raw / LOT_STEP) * LOT_STEP, 4)
+    lot = max(LOT_MIN, min(LOT_MAX, lot))
     print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
     print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${RISK_USD:.0f}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
