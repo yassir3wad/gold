@@ -164,7 +164,7 @@ def volume_profile():
     poc = vah = val = None; regime = "flat"
     try:
         tv("timeframe", VP_TF)
-        if tid: tv("indicator", "toggle", tid, "--show"); time.sleep(4)   # let the TPO render on 30m
+        if tid: tv("indicator", "toggle", tid, "--visible", "true"); time.sleep(4)   # show TPO to render on 30m
         if tid: poc, vah, val = _tpo_levels()
         bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", [])
         if poc is None: poc, vah, val = _calc_vp(bars)                    # fallback: computed profile
@@ -173,8 +173,8 @@ def volume_profile():
             h5, h1, h2 = em_h.get(50), em_h.get(100), em_h.get(200)
             if h5 and h1 and h2:
                 regime = "UP" if h5 > h1 > h2 else ("DOWN" if h5 < h1 < h2 else "flat")
-        if tid: tv("indicator", "toggle", tid, "--hide")
     finally:
+        if tid: tv("indicator", "toggle", tid, "--hidden")   # ALWAYS hide (even on error) — TPO stays off the 1m chart
         tv("timeframe", "1")
     try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime}, open(VP_FILE, "w"))
     except Exception: pass
