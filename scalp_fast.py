@@ -42,6 +42,7 @@ MAX_CHASE_P = 60                   # skip a continuation entry if price already 
 DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
 TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of the next structure (don't aim into the wall)
 MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
+BE_TRIGGER_P = 35                  # once a trade runs +this many pips favorable (pre-TP1), move stop to breakeven — protect the scratch (06-04: a short ran +38p, never hit TP1, gave it all back to -30p; BE turns that into 0). Set above typical entry-noise pullbacks so it doesn't scratch winners early.
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
@@ -295,6 +296,15 @@ def check_active_trade(price):
     if not t.get("active"): return
     side, e, sl, tp1, tp2 = t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"]
     sid = t.get("id"); tp1_hit = t.get("tp1_hit"); PP = lambda x: round((e - x)/PIP if side == "SHORT" else (x - e)/PIP)
+    # Breakeven protection (pre-TP1): track max favorable excursion; once it runs +BE_TRIGGER_P, pull the stop to
+    # entry so a reversal scratches at 0 instead of the full SL. (06-04 fix: a short ran +38p, never hit TP1, gave
+    # it all back to -30p — this turns that into breakeven.) Fires a one-time alert so you move your broker stop too.
+    fav = PP(price)
+    if fav > t.get("mfe", -10**9): t["mfe"] = fav
+    be_moved = t.get("be_moved", False)
+    if not tp1_hit and not be_moved and t.get("mfe", 0) >= BE_TRIGGER_P:
+        sl = t["sl"] = e; t["be_moved"] = be_moved = True
+        _tg_text(f"🛡️ XAUUSD {side} — stop to BREAKEVEN ({e}). Ran +{t['mfe']:.0f}p; protecting the scratch. Move your stop to entry.")
     hit_sl  = price >= sl  if side == "SHORT" else price <= sl
     hit_tp2 = price <= tp2 if side == "SHORT" else price >= tp2
     hit_tp1 = price <= tp1 if side == "SHORT" else price >= tp1
@@ -305,12 +315,15 @@ def check_active_trade(price):
         t["active"] = False
         if tp1_hit:   # remainder stopped at breakeven AFTER banking the partial — still a win, log as TP1
             label, lvl, res = "🟰 BE (after TP1)", tp1, "TP1"
+        elif be_moved:   # pre-TP1 breakeven protection caught it — scratched at entry, no loss
+            label, lvl, res = "🛡️ BE (protected)", e, "BE"
         else:
             label, lvl, res = "❌ SL", sl, "SL"
     elif hit_tp1 and not tp1_hit:
         label, lvl, res = f"✅ TP1 (+{PP(tp1):.0f}p)", tp1, "TP1"; t["tp1_hit"] = True; t["sl"] = e   # stop -> breakeven
     if label:
-        if res == "SL":            extra = "  → trade closed."
+        if res == "BE":            extra = "  → scratched at breakeven, no loss (protected the +run)."
+        elif res == "SL":          extra = "  → trade closed."
         elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +{PP(tp1):.0f}p partial kept."
         elif res == "TP1":         extra = "  → take partial, SL to breakeven."
         else:                      extra = "  → trade closed."
