@@ -314,7 +314,7 @@ def check_active_trade(price):
         elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +{PP(tp1):.0f}p partial kept."
         elif res == "TP1":         extra = "  → take partial, SL to breakeven."
         else:                      extra = "  → trade closed."
-        _tg_text(f"{label} — GOLD {side} hit {lvl} (entry {e}, now {price}).{extra}")
+        _tg_text(f"{label} — XAUUSD {side} hit {lvl} (entry {e}, now {price}).{extra}")
         if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, 1), "pips": PP(lvl)})
     elif time.time() - t.get("t0", time.time()) > 720:   # 12-min timeout
         t["active"] = False
@@ -683,7 +683,7 @@ def main():
             if recent and not new_zone:
                 print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
-            wmsg = (f"{wa} 👀 GOLD — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
+            wmsg = (f"{wa} 👀 XAUUSD — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
             if not DRY:
                 notify_telegram(wmsg, f"watch|{htf[2]}")
@@ -768,7 +768,7 @@ def main():
            f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence\n"
            f"• Room to next structure: {str(room_p)+'p' if room_p is not None else 'open'}"
            f"{' ⚠tight' if room_p is not None and room_p < MIN_ROOM_P else ''}")
-    msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n\n"
+    msg = (f"{arrow} XAUUSD — CONFIRMED {side} [{grade}]\n\n"
            f"{ctx}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
