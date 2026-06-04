@@ -45,6 +45,7 @@ MIN_ROOM_P = 25                    # skip a trade if usable room to the next str
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
+CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
 ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
@@ -212,7 +213,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
-                 "session_filter": True, "news_filter": True, "volume_filter": True}
+                 "range_filter": True, "session_filter": True, "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -373,6 +374,16 @@ def rsi_series(closes, n=14):
         out[i] = 100 - 100/(1 + (ag/al if al else 999))
     return out
 
+def chop_15m(b):
+    """Range/chop detector on the 15m TF (resampled from the 1m bars in hand — no TF switch).
+    Kaufman efficiency ratio = |net move| / sum(|bar-to-bar moves|): ~1 = clean trend, ~0 = chop.
+    Returns (is_chop, er)."""
+    c = [b[i]['close'] for i in range(len(b)-1, -1, -15)][::-1]   # ~12 15m closes ending at the current bar
+    if len(c) < 5: return (False, 1.0)
+    denom = sum(abs(c[k]-c[k-1]) for k in range(1, len(c)))
+    er = abs(c[-1]-c[0]) / denom if denom else 0.0
+    return (er < CHOP_ER, round(er, 2))
+
 def rsi_divergence(b, side):
     """Bullish div (LONG): price lower-low but RSI higher-low at the last 2 swing lows. Mirror for SHORT."""
     rs = rsi_series([x['close'] for x in b]); sh, sl = pivots(b)
@@ -413,6 +424,7 @@ def main():
     avgbody = sum(abs(x['close'] - x['open']) for x in b[-20:]) / 20 / PIP
     strong = body_pips > 1.6 * max(avgbody, 0.5)
     bull = body > 0
+    is_chop, chop_er = chop_15m(b)   # 15m range/chop detector (suppress breakout/momentum when ranging)
     sh, sl = pivots(b)
     # --- trendlines through last 2 swing highs / lows ---
     res_tl = line_through(sh[-2], sh[-1]) if len(sh) >= 2 else None
@@ -466,7 +478,7 @@ def main():
     nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
     print(f"\n[{_dt.datetime.utcnow():%Y-%m-%d %H:%M:%S}Z]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
-    print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
+    print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  15m-ER={chop_er}{' CHOP' if is_chop else ''}  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
@@ -569,6 +581,17 @@ def main():
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
+
+    # range filter: in 15m chop, suppress BREAKOUT/CONTINUATION setups (false breaks in a range).
+    # Reversals (sweep/VWAP/retest/reclaim) stay — fading the range is the right play when chopping.
+    if FL.get("range_filter", True) and is_chop and setups:
+        kept = []
+        for s in setups:
+            if any(k in s[1] for k in ("trendline", "breakout", "breakdown", "impulse", "double")):
+                print(f">> SKIP RANGE: {s[0]} [{s[1]}] — 15m is chop (ER={chop_er}<{CHOP_ER}); breakouts fail in a range.")
+            else:
+                kept.append(s)
+        setups = kept
 
     # anti-chase: don't enter a CONTINUATION setup after price has already run far off its base
     # (avoids buying the top / selling the bottom of a vertical spike). Reversals fade extension -> exempt.
