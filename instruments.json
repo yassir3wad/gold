@@ -4,7 +4,7 @@
 
   "XAUUSD": { "pip": 0.10,   "atr_ref": 30, "pip_value": 10.0, "tv": "XAUUSD", "chart": "eabXWKAd", "sessions": ["london", "ny"], "desc": "Gold (1.0 lot=100oz, $10/pip)" },
   "GBPUSD": { "pip": 0.0001, "atr_ref": 8,  "pip_value": 10.0, "tv": "GBPUSD", "chart": "ldWp9xnE", "sessions": ["london", "ny"], "desc": "Pound ($10/pip/lot)" },
-  "NAS100": { "pip": 1.0,    "atr_ref": 25, "pip_value": 1.0,  "tv": "NAS100", "sessions": ["ny"],            "desc": "US Tech 100 — VERIFY pip_value w/ broker ($/point/lot)" },
+  "NAS100": { "pip": 1.0,    "atr_ref": 25, "pip_value": 1.0,  "tv": "NAS100", "chart": "Zs07LqQb", "sessions": ["ny"],           "desc": "US Tech 100 — VERIFY pip_value w/ broker ($/point/lot)" },
   "US30":   { "pip": 1.0,    "atr_ref": 30, "pip_value": 1.0,  "tv": "US30",   "chart": "NKYI04JN", "sessions": ["ny"],           "desc": "Dow 30 — VERIFY pip_value w/ broker" },
   "EURUSD": { "pip": 0.0001, "atr_ref": 6,  "pip_value": 10.0, "tv": "EURUSD", "chart": "qn9pRpwp", "sessions": ["london", "ny"], "desc": "Euro ($10/pip/lot)" },
   "USDJPY": { "pip": 0.01,   "atr_ref": 7,  "pip_value": 6.7,  "tv": "USDJPY", "chart": "soFkmee0", "sessions": ["asia", "ny"],   "desc": "Yen (~$6.7/pip/lot, varies w/ rate)" },
