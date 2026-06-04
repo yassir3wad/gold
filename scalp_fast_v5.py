@@ -196,8 +196,8 @@ def load_zones():
         except Exception: pass
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:
         return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
-                z.get("pdh") or PDH, z.get("pdl") or PDL)
-    return list(HTF_R), list(HTF_S), PDH, PDL
+                z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
+    return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
 
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
@@ -407,8 +407,8 @@ def main():
     draw = "--draw" in sys.argv
     DRY = "--dry" in sys.argv   # test mode: compute + print only, NO telegram/log/sound/state
     FL = load_flags()
-    global HTF_R, HTF_S, PDH, PDL
-    HTF_R, HTF_S, PDH, PDL = load_zones()   # auto-derived zones (rebuilt every ~6h) override the hardcoded fallback
+    global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
+    HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
     tv("timeframe", "1")
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])

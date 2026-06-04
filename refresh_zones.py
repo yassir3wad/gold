@@ -67,10 +67,20 @@ def main():
     zones = [fmt(z) for z in merged]
     R = sorted([z for z in zones if z[3] > price], key=lambda z: z[3])[:6]
     S = sorted([z for z in zones if z[3] < price], key=lambda z: -z[3])[:6]
-    out = {'ts': time.time(), 'price': price, 'pdh': pdh, 'pdl': pdl,
+    # Asian session range by UTC time (00-07) — dynamic, replaces the hardcoded ASIA. Use the LAST
+    # COMPLETED Asian session (today's if past 07 UTC, else yesterday's).
+    import datetime as dt
+    tv('timeframe', '15'); sb = tv('ohlcv', '-n', '200').get('bars', []); tv('timeframe', '1')
+    now = dt.datetime.utcnow()
+    asia_day = now.date() if now.hour >= 7 else (now.date() - dt.timedelta(days=1))
+    asia = [x for x in sb if dt.datetime.utcfromtimestamp(x['time']).hour < 7
+            and dt.datetime.utcfromtimestamp(x['time']).date() == asia_day]
+    asia_h = round(max(x['high'] for x in asia), 1) if asia else None
+    asia_l = round(min(x['low'] for x in asia), 1) if asia else None
+    out = {'ts': time.time(), 'price': price, 'pdh': pdh, 'pdl': pdl, 'asia_h': asia_h, 'asia_l': asia_l,
            'htf_r': [[z[0], z[1], z[2]] for z in R], 'htf_s': [[z[0], z[1], z[2]] for z in S]}
     json.dump(out, open(ZONES_FILE, 'w'), indent=1)
-    print(f"wrote zones.json  price={price}  R={len(R)} S={len(S)}  pdh={pdh} pdl={pdl}")
+    print(f"wrote zones.json  price={price}  R={len(R)} S={len(S)}  pdh={pdh} pdl={pdl}  asia={asia_h}/{asia_l}")
 
 if __name__ == "__main__":
     main()
