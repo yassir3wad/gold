@@ -213,7 +213,8 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
-                 "range_filter": True, "session_filter": True, "news_filter": True, "volume_filter": True}
+                 "range_filter": True, "session_sweep": True, "session_filter": True,
+                 "news_filter": True, "volume_filter": True}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -576,6 +577,24 @@ def main():
         for zlo, zhi, lab in HTF_R:
             if hi5 >= zlo and last['close'] < zlo - 5*PIP and (not bull) and cum3 <= -20:
                 setups.append(("SHORT", "zone-reclaim rejection", last['close'], zhi)); break
+    # 10) Session liquidity sweep — a session raids the PRIOR session's high/low (resting stops) then
+    # reverses back inside (Asian-range raid / Judas swing). Watches real session pools, not recent swings.
+    if FL.get("session_sweep", True):
+        try: _z = json.load(open(ZONES_FILE))
+        except Exception: _z = {}
+        h = _dt.datetime.utcfromtimestamp(ts).hour
+        # only the genuinely-prior session's pool is live: prior-day always; Asian once it's done (h>=7,
+        # i.e. during London/NY); London once done (h>=16); NY once done (overnight). Avoids stale pools.
+        pools_hi = [(PDH, "PDH")]; pools_lo = [(PDL, "PDL")]
+        if h >= 7:            pools_hi.append((ASIA_H, "Asian-H"));         pools_lo.append((ASIA_L, "Asian-L"))
+        if h >= 16:           pools_hi.append((_z.get("london_h"), "London-H")); pools_lo.append((_z.get("london_l"), "London-L"))
+        if h >= 22 or h < 7:  pools_hi.append((_z.get("ny_h"), "NY-H"));    pools_lo.append((_z.get("ny_l"), "NY-L"))
+        for lvl, nm in pools_hi:   # raid buy-side liquidity above, reject -> SHORT
+            if lvl and strong and not bull and last['high'] > lvl and last['close'] < lvl - 4*PIP:
+                setups.append(("SHORT", f"{nm} liq sweep", last['close'], last['high'])); break
+        for lvl, nm in pools_lo:   # raid sell-side liquidity below, reclaim -> LONG
+            if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + 4*PIP:
+                setups.append(("LONG", f"{nm} liq sweep", last['close'], last['low'])); break
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim) exempt
     if FL["volume_filter"] and not vol_ok:
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim"))]

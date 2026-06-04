@@ -19,5 +19,6 @@
   "news_filter": true,
   "volume_filter": true,
   "zone_reclaim": false,
-  "range_filter": true
+  "range_filter": true,
+  "session_sweep": true
 }

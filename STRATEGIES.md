@@ -17,6 +17,7 @@ and pushes alerts to Telegram. Conventions: **1 pip = $0.10** (so 50 pips = a $5
 | 6 | **Break-and-retest** | `break_retest` | A broken swing level is retested from the other side and rejected |
 | 7 | **VWAP rejection / bounce** | `vwap` | Strong rejection at / bounce off VWAP. Reads TradingView's **session-anchored VWAP + bands** off the chart (falls back to a computed rolling VWAP if the indicator's removed). Upper/lower bands act as mean-reversion levels (tag upper → short bias, lower → long bias). |
 | 8 | **Asian-range / prior-day breakout** | `session_breakout` | Strong close beyond the Asian-session range or prior-day high/low |
+| 9 | **Session liquidity sweep** 🌊 | `session_sweep` | A session **raids the prior session's high/low** (resting stops) then reverses back inside — the Asian-range raid / *Judas swing*. Watches real session pools (Asian / London / NY H-L + prior-day H-L), **time-gated** to the genuinely-prior session (during London → Asian; overnight → NY). Strong wick beyond the pool + close ≥4p back inside. |
 
 *\*"strong candle" = body > **1.6× the average body of the last 20 candles** (adaptive to volatility).*
 
