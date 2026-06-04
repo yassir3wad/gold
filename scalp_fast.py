@@ -238,6 +238,7 @@ def alert_sound(n=3):
 TG_CONF = os.path.expanduser("~/tradingview-mcp/telegram_config.json")
 TG_STATE = os.path.expanduser("~/.tv_fast_tg.json")
 TRADE_STATE = os.path.expanduser("~/.tv_fast_trade.json")
+PENDING_FILE = os.path.expanduser("~/.tv_fast_pending.json")   # a confirmed trade held for AI review (--review)
 
 def _tg_text(text):
     """Plain text Telegram send (no dedup, no photo) — for trade-management events."""
@@ -407,6 +408,7 @@ def proj(line, x): return line[0] * x + line[1]
 def main():
     draw = "--draw" in sys.argv
     DRY = "--dry" in sys.argv   # test mode: compute + print only, NO telegram/log/sound/state
+    REVIEW = "--review" in sys.argv   # AI-review gate: hold confirmed trades for approval (TP/SL + heads-ups still go)
     FL = load_flags()
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
@@ -736,9 +738,6 @@ def main():
     print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
     print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
-    if DRY:
-        print("   [DRY RUN — no telegram/log/state]"); return
-    alert_sound(3)   # audible alert
     arrow = "🟢⬆️" if side == "LONG" else "🔴⬇️"
     msg = (f"{arrow} GOLD — CONFIRMED {side} [{grade}]\n{why}{htf_note}\n\n"
            f"Entry: {entry}\n"
@@ -746,18 +745,59 @@ def main():
            f"TP1: {tp1} (+{tp1_p:.0f}p)\n"
            f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
-    notify_telegram(msg, f"signal|{side}|{round(entry)}|{why}")
-    sid = int(time.time())
     hz = at_R or at_S   # the actual extended level that drove the grade (incl. VWAP/round#/PDH/Asian)
+    trade = {"side": side, "entry": entry, "sl": sl_lvl, "tp1": tp1, "tp2": tp2, "tp1_p": tp1_p, "tp2_p": tp2_p,
+             "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
+             "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi}
+    if DRY:
+        print("   [DRY RUN — no telegram/log/state]"); return
+    if REVIEW:   # AI-review gate: hold the trade, don't send. (approve: --approve  ·  reject: --reject)
+        try: json.dump({**trade, "t": time.time()}, open(PENDING_FILE, "w"))
+        except Exception: pass
+        print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
+        return
+    _fire(trade)
+
+def _fire(t):
+    """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown."""
+    alert_sound(3)
+    notify_telegram(t["msg"], f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
+    sid = int(time.time())
     log_signal({"id": sid, "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
-                "side": side, "grade": grade, "pattern": why, "entry": entry, "sl": sl_lvl, "tp1": tp1,
-                "rng10": round(rng10), "body_p": round(body_pips), "htf": hz[2] if hz else "open",
+                "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"], "sl": t["sl"],
+                "tp1": t["tp1"], "rng10": t.get("rng10", ""), "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"),
                 "result": "PENDING", "exit": "", "pips": ""})
-    set_active_trade(side, entry, sl_lvl, tp1, tp2, sid)   # track for TP/SL + outcome logging
+    set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid)
     try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
     except Exception: pass
 
+def _read_pending():
+    try: return json.load(open(PENDING_FILE))
+    except Exception: return None
+
 if __name__ == "__main__":
+    if "--approve" in sys.argv:   # send the held trade + start tracking
+        t = _read_pending()
+        if t:
+            _fire(t)
+            try: os.remove(PENDING_FILE)
+            except Exception: pass
+            print(f"✅ APPROVED & SENT: {t['side']} {t['grade']} @ {t['entry']}")
+        else: print("no pending trade to approve")
+        sys.exit()
+    if "--reject" in sys.argv:    # log the rejection (feeds the learn dataset), don't send
+        t = _read_pending()
+        if t:
+            reason = next((a for a in sys.argv[sys.argv.index("--reject")+1:] if not a.startswith("--")), "")
+            log_signal({"id": int(time.time()), "time": _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"),
+                        "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"],
+                        "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""), "body_p": t.get("body_p",""),
+                        "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason})
+            try: os.remove(PENDING_FILE)
+            except Exception: pass
+            print(f"🚫 REJECTED & LOGGED: {t['side']} {t['grade']} @ {t['entry']}  ({reason})")
+        else: print("no pending trade to reject")
+        sys.exit()
     # single-instance lock: never let two scans overlap and fight over the chart timeframe
     LOCK = os.path.expanduser("~/.tv_fast.lock")
     if os.path.exists(LOCK):
