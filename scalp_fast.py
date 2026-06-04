@@ -148,28 +148,35 @@ def _tpo_levels():
     return (rows[idx][0], rows[z][0], rows[a][0])            # poc, vah, val
 
 def volume_profile():
-    """POC + value-area for confluence. The Kioseff TPO only renders on a high TF, so flip to VP_TF,
-    SHOW the TPO, read it, HIDE it, restore 1m; fall back to a computed 30m volume profile if unread.
-    Cached (VP_TTL). try/finally guarantees the chart is always restored to 1m (never stuck on 30m)."""
+    """One cached visit to VP_TF (30m) returns BOTH the TPO POC/value-area AND the HTF trend regime.
+    The 1m chart is execution-only — trend bias is read from the 30m EMA stack up here (immune to 1m
+    pullbacks). The Kioseff TPO only renders on a high TF, so we SHOW it, read it, HIDE it. try/finally
+    guarantees the chart returns to 1m. Returns (vpoc, vah, val, regime). Cached VP_TTL."""
     try:
         c = json.load(open(VP_FILE))
-        if time.time() - c.get("t", 0) < VP_TTL: return c.get("vpoc"), c.get("vah"), c.get("val")
+        if time.time() - c.get("t", 0) < VP_TTL:
+            return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat")
     except Exception: pass
     tid = next((s["id"] for s in tv("state").get("studies", [])
                 if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None)
-    poc = vah = val = None
+    poc = vah = val = None; regime = "flat"
     try:
         tv("timeframe", VP_TF)
         if tid: tv("indicator", "toggle", tid, "--show"); time.sleep(4)   # let the TPO render on 30m
         if tid: poc, vah, val = _tpo_levels()
-        if poc is None:   # fallback: compute a volume profile from 30m bars
-            poc, vah, val = _calc_vp(tv("ohlcv", "-n", str(VP_BARS)).get("bars", []))
+        bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", [])
+        if poc is None: poc, vah, val = _calc_vp(bars)                    # fallback: computed profile
+        if bars:                                                          # HTF regime from 30m EMA stack
+            _, _, _, em_h, _ = read_chart_levels([x["close"] for x in bars])
+            h5, h1, h2 = em_h.get(50), em_h.get(100), em_h.get(200)
+            if h5 and h1 and h2:
+                regime = "UP" if h5 > h1 > h2 else ("DOWN" if h5 < h1 < h2 else "flat")
         if tid: tv("indicator", "toggle", tid, "--hide")
     finally:
         tv("timeframe", "1")
-    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val}, open(VP_FILE, "w"))
+    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime}, open(VP_FILE, "w"))
     except Exception: pass
-    return poc, vah, val
+    return poc, vah, val, regime
 
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
@@ -420,11 +427,9 @@ def main():
 
     # --- chart indicators: session VWAP (+bands), EMA 50/100/200, RSI — read not computed (self-heal) ---
     vw, vw_up, vw_lo, em, rsi = read_chart_levels([x['close'] for x in b])
-    e50, e100, e200 = em.get(50), em.get(100), em.get(200)
-    up_stack = bool(e50 and e100 and e200 and e50 > e100 > e200)   # EMA stack = uptrend regime
-    dn_stack = bool(e50 and e100 and e200 and e50 < e100 < e200)   # EMA stack = downtrend regime
-    regime = "UP" if up_stack else ("DOWN" if dn_stack else "flat")
-    vpoc, vah, val = volume_profile() if FL.get("volume_profile", True) else (None, None, None)
+    e50, e100, e200 = em.get(50), em.get(100), em.get(200)   # 1m EMAs — execution-level S/R only
+    vpoc, vah, val, regime = volume_profile()   # TPO POC/value-area + HTF (30m) trend regime, cached
+    if not FL.get("volume_profile", True): vpoc = vah = val = None   # flag only suppresses the VP levels
     r10 = round(price/10)*10; near_round = r10 if abs(r10-price) < 2 else None
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
@@ -459,7 +464,7 @@ def main():
     nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
     print(f"\n[{_dt.datetime.utcnow():%Y-%m-%d %H:%M:%S}Z]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
-    print(f"RSI={rsi}  regime={regime}(EMA stack)  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
+    print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
