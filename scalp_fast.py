@@ -16,11 +16,12 @@ MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
 
 # Higher-TF swing S/R map (matches the 1H/4H/Daily zones drawn on the chart). (lo, hi, label)
-HTF_R = [(4459,4468,"R 4459-68 (1H+15m highs)"), (4473,4478,"R 4475 (1H EMA50/15m EMA200)"),
-         (4493,4498,"KEY R 4496 (PDH + Asian-H + 4H EMA50)"), (4511,4515,"R 4513 (1H high)"),
-         (4538,4545,"R 4541 (1H/4H lower high)")]
-HTF_S = [(4438,4447,"S 4438-47 (15m EMA50 + 1H lows)"), (4423,4434,"S 4423-34 (prior-day low + 15m multi-touch)"),
-         (4398,4406,"Support 4400 (4H+1H)"), (4351,4368,"BUY ZONE Daily EMA200")]
+HTF_R = [(4459,4468,"R 4459-68 (15m+1H swing highs)"), (4470,4475,"R 4472 (15m EMA200 + 1H EMA50)"),
+         (4483,4489,"R 4485-88 (1H EMA100 + 15m/1H highs)"), (4493,4501,"KEY R 4496-4500 (PDH + 4H/1H EMA200)"),
+         (4511,4515,"R 4513 (1H high)"), (4538,4545,"R 4541 (1H/4H highs)")]
+HTF_S = [(4446,4449,"S 4447 (15m EMA50 + 1H/4H lows)"), (4433,4439,"S 4433-39 (1H/15m swing lows)"),
+         (4423,4427,"S 4424-26 (PDL + today-low multi-touch)"), (4398,4406,"S 4400 (4H swing low)"),
+         (4375,4385,"BUY ZONE Daily EMA200 (~4380)"), (4360,4368,"S 4366 (4H/Daily low)")]
 def near_htf(price, levels, tol=4):
     for lo, hi, lab in levels:
         if lo - tol <= price <= hi + tol: return (lo, hi, lab)
@@ -28,7 +29,7 @@ def near_htf(price, levels, tol=4):
 
 # --- v2 gold-specific reference levels (refresh ~daily) ---
 PDH, PDL = 4496.7, 4426.4          # prior-day high / low
-ASIA_H, ASIA_L = 4496.7, 4455.2    # Asian-session range
+ASIA_H, ASIA_L = 4465.2, 4449.8    # Asian-session range (06-04, still forming at refresh — re-check near London open)
 SESSION_UTC = set(range(7, 22))    # London+NY active hours (UTC); outside = quiet
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")
