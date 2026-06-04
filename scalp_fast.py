@@ -220,7 +220,8 @@ def load_flags():
     return f
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
-            "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout"}
+            "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
+            "reclaim": "zone_reclaim"}
 def flag_for(why):
     for k, v in PAT_FLAG.items():
         if k in why: return v
@@ -295,18 +296,18 @@ def check_active_trade(price):
     hit_tp1 = price <= tp1 if side == "SHORT" else price >= tp1
     label = None
     if hit_tp2:
-        label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
+        label, lvl, res = f"🎯 TP2 (+{PP(tp2):.0f}p)", tp2, "TP2"; t["active"] = False
     elif hit_sl:
         t["active"] = False
-        if tp1_hit:   # remainder stopped at breakeven AFTER banking the +50 partial — still a win, log as TP1
+        if tp1_hit:   # remainder stopped at breakeven AFTER banking the partial — still a win, log as TP1
             label, lvl, res = "🟰 BE (after TP1)", tp1, "TP1"
         else:
             label, lvl, res = "❌ SL", sl, "SL"
     elif hit_tp1 and not tp1_hit:
-        label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True; t["sl"] = e   # stop -> breakeven
+        label, lvl, res = f"✅ TP1 (+{PP(tp1):.0f}p)", tp1, "TP1"; t["tp1_hit"] = True; t["sl"] = e   # stop -> breakeven
     if label:
         if res == "SL":            extra = "  → trade closed."
-        elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +50p partial kept."
+        elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +{PP(tp1):.0f}p partial kept."
         elif res == "TP1":         extra = "  → take partial, SL to breakeven."
         else:                      extra = "  → trade closed."
         _tg_text(f"{label} — GOLD {side} hit {lvl} (entry {e}, now {price}).{extra}")
