@@ -32,12 +32,13 @@ ASIA_H, ASIA_L = 4496.7, 4455.2    # Asian-session range
 SESSION_UTC = set(range(7, 22))    # London+NY active hours (UTC); outside = quiet
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")
-COOLDOWN_MIN = 8                   # no new signal for N minutes after one fires (anti-clustering)
+COOLDOWN_MIN = 5                   # no new signal for N minutes after one fires (anti-clustering)
 WATCH_CD_FILE = os.path.expanduser("~/.tv_fast_watch.json")
 WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same zone area for N min
 WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
 CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
 MAX_CHASE_P = 60                   # skip a continuation entry if price already ran >this many pips off the base
+DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
 
 def _num(x):
     try: return float(str(x).replace(",", ""))
@@ -82,9 +83,16 @@ def read_chart_levels(closes):
         for c in closes[1:]: e = c*k + e*(1-k)
         return e
     em = {50: None, 100: None, 200: None}
-    for L in (50, 100, 200):                              # nearest-match: label by length, keep chart value
-        if emas:
-            ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x-ref)), 2)
+    if len(emas) == 3:
+        # rank-match: chart EMAs and internal EMAs of the same series rank identically (shorter length
+        # sits nearer recent price), so pairing by sorted rank is robust even though our EMA200 is
+        # under-sampled from 180 bars — far safer than absolute-nearest in a tight cluster.
+        order = sorted(emas)
+        for rank, (_, L) in enumerate(sorted((ema(L), L) for L in (50, 100, 200))):
+            em[L] = round(order[rank], 2)
+    elif emas:                                            # fallback (extra/missing EMAs): absolute nearest
+        for L in (50, 100, 200):
+            ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x - ref)), 2)
     return vw, up, lo, em
 
 def in_session(ts):
@@ -279,8 +287,8 @@ def main():
     vol_ok = (vol > avgvol) if avgvol else True
     ts = last['time']; sess_ok = in_session(ts); news = in_news(ts)
     asian_now = not sess_ok   # overnight/Asian window (off London-NY) — Asian range still forming, don't use it as a level
-    # extended level map: HTF zones + dynamic (VWAP / round# / prior-day H-L / Asian H-L) for grading
-    dynR, dynS = list(HTF_R), list(HTF_S)
+    # level map: wide HTF zones (tol=4) + dynamic POINT levels (VWAP/EMA/round#/PDH/Asian, tight DYN_TOL)
+    ptR, ptS = [], []   # dynamic point levels — kept separate so they get a tight halo, not the zone width
     if FL["extended_levels"]:
         ext = [(PDH,"prior-day high"), (PDL,"prior-day low"), (vw,"VWAP"), (near_round,f"round {near_round}")]
         if vw_up: ext.append((vw_up, "VWAP upper band"))   # mean-reversion: tag of upper band favors shorts
@@ -291,8 +299,10 @@ def main():
             ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
         for lvl, lab in ext:
             if lvl is None: continue
-            (dynR if lvl >= price else dynS).append((lvl-2, lvl+2, lab))
-    at_R = near_htf(price, dynR); at_S = near_htf(price, dynS)
+            (ptR if lvl >= price else ptS).append((lvl, lvl, lab))
+    # HTF zones keep their intended wide tolerance; dynamic point-levels get the tight one
+    at_R = near_htf(price, HTF_R) or near_htf(price, ptR, tol=DYN_TOL)
+    at_S = near_htf(price, HTF_S) or near_htf(price, ptS, tol=DYN_TOL)
     print(f"PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")

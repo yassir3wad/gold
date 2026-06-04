@@ -31,7 +31,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 - **B** — momentum in **open space** (no nearby level). `B+vol` if volume confirms.
 - **C-into-zone** — a LONG poking *into* resistance, or SHORT *into* support, **without** a real break → **SUPPRESSED** (not fired). *(This is the fix for the "short into support" loss.)*
 
-**Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP (+ bands), round numbers, prior-day H/L, Asian-range H/L**, and (when `ema_levels` on) **EMA 50 / 100 / 200**. VWAP and the EMAs are **read live from your chart indicators** (not computed); the scanner self-heals by re-adding any that get removed. EMAs are read at the chart's timeframe and labeled by length via a rank-match (the value used is always the chart's plotted value).
+**Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP (+ bands), round numbers, prior-day H/L, Asian-range H/L**, and (when `ema_levels` on) **EMA 50 / 100 / 200**. VWAP and the EMAs are **read live from your chart indicators** (not computed); the scanner self-heals by re-adding any that get removed. EMAs are read at the chart's timeframe and labeled by length via a rank-match (the value used is always the chart's plotted value). **Proximity:** wide `HTF_R`/`HTF_S` zones count as "at level" within ±4 (`near_htf` tol); dynamic point-levels (VWAP/EMA/round/PDH/Asian) use a tight **±15 pip** halo (`DYN_TOL`) so a far-away VWAP no longer inflates a grade to A+.
 
 ---
 
@@ -44,7 +44,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 | **News blackout** | `news_filter` | Mutes during manual `NEWS_BLACKOUT` UTC windows (set around NFP/CPI/FOMC) |
 | **Volume confirmation** | `volume_filter` | Breakouts/breaks need **above-average volume**; reversals (sweep/retest/VWAP) exempt |
 | **Anti-chase** | `anti_chase` | Skips a **continuation** entry (momentum/breakout/trendline/double) if price already ran **>60p** (`MAX_CHASE_P`) off the 6-bar base — stops buying the top / selling the bottom of a vertical spike. Reversals (sweep/VWAP/retest) are exempt (they fade extension). |
-| **Cooldown** | (const) | After any signal, **no new signal for 8 min** (`COOLDOWN_MIN`) — anti-clustering |
+| **Cooldown** | (const) | After any signal, **no new signal for 5 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 
 ---
