@@ -11,6 +11,9 @@ Optionally draws the active trendlines:  python3 scalp_fast.py --draw
 """
 import subprocess, json, os, sys, time, csv as _csv, datetime as _dt
 TVDIR = os.path.expanduser("~/tradingview-mcp")
+try:
+    sys.path.insert(0, TVDIR); import news as newsmod   # FF economic-calendar blackout (cache-only, no fetch in scanner)
+except Exception: newsmod = None
 PIP = 0.10
 MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
@@ -573,8 +576,9 @@ def main():
         print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{vol_min:.0f}p). No fast scalp{extra}.")
         return
 
-    if FL["news_filter"] and news:
-        print("\n>> NEWS BLACKOUT — muted (manual window)."); return
+    ff_bo, ff_lbl = (newsmod.is_blackout(SYMBOL) if newsmod else (False, ""))
+    if FL["news_filter"] and (news or ff_bo):
+        print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'})."); return
 
     try: cd_t = json.load(open(CD_FILE)).get("t", 0)
     except Exception: cd_t = 0
