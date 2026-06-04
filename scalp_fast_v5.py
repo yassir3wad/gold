@@ -29,7 +29,7 @@ def near_htf(price, levels, tol=4):
 
 # --- v2 gold-specific reference levels (refresh ~daily) ---
 PDH, PDL = 4496.7, 4426.4          # prior-day high / low
-ASIA_H, ASIA_L = 4465.2, 4449.8    # Asian-session range (06-04, still forming at refresh — re-check near London open)
+ASIA_H, ASIA_L = 4484.0, 4443.3    # Asian-session range (06-04, complete 00-07 UTC)
 SESSION_UTC = set(range(7, 22))    # London+NY active hours (UTC); outside = quiet
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")

@@ -50,14 +50,21 @@ def main():
             c = clusters[-1]; c['hi'] = max(c['hi'], p); c['srcs'].append(src); c['ps'].append(p)
         else:
             clusters.append({'lo': p, 'hi': p, 'srcs': [src], 'ps': [p]})
-    zones = []
+    raw = []
     for c in clusters:
-        key = any(s in ('PDH', 'PDL') for s in c['srcs'])
-        if len(c['srcs']) >= 2 or key:   # multi-touch or a prior-day extreme
-            mid = round(sum(c['ps'])/len(c['ps']), 1)
-            srcs = sorted(set(c['srcs']))
-            lab = f"{mid} ({'+'.join(srcs[:4])}, x{len(c['srcs'])})"
-            zones.append((round(c['lo']-2, 1), round(c['hi']+2, 1), lab, mid))
+        if len(c['srcs']) >= 2 or any(s in ('PDH', 'PDL') for s in c['srcs']):   # multi-touch or prior-day extreme
+            raw.append({'lo': round(c['lo']-2, 1), 'hi': round(c['hi']+2, 1), 'srcs': list(c['srcs']), 'ps': list(c['ps'])})
+    # merge overlapping zones (same structure split across adjacent clusters) — avoids confluence inflation
+    raw.sort(key=lambda z: z['lo']); merged = []
+    for z in raw:
+        if merged and z['lo'] <= merged[-1]['hi']:
+            m = merged[-1]; m['hi'] = max(m['hi'], z['hi']); m['srcs'] += z['srcs']; m['ps'] += z['ps']
+        else:
+            merged.append(z)
+    def fmt(z):
+        mid = round(sum(z['ps'])/len(z['ps']), 1); srcs = sorted(set(z['srcs']))
+        return (z['lo'], z['hi'], f"{mid} ({'+'.join(srcs[:4])}, x{len(z['srcs'])})", mid)
+    zones = [fmt(z) for z in merged]
     R = sorted([z for z in zones if z[3] > price], key=lambda z: z[3])[:6]
     S = sorted([z for z in zones if z[3] < price], key=lambda z: -z[3])[:6]
     out = {'ts': time.time(), 'price': price, 'pdh': pdh, 'pdl': pdl,
