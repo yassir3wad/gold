@@ -46,6 +46,7 @@ RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
+ZONE_WICK_P = 15                   # zone-bounce: min rejection-wick (pips) for a candle to count as a zone defense
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
 ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
@@ -213,7 +214,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
-                 "range_filter": True, "session_sweep": True, "session_filter": True,
+                 "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "ai_decide": False}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
@@ -223,7 +224,7 @@ def load_flags():
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
             "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
-            "reclaim": "zone_reclaim"}
+            "reclaim": "zone_reclaim", "bounce": "zone_bounce"}
 def flag_for(why):
     for k, v in PAT_FLAG.items():
         if k in why: return v
@@ -599,9 +600,22 @@ def main():
         for lvl, nm in pools_lo:   # raid sell-side liquidity below, reclaim -> LONG
             if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + 4*PIP:
                 setups.append(("LONG", f"{nm} liq sweep", last['close'], last['low'])); break
-    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim) exempt
+    # 11) Zone-bounce — a REJECTION candle at a confluent zone (NO "strong" candle / 2-bar pattern needed).
+    # Catches the gradual bounce/fade the impulse triggers miss: long lower-wick close-up at support, or
+    # upper-wick close-down at resistance. Tight stop just beyond the zone. Gated to confluent (conf>=2) zones.
+    if FL.get("zone_bounce", True):
+        # LONG: wick pierced the support-zone floor and closed back above it, with a real (>=ZONE_WICK_P) wick.
+        if (at_S and at_S[1] > at_S[0]                                  # a structural zone (not a clingy EMA/point)
+                and last['low'] <= at_S[0] and last['close'] >= at_S[0]  # pierced the floor, reclaimed it
+                and (last['close'] - last['low']) >= ZONE_WICK_P*PIP and last['close'] > last['open']):
+            setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - 2*PIP, 2)))
+        if (at_R and at_R[1] > at_R[0]
+                and last['high'] >= at_R[1] and last['close'] <= at_R[1]
+                and (last['high'] - last['close']) >= ZONE_WICK_P*PIP and last['close'] < last['open']):
+            setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + 2*PIP, 2)))
+    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce) exempt
     if FL["volume_filter"] and not vol_ok and not AI:
-        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim"))]
+        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 

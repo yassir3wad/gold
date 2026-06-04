@@ -12,3 +12,6 @@ id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
 1780555744,2026-06-04 06:49,LONG,A+,liquidity-sweep reversal,4466.76,4463.53,4471.4,107,32,"4470.1 (15mEMA+1H+1HEMA+round, x4)",timeout,4465.9,-9
 1780560188,2026-06-04 08:03,LONG,A+,momentum impulse,4465.09,4461.59,4470.09,56,22,EMA100,SL,4461.6,-35
 1780568595,2026-06-04 10:23,SHORT,A+,momentum impulse,4465.15,4468.55,4463.95,69,22,"4469.6 (15m+15mEMA+1H+1HEMA, x5)",rejected,,neg R:R 32p risk/20p into x7 support; RSI31 oversold; dead chop ER0.01; counter-trend
+1780572500,2026-06-04 11:28,LONG,A,momentum impulse,4488.24,4484.74,4489.44,150,21,"4480.8 (15m+1H+1HEMA+round, x6)",rejected,,"RSI80 overbought, chasing top of +18p vertical run; R:R upside-down 35p risk/20p into nextR 4489.9; bought into resistance no room"
+1780574325,2026-06-04 11:58,LONG,B (open space),resistance-trendline break,4513.41,4509.91,4518.41,141,58,open,rejected,,"RSI83 apex of +290p vertical run, flat regime = buying blow-off top; room great but entry is the climax — want the VAH/4500 retest not the chase"
+1780575150,2026-06-04 12:12,SHORT,C-into-zone,PDH liq sweep,4492.48,4495.98,4489.19,153,45,"4495.1 (1H+1HEMA+4H+4HEMA, x10)",rejected,,"C-into-zone: shorting INTO the x10 support shelf (4486-4502), ~6p to floor; RSI37 oversold = bounce risk; not a clean breakdown (no close+reject below 4486)"

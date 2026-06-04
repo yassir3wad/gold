@@ -21,5 +21,6 @@
   "zone_reclaim": false,
   "range_filter": true,
   "session_sweep": true,
-  "ai_decide": true
+  "ai_decide": true,
+  "zone_bounce": true
 }
