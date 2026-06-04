@@ -165,37 +165,51 @@ def set_active_trade(side, entry, sl, tp1, tp2, sid):
     try:   # finalize any still-open prior trade that this new signal supersedes
         old = json.load(open(TRADE_STATE))
         if old.get("active") and old.get("id") and old.get("id") != sid:
-            oe = old["entry"]; pips = round((oe-entry)/PIP if old["side"] == "SHORT" else (entry-oe)/PIP)
-            log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, 1), "pips": pips})
+            if old.get("tp1_hit"):   # already banked +50 — keep the win, don't downgrade to 'superseded'
+                ot1 = old["tp1"]; tp = round((old["entry"]-ot1)/PIP if old["side"]=="SHORT" else (ot1-old["entry"])/PIP)
+                log_signal({"id": old["id"], "result": "TP1", "exit": round(ot1, 1), "pips": tp})
+            else:
+                oe = old["entry"]; pips = round((oe-entry)/PIP if old["side"] == "SHORT" else (entry-oe)/PIP)
+                log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, 1), "pips": pips})
     except Exception: pass
     try: json.dump({"active": True, "id": sid, "side": side, "entry": entry, "sl": sl,
                     "tp1": tp1, "tp2": tp2, "tp1_hit": False, "t0": time.time()}, open(TRADE_STATE, "w"))
     except Exception: pass
 
 def check_active_trade(price):
-    """Alert on TP1/TP2/SL; finalize the signals_log outcome (incl. 12-min timeout)."""
+    """Alert on TP1/TP2/SL; finalize the signals_log outcome (incl. 12-min timeout).
+    Once TP1 is banked the stop moves to breakeven and the logged result can only be TP1/TP2 —
+    a later reversal can never overwrite a partial win with an 'SL' loss."""
     try: t = json.load(open(TRADE_STATE))
     except Exception: return
     if not t.get("active"): return
     side, e, sl, tp1, tp2 = t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"]
-    sid = t.get("id"); PP = lambda x: round((e - x)/PIP if side == "SHORT" else (x - e)/PIP)
+    sid = t.get("id"); tp1_hit = t.get("tp1_hit"); PP = lambda x: round((e - x)/PIP if side == "SHORT" else (x - e)/PIP)
+    hit_sl  = price >= sl  if side == "SHORT" else price <= sl
+    hit_tp2 = price <= tp2 if side == "SHORT" else price >= tp2
+    hit_tp1 = price <= tp1 if side == "SHORT" else price >= tp1
     label = None
-    if side == "SHORT":
-        if price >= sl: label, lvl, res = "❌ SL", sl, "SL"; t["active"] = False
-        elif price <= tp2: label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
-        elif price <= tp1 and not t.get("tp1_hit"): label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True
-    else:
-        if price <= sl: label, lvl, res = "❌ SL", sl, "SL"; t["active"] = False
-        elif price >= tp2: label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
-        elif price >= tp1 and not t.get("tp1_hit"): label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True
+    if hit_tp2:
+        label, lvl, res = "🎯 TP2 (+100p)", tp2, "TP2"; t["active"] = False
+    elif hit_sl:
+        t["active"] = False
+        if tp1_hit:   # remainder stopped at breakeven AFTER banking the +50 partial — still a win, log as TP1
+            label, lvl, res = "🟰 BE (after TP1)", tp1, "TP1"
+        else:
+            label, lvl, res = "❌ SL", sl, "SL"
+    elif hit_tp1 and not tp1_hit:
+        label, lvl, res = "✅ TP1 (+50p)", tp1, "TP1"; t["tp1_hit"] = True; t["sl"] = e   # stop -> breakeven
     if label:
-        extra = "  → take partial, SL to breakeven." if "TP1" in label else "  → trade closed."
+        if res == "SL":            extra = "  → trade closed."
+        elif "BE" in label:        extra = f"  → remainder out at breakeven ({e}); +50p partial kept."
+        elif res == "TP1":         extra = "  → take partial, SL to breakeven."
+        else:                      extra = "  → trade closed."
         _tg_text(f"{label} — GOLD {side} hit {lvl} (entry {e}, now {price}).{extra}")
         if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, 1), "pips": PP(lvl)})
     elif time.time() - t.get("t0", time.time()) > 720:   # 12-min timeout
-        res = "TP1" if t.get("tp1_hit") else "timeout"
         t["active"] = False
-        if sid: log_signal({"id": sid, "result": res, "exit": round(price, 1), "pips": PP(price)})
+        res, exit_px = ("TP1", tp1) if tp1_hit else ("timeout", price)   # tp1 already banked -> keep the win
+        if sid: log_signal({"id": sid, "result": res, "exit": round(exit_px, 1), "pips": PP(exit_px)})
     try: json.dump(t, open(TRADE_STATE, "w"))
     except Exception: pass
 

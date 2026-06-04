@@ -1,4 +1,5 @@
 id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
+1780522300,2026-06-03 21:31,SHORT,(reconstructed),"(pre-log, from TG alerts)",4446.0,,4441.0,,,,TP2,4436.0,100
 1780524990,2026-06-03 22:16,SHORT,A,momentum impulse,4426.48,4429.98,4421.48,124,24,S 4426-34 (1H+15m multi-touch),superseded,4425.15,13
 1780525246,2026-06-03 22:20,SHORT,A,momentum impulse,4425.15,4428.65,4420.15,120,27,S 4426-34 (1H+15m multi-touch),SL,4428.6,-35
 1780525379,2026-06-03 22:22,LONG,A+,resistance-trendline break,4428.83,4425.33,4433.83,93,28,S 4426-34 (1H+15m multi-touch),TP2,4438.8,100

@@ -62,7 +62,9 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 
 1. **👀 SETUP FORMING** — price reaches a key zone (heads-up, prepare)
 2. **🚨 CONFIRMED [side] [grade]** — trigger fired → Entry / SL / TP1 / TP2 + chart photo
-3. **✅ TP1** → take partial / SL to BE  ·  **🎯 TP2** (+100p)  ·  **❌ SL**
+3. **✅ TP1** → take partial / SL to BE  ·  **🎯 TP2** (+100p)  ·  **❌ SL**  ·  **🟰 BE after TP1** (remainder stopped at breakeven)
+
+> **Logging integrity:** once **TP1** is banked, the stop moves to breakeven and the recorded outcome can only become **TP1** or **TP2** — a later reversal can never overwrite a partial win with an `SL` loss in `signals_log.csv`. This keeps the auto-learn dataset honest.
 
 ---
 
