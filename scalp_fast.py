@@ -260,11 +260,13 @@ SIGNALS_LOG = os.path.expanduser("~/tradingview-mcp/signals_log.csv")
 SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng10", "body_p", "htf", "result", "exit", "pips"]
 
 SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
+RISK_USD = 20.0      # fixed $ risk per trade → lot = RISK_USD / (PIP_VALUE × stop_pips)
+PIP_VALUE = 10.0     # $ P/L per 1 pip per 1.0 lot (gold & USD-quoted forex ≈ 10; JPY/indices differ — set per symbol)
 INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
 def init_symbol(sym):
     """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
-    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF
+    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE
     global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
@@ -272,6 +274,7 @@ def init_symbol(sym):
         allc = json.load(open(INSTRUMENTS_FILE)); cfg = {**allc.get("_default", {}), **allc.get(SYMBOL, {})}
     except Exception: pass
     PIP = cfg.get("pip", PIP); ATR_REF = cfg.get("atr_ref", ATR_REF)
+    RISK_USD = cfg.get("risk_usd", RISK_USD); PIP_VALUE = cfg.get("pip_value", PIP_VALUE)
     TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
     if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
     s = SYMBOL.lower()
@@ -841,8 +844,10 @@ def main():
     else:
         tp1 = round(entry - tp1_p*PIP, 2); tp2 = round(entry - tp2_p*PIP, 2)
     risk = abs(entry - sl_lvl) / PIP
+    # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), floored at broker min 0.01
+    lot = max(0.01, round(RISK_USD / (PIP_VALUE * risk), 2)) if (risk > 0 and PIP_VALUE > 0) else 0.01
     print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
-    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
+    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${RISK_USD:.0f}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
     arrow = "🟢⬆️" if side == "LONG" else "🔴⬇️"
     hz = at_R or at_S   # the actual extended level that drove the grade (incl. VWAP/round#/PDH/Asian)
@@ -859,11 +864,12 @@ def main():
            f"{ctx}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
+           f"Lot: {lot}  (risk ≈ ${RISK_USD:.0f})\n"
            f"TP1: {tp1} (+{tp1_p:.0f}p)\n"
            f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
     trade = {"side": side, "entry": entry, "sl": sl_lvl, "tp1": tp1, "tp2": tp2, "tp1_p": tp1_p, "tp2_p": tp2_p,
-             "be_trig": be_trig,
+             "be_trig": be_trig, "lot": lot, "risk_usd": RISK_USD,
              "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
              "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
              "chop_er": chop_er, "conf": conf, "room": room_p, "bias": bias}
