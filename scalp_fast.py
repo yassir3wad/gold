@@ -216,7 +216,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
-                 "news_filter": True, "volume_filter": True, "ai_decide": False}
+                 "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False}
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -225,7 +225,7 @@ def load_flags():
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
             "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
-            "reclaim": "zone_reclaim", "bounce": "zone_bounce"}
+            "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt"}
 def flag_for(why):
     for k, v in PAT_FLAG.items():
         if k in why: return v
@@ -628,9 +628,26 @@ def main():
                 and last['high'] >= at_R[0] and last['close'] <= at_R[1]  # wick into the band, close didn't break the top
                 and (last['high'] - last['close']) >= ZONE_WICK_P*PIP and last['close'] < last['open']):
             setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + 2*PIP, 2)))
-    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce) exempt
+    # CRT (Candle Range Theory): the prior 15m block = the "range candle"; the last few 1m bars SWEEP its
+    # high/low (liquidity grab) and the last candle CLOSES BACK INSIDE the range = manipulation + reversal.
+    # Distinct from liquidity_sweep (which needs an HTF zone): CRT's edge is the swept range-extreme + the
+    # opposite range end as a defined target. Built-in room rule (>=25p to the opposite end) keeps R:R real.
+    if FL.get("crt", True) and len(b) >= 25:
+        rng = b[-20:-5]                                  # prior 15-bar block = the range candle (rolling 15m proxy)
+        rhi = max(x['high'] for x in rng); rlo = min(x['low'] for x in rng)
+        sw = b[-5:]                                      # last 5 bars = the sweep+reclaim window (recent, timely)
+        swlo = min(x['low'] for x in sw); swhi = max(x['high'] for x in sw)
+        # bullish CRT: swept >=3p below the range low, last candle reclaimed back inside (bullish close), room up
+        if (swlo <= rlo - 3*PIP and last['close'] > rlo and last['close'] > last['open']
+                and (rhi - last['close']) >= 25*PIP):
+            setups.append(("LONG", "CRT sweep+reclaim", last['close'], round(swlo - 2*PIP, 2)))
+        # bearish CRT: swept >=3p above the range high, last candle reclaimed back inside (bearish close), room down
+        if (swhi >= rhi + 3*PIP and last['close'] < rhi and last['close'] < last['open']
+                and (last['close'] - rlo) >= 25*PIP):
+            setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + 2*PIP, 2)))
+    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce/CRT) exempt
     if FL["volume_filter"] and not vol_ok and not AI:
-        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce"))]
+        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
