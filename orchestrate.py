@@ -35,6 +35,16 @@ def review(sym):
     subprocess.run(["bash", "aireview.sh", sym], cwd=TVDIR, capture_output=True, text=True, timeout=140)
     return os.path.exists(_state(sym, "pending"))
 
+def orch_log(line):
+    """Append one compact line/tick to a durable per-day all-pairs timeline (logs/_orch/<localdate>.log)."""
+    try:
+        d = os.path.join(TVDIR, "logs", "_orch")
+        os.makedirs(d, exist_ok=True)
+        f = os.path.join(d, dt.datetime.now().astimezone().strftime("%Y-%m-%d") + ".log")
+        ts = dt.datetime.now().astimezone().strftime("%H:%M")
+        with open(f, "a") as fh: fh.write(f"{ts} {line}\n")
+    except Exception: pass
+
 def main():
     rows = []
     for sym, cfg in INSTR.items():
@@ -46,7 +56,8 @@ def main():
     focus = set(r["sym"] for r in rows[:TOP_N]) | set(r["sym"] for r in rows if r["score"] >= FOCUS_MIN) | act | pin
 
     print(f"=== ORCH {dt.datetime.now().astimezone():%Y-%m-%d %H:%M %Z} ===")
-    print("scores: " + "  ".join(f"{r['sym']}:{r['score']}({'in '+r['sess'] if r['sess']!='—' else 'off'},ER{r['er']})" for r in rows))
+    score_str = "  ".join(f"{r['sym']}:{r['score']}({'in '+r['sess'] if r['sess']!='—' else 'off'},ER{r['er']})" for r in rows)
+    print("scores: " + score_str)
     held = []
     for sym in sorted(focus):
         is_held = review(sym)
@@ -64,6 +75,10 @@ def main():
         print(">> Claude: review each, then approve.sh <SYM> \"reason\" / reject.sh <SYM> \"reason\".")
     else:
         print(f"\n>> no held trades. focus={rows[0]['sym'] if rows else '-'} (score {rows[0]['score'] if rows else '-'}); others quiet.")
+
+    foc = rows[0]['sym'] if rows else '-'
+    tail = ("HELD " + ",".join(held)) if held else f"quiet (focus {foc})"
+    orch_log(f"{score_str} | {tail}")
 
 if __name__ == "__main__":
     main()

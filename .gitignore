@@ -13,3 +13,4 @@ telegram_config.json
 
 # runtime artifacts (auto-derived / cached)
 zones.json
+scalp_fast.log
