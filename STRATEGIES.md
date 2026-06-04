@@ -17,6 +17,7 @@ and pushes alerts to Telegram. Conventions: **1 pip = $0.10** (so 50 pips = a $5
 | 6 | **Break-and-retest** | `break_retest` | A broken swing level is retested from the other side and rejected |
 | 7 | **VWAP rejection / bounce** | `vwap` | Strong rejection at / bounce off VWAP. Reads TradingView's **session-anchored VWAP + bands** off the chart (falls back to a computed rolling VWAP if the indicator's removed). Upper/lower bands act as mean-reversion levels (tag upper → short bias, lower → long bias). |
 | 8 | **Asian-range / prior-day breakout** | `session_breakout` | Strong close beyond the Asian-session range or prior-day high/low |
+| 10 | **Zone-bounce** 🛡️ | `zone_bounce` | Rejection candle that **pierces a structural S/R zone and reclaims it** (≥15p wick, `ZONE_WICK_P`) — **no "strong" candle or 2-bar pattern needed**, so it catches *gradual* bounces the momentum triggers miss. Only at real zones (not clingy EMA points); tight stop at the rejection wick. |
 | 9 | **Session liquidity sweep** 🌊 | `session_sweep` | A session **raids the prior session's high/low** (resting stops) then reverses back inside — the Asian-range raid / *Judas swing*. Watches real session pools (Asian / London / NY H-L + prior-day H-L), **time-gated** to the genuinely-prior session (during London → Asian; overnight → NY). Strong wick beyond the pool + close ≥4p back inside. |
 
 *\*"strong candle" = body > **1.6× the average body of the last 20 candles** (adaptive to volatility).*
@@ -62,6 +63,8 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 - **SL:** just beyond the invalidating structure, **capped at 30–35 pips**
 - **TP1:** entry ± **50 pips**  ·  **TP2:** entry ± **100 pips**  *(currently fixed; adaptive-TP is planned)*
 - **Management rule:** take partial at TP1 → SL to breakeven → trail. **Exit if TP1 not hit within ~10 min.**
+- **Pre-TP1 breakeven protection** (`BE_TRIGGER_P=35`, auto): once a trade runs **+35 pips favorable** (even before TP1), the tracker pulls the stop to **entry** and fires a `🛡️ stop to BREAKEVEN` Telegram alert (move your broker stop too). A reversal then scratches at **0** instead of the full SL, and logs as `BE` not `SL`. *Born from 06-04: a short ran +38p, never hit TP1, gave it all back to −30p.* Trigger sits above typical entry-noise pullbacks so it doesn't scratch winners early.
+- **What to AVOID (06-04 lesson):** in **choppy / post-trend / reversing tape** (low 15m-ER, no clean trend), **skip counter-trend fades** even when well-located with good R:R — their hit-rate is poor (1W-2L day proved it; both losses were counter-trend fades in chop). The edge is **with-trend continuation** (pullback/bounce in a clean trend, the +77p type). In chop, demand extra confirmation (a held break-of-structure + retest, not the first rejection/reclaim candle) or stand aside.
 
 ---
 
