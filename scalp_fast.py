@@ -196,7 +196,7 @@ def load_zones():
         age = 1e12
     if age > ZONES_TTL:   # stale -> rebuild inline (only happens ~every 6h; switches TFs then restores 1m)
         try:
-            subprocess.run(["python3", "refresh_zones.py"], cwd=TVDIR, capture_output=True, timeout=150)
+            subprocess.run(["python3", "refresh_zones.py", "--symbol", SYMBOL], cwd=TVDIR, capture_output=True, timeout=150)
             z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
         except Exception: pass
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:

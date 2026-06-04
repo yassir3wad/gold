@@ -4,10 +4,23 @@ Clusters swing pivots + EMAs + PDH/PDL + round numbers into multi-touch zones. R
 scalp_fast.py (which rebuilds this automatically when it goes stale). Run standalone any time:
     python3 refresh_zones.py
 """
-import subprocess, json, os, time
-TVDIR = os.path.expanduser("~/tradingview-mcp"); PIP = 0.10
-ZONES_FILE = os.path.join(TVDIR, "zones.json")
-MERGE = 2.0   # cluster levels within $2 (20p) into one zone
+import subprocess, json, os, time, sys, math
+TVDIR = os.path.expanduser("~/tradingview-mcp")
+SYMBOL = "XAUUSD"
+if "--symbol" in sys.argv:
+    try: SYMBOL = sys.argv[sys.argv.index("--symbol")+1].upper()
+    except Exception: pass
+_cfg = {}
+try:
+    _all = json.load(open(os.path.join(TVDIR, "instruments.json")))
+    _cfg = {**_all.get("_default", {}), **_all.get(SYMBOL, {})}
+except Exception: pass
+PIP = _cfg.get("pip", 0.10)
+if _cfg.get("chart"): os.environ["TV_CHART"] = str(_cfg["chart"])   # pin reads to this symbol's window
+ZONES_FILE = os.path.join(TVDIR, f"zones_{SYMBOL.lower()}.json")
+MERGE = 20 * PIP   # cluster levels within ~20 pips into one zone (pip-scaled per instrument)
+PAD = 20 * PIP     # zone half-width padding (pip-scaled; was hardcoded $2 for gold)
+DECIMALS = max(0, int(round(-math.log10(PIP)))) + 1   # price rounding precision per instrument (gold 2, EUR 5, US30 1, JPY 3)
 
 def tv(*a):
     r = subprocess.run(["node", "src/cli/index.js", *a], cwd=TVDIR, capture_output=True, text=True, timeout=45)
@@ -30,18 +43,19 @@ def main():
         tv('timeframe', tf); b = tv('ohlcv', '-n', str(n)).get('bars', [])
         if not b: continue
         sh, sl = pivots(b)
-        for p in sh[-6:]: cands.append((round(p, 1), tag))
-        for p in sl[-6:]: cands.append((round(p, 1), tag))
+        for p in sh[-6:]: cands.append((round(p, DECIMALS), tag))
+        for p in sl[-6:]: cands.append((round(p, DECIMALS), tag))
         for s in tv('values').get('studies', []):
             if 'Moving Average' in s.get('name', ''):
-                try: cands.append((round(float(s['values']['EMA'].replace(',', '')), 1), tag+'EMA'))
+                try: cands.append((round(float(s['values']['EMA'].replace(',', '')), DECIMALS), tag+'EMA'))
                 except Exception: pass
         if tf == 'D' and len(b) >= 2:
-            pdh, pdl = round(b[-2]['high'], 1), round(b[-2]['low'], 1)
+            pdh, pdl = round(b[-2]['high'], DECIMALS), round(b[-2]['low'], DECIMALS)
             cands += [(pdh, 'PDH'), (pdl, 'PDL')]
     tv('timeframe', '1')
-    base = round(price/10)*10
-    for r in (base-20, base-10, base, base+10, base+20): cands.append((float(r), 'round'))
+    rstep = 100 * PIP   # round-number increment, pip-scaled (gold $10, EURUSD 0.01, US30 100, JPY 1.00)
+    base = round(price / rstep) * rstep
+    for k in (-2, -1, 0, 1, 2): cands.append((round(base + k*rstep, 5), 'round'))
     # cluster nearby levels
     cands.sort()
     clusters = []
@@ -53,7 +67,7 @@ def main():
     raw = []
     for c in clusters:
         if len(c['srcs']) >= 2 or any(s in ('PDH', 'PDL') for s in c['srcs']):   # multi-touch or prior-day extreme
-            raw.append({'lo': round(c['lo']-2, 1), 'hi': round(c['hi']+2, 1), 'srcs': list(c['srcs']), 'ps': list(c['ps'])})
+            raw.append({'lo': round(c['lo']-PAD, DECIMALS), 'hi': round(c['hi']+PAD, DECIMALS), 'srcs': list(c['srcs']), 'ps': list(c['ps'])})
     # merge overlapping zones (same structure split across adjacent clusters) — avoids confluence inflation
     raw.sort(key=lambda z: z['lo']); merged = []
     for z in raw:
@@ -62,7 +76,7 @@ def main():
         else:
             merged.append(z)
     def fmt(z):
-        mid = round(sum(z['ps'])/len(z['ps']), 1); srcs = sorted(set(z['srcs']))
+        mid = round(sum(z['ps'])/len(z['ps']), DECIMALS); srcs = sorted(set(z['srcs']))
         return (z['lo'], z['hi'], f"{mid} ({'+'.join(srcs[:4])}, x{len(z['srcs'])})", mid)
     zones = [fmt(z) for z in merged]
     R = sorted([z for z in zones if z[3] > price], key=lambda z: z[3])[:6]
@@ -85,7 +99,7 @@ def main():
         now = dt.datetime.now(tz); days = sorted(byd); last = days[-1]
         if last == now.date() and (now.hour*60+now.minute) < z and len(days) >= 2: last = days[-2]
         s = byd[last]; end = dt.datetime.combine(last, dt.time(), tz) + dt.timedelta(minutes=z)
-        return (round(max(x['high'] for x in s), 1), round(min(x['low'] for x in s), 1), end.astimezone(dt.timezone.utc).hour)
+        return (round(max(x['high'] for x in s), DECIMALS), round(min(x['low'] for x in s), DECIMALS), end.astimezone(dt.timezone.utc).hour)
     sid = next((s['id'] for s in tv('state').get('studies', []) if 'Session' in s.get('name', '')), None)
     sess = {}
     if sid:
@@ -98,7 +112,7 @@ def main():
     def fb(h1, h2):   # fallback: hardcoded UTC windows
         now = dt.datetime.utcnow(); day = now.date() if now.hour >= h2 else (now.date()-dt.timedelta(days=1))
         s = [x for x in sb if dt.datetime.utcfromtimestamp(x['time']).date() == day and h1 <= dt.datetime.utcfromtimestamp(x['time']).hour < h2]
-        return (round(max(x['high'] for x in s), 1), round(min(x['low'] for x in s), 1), h2) if s else (None, None, None)
+        return (round(max(x['high'] for x in s), DECIMALS), round(min(x['low'] for x in s), DECIMALS), h2) if s else (None, None, None)
     asia_h, asia_l, asia_end = sess.get('asia') or fb(0, 7)
     london_h, london_l, london_end = sess.get('london') or fb(7, 16)
     ny_h, ny_l, ny_end = sess.get('ny') or fb(13, 22)
