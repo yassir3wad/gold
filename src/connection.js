@@ -90,10 +90,16 @@ export async function connect() {
 async function findChartTarget() {
   const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/list`);
   const targets = await resp.json();
-  // Prefer targets with tradingview.com/chart in the URL
-  return targets.find(t => t.type === 'page' && /tradingview\.com\/chart/i.test(t.url))
-    || targets.find(t => t.type === 'page' && /tradingview/i.test(t.url))
-    || null;
+  const pages = targets.filter(t => t.type === 'page' && /tradingview/i.test(t.url));
+  // Pin to a specific window for parallel multi-pair: TV_TARGET = exact CDP target id, or
+  // TV_CHART = chart_id substring (e.g. ldWp9xnE). Lets one scanner-per-window run concurrently.
+  const want = process.env.TV_TARGET || process.env.TV_CHART;
+  if (want) {
+    const m = pages.find(t => t.id === want || (t.url || '').includes(want));
+    if (m) return m;
+  }
+  // default: first chart window (back-compat)
+  return pages.find(t => /tradingview\.com\/chart/i.test(t.url)) || pages[0] || null;
 }
 
 export async function getTargetInfo() {
