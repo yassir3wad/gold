@@ -10,3 +10,6 @@ telegram_config.json
 *.err
 .tv_*.json
 .DS_Store
+
+# runtime artifacts (auto-derived / cached)
+zones.json
