@@ -14,6 +14,9 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 PIP = 0.10
 MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
+ATR_REF = 30           # gold's characteristic 1m ATR (pips) — the VS=1 anchor for ATR-normalized sizing.
+                       # All pip-tuned constants below are scaled by VS = atr_base/ATR_REF at runtime so the
+                       # strategies self-fit any instrument & volatility regime (gold at normal vol → VS≈1 → unchanged).
 
 # Higher-TF swing S/R map (matches the 1H/4H/Daily zones drawn on the chart). (lo, hi, label)
 HTF_R = [(4459,4468,"R 4459-68 (15m+1H swing highs)"), (4470,4475,"R 4472 (15m EMA200 + 1H EMA50)"),
@@ -272,7 +275,7 @@ def log_signal(row):
         for r in rows: w.writerow({k: r.get(k, "") for k in SIG_COLS})
     except Exception: pass
 
-def set_active_trade(side, entry, sl, tp1, tp2, sid):
+def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
     try:   # finalize any still-open prior trade that this new signal supersedes
         old = json.load(open(TRADE_STATE))
         if old.get("active") and old.get("id") and old.get("id") != sid:
@@ -284,7 +287,7 @@ def set_active_trade(side, entry, sl, tp1, tp2, sid):
                 log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, 1), "pips": pips})
     except Exception: pass
     try: json.dump({"active": True, "id": sid, "side": side, "entry": entry, "sl": sl,
-                    "tp1": tp1, "tp2": tp2, "tp1_hit": False, "t0": time.time()}, open(TRADE_STATE, "w"))
+                    "tp1": tp1, "tp2": tp2, "tp1_hit": False, "be_trig": be_trig, "t0": time.time()}, open(TRADE_STATE, "w"))
     except Exception: pass
 
 def check_active_trade(price):
@@ -302,7 +305,7 @@ def check_active_trade(price):
     fav = PP(price)
     if fav > t.get("mfe", -10**9): t["mfe"] = fav
     be_moved = t.get("be_moved", False)
-    if not tp1_hit and not be_moved and t.get("mfe", 0) >= BE_TRIGGER_P:
+    if not tp1_hit and not be_moved and t.get("mfe", 0) >= t.get("be_trig", BE_TRIGGER_P):
         sl = t["sl"] = e; t["be_moved"] = be_moved = True
         _tg_text(f"🛡️ XAUUSD {side} — stop to BREAKEVEN ({e}). Ran +{t['mfe']:.0f}p; protecting the scratch. Move your stop to entry.")
     hit_sl  = price >= sl  if side == "SHORT" else price <= sl
@@ -437,6 +440,22 @@ def main():
     # --- volatility gate ---
     rng10 = (max(x['high'] for x in b[-10:]) - min(x['low'] for x in b[-10:])) / PIP
     atr = sum(x['high'] - x['low'] for x in b[-14:]) / 14 / PIP
+    # --- ATR-normalized sizing: scale the gold-tuned pip constants by a STABLE volatility factor so every
+    # strategy self-fits the instrument & regime. atr_base = ~2h 1m ATR (instrument character, not the noisy
+    # instant ATR); VS=1 at gold's ~30p reference ATR reproduces the original tuned values. Clamped to avoid extremes. ---
+    _nb = min(len(b), 120)
+    atr_base = (sum(x['high'] - x['low'] for x in b[-_nb:]) / _nb / PIP) if _nb else atr
+    VS = max(0.5, min(4.0, atr_base / ATR_REF))
+    chase_p  = MAX_CHASE_P * VS           # anti-chase max extension
+    wick_p   = ZONE_WICK_P * VS           # zone-bounce min rejection wick
+    room_min = MIN_ROOM_P * VS            # min clean room to next structure (R:R floor)
+    tp_buf   = TP_BUFFER_P * VS           # adaptive-TP buffer short of the wall
+    be_trig  = round(BE_TRIGGER_P * VS)   # pre-TP1 breakeven trigger (stored per-trade for the tracker)
+    dyn_tolp = DYN_TOL * VS               # dynamic-level "at level" halo (price units)
+    sl_lo_p, sl_hi_p = 30*VS, 35*VS       # SL cap band (pips)
+    tp1_cap, tp2_cap = 50*VS, 100*VS      # TP target caps (pips)
+    vol_min  = VOL_MIN_RANGE10 * VS       # volatility gate (10-bar range floor)
+    buf_p, rcl_p = 2*VS, 4*VS             # break buffer / min reclaim-back-inside (pips)
     # --- momentum candle ---
     body = last['close'] - last['open']; body_pips = abs(body) / PIP
     avgbody = sum(abs(x['close'] - x['open']) for x in b[-20:]) / 20 / PIP
@@ -482,11 +501,11 @@ def main():
             if lvl is None: continue
             (ptR if lvl >= price else ptS).append((lvl, lvl, lab))
     # HTF zones keep their intended wide tolerance; dynamic point-levels get the tight one
-    at_R = near_htf(price, HTF_R) or near_htf(price, ptR, tol=DYN_TOL)
-    at_S = near_htf(price, HTF_S) or near_htf(price, ptS, tol=DYN_TOL)
+    at_R = near_htf(price, HTF_R) or near_htf(price, ptR, tol=dyn_tolp)
+    at_S = near_htf(price, HTF_S) or near_htf(price, ptS, tol=dyn_tolp)
     # confluence: how many distinct levels sit right at price (used to strengthen/justify the grade)
-    conf_R = len([1 for lo,hi,_ in HTF_R if lo-4<=price<=hi+4] + [1 for p,_,_ in ptR if abs(p-price)<=DYN_TOL])
-    conf_S = len([1 for lo,hi,_ in HTF_S if lo-4<=price<=hi+4] + [1 for p,_,_ in ptS if abs(p-price)<=DYN_TOL])
+    conf_R = len([1 for lo,hi,_ in HTF_R if lo-4<=price<=hi+4] + [1 for p,_,_ in ptR if abs(p-price)<=dyn_tolp])
+    conf_S = len([1 for lo,hi,_ in HTF_S if lo-4<=price<=hi+4] + [1 for p,_,_ in ptS if abs(p-price)<=dyn_tolp])
     # next structure above / below entry (for adaptive TP) — horizontal walls only.
     # EMAs and VWAP are dynamic lines price flows THROUGH, so they don't cap a target.
     is_wall = lambda lab: not ("EMA" in lab or "VWAP" in lab)
@@ -509,10 +528,10 @@ def main():
         print("(trendlines drawn)")
 
     # --- volatility gate ---
-    if rng10 < VOL_MIN_RANGE10 and not AI:
+    if rng10 < vol_min and not AI:
         htf = at_R or at_S
         extra = f" — but price at {htf[2]}, watch for a burst there" if htf else ""
-        print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{VOL_MIN_RANGE10}p). No fast scalp{extra}.")
+        print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{vol_min:.0f}p). No fast scalp{extra}.")
         return
 
     if FL["news_filter"] and news:
@@ -525,7 +544,7 @@ def main():
         print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
 
     setups = []
-    buf = 2 * PIP  # break buffer
+    buf = buf_p * PIP  # break buffer (ATR-scaled)
     # 1) Trendline break (with strong momentum candle)
     if res_at and strong and bull and last['close'] > res_at + buf and last['open'] <= res_at + buf:
         setups.append(("LONG", "resistance-trendline break", last['close'], lo15))
@@ -552,7 +571,7 @@ def main():
     look = b[-22:-2] if len(b) >= 24 else b[:-2]
     if look:
         sw_hi = max(x['high'] for x in look); sw_lo = min(x['low'] for x in look)
-        rcl = 4 * PIP   # must close >=4p back INSIDE the swept level (genuine rejection, not a breakout run)
+        rcl = rcl_p * PIP   # must close >=rcl_p back INSIDE the swept level (genuine rejection, not a breakout run)
         if strong and not bull and last['high'] > sw_hi and last['close'] < sw_hi - rcl and near_htf(sw_hi, HTF_R):
             setups.append(("SHORT", "liquidity-sweep reversal", last['close'], last['high']))
         if strong and bull and last['low'] < sw_lo and last['close'] > sw_lo + rcl and near_htf(sw_lo, HTF_S):
@@ -560,12 +579,12 @@ def main():
     # 6) Break-and-retest (broken swing level retested from the other side, rejected)
     if len(sh) >= 1:
         lv = sh[-1][1]
-        if strong and bull and any(x['close'] > lv for x in b[-8:-1]) and last['low'] <= lv + 3*PIP and last['close'] > lv:
-            setups.append(("LONG", "break-and-retest", last['close'], lv - 3*PIP))
+        if strong and bull and any(x['close'] > lv for x in b[-8:-1]) and last['low'] <= lv + 3*VS*PIP and last['close'] > lv:
+            setups.append(("LONG", "break-and-retest", last['close'], lv - 3*VS*PIP))
     if len(sl) >= 1:
         lv = sl[-1][1]
-        if strong and not bull and any(x['close'] < lv for x in b[-8:-1]) and last['high'] >= lv - 3*PIP and last['close'] < lv:
-            setups.append(("SHORT", "break-and-retest", last['close'], lv + 3*PIP))
+        if strong and not bull and any(x['close'] < lv for x in b[-8:-1]) and last['high'] >= lv - 3*VS*PIP and last['close'] < lv:
+            setups.append(("SHORT", "break-and-retest", last['close'], lv + 3*VS*PIP))
     # 7) VWAP rejection / bounce
     if vw:
         if strong and not bull and last['high'] >= vw and last['close'] < vw:
@@ -608,10 +627,10 @@ def main():
         if le is not None and h >= le:                pools_hi.append((_z.get("london_h"), "London-H")); pools_lo.append((_z.get("london_l"), "London-L"))
         if ne is not None and (h >= ne or h < (ae or 7)): pools_hi.append((_z.get("ny_h"), "NY-H"));    pools_lo.append((_z.get("ny_l"), "NY-L"))
         for lvl, nm in pools_hi:   # raid buy-side liquidity above, reject -> SHORT
-            if lvl and strong and not bull and last['high'] > lvl and last['close'] < lvl - 4*PIP:
+            if lvl and strong and not bull and last['high'] > lvl and last['close'] < lvl - rcl_p*PIP:
                 setups.append(("SHORT", f"{nm} liq sweep", last['close'], last['high'])); break
         for lvl, nm in pools_lo:   # raid sell-side liquidity below, reclaim -> LONG
-            if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + 4*PIP:
+            if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + rcl_p*PIP:
                 setups.append(("LONG", f"{nm} liq sweep", last['close'], last['low'])); break
     # 11) Zone-bounce — a REJECTION candle at a confluent zone (NO "strong" candle / 2-bar pattern needed).
     # Catches the gradual bounce/fade the impulse triggers miss: long lower-wick close-up at support, or
@@ -622,12 +641,12 @@ def main():
         # also catches upper-edge reclaims of wide zones (the ~4500 bounce inside 4486-4503 it used to miss).
         if (at_S and at_S[1] > at_S[0]                                  # a structural zone (not a clingy EMA/point)
                 and last['low'] <= at_S[1] and last['close'] >= at_S[0]  # wick into the band, close didn't lose the floor
-                and (last['close'] - last['low']) >= ZONE_WICK_P*PIP and last['close'] > last['open']):
-            setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - 2*PIP, 2)))
+                and (last['close'] - last['low']) >= wick_p*PIP and last['close'] > last['open']):
+            setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - buf_p*PIP, 2)))
         if (at_R and at_R[1] > at_R[0]
                 and last['high'] >= at_R[0] and last['close'] <= at_R[1]  # wick into the band, close didn't break the top
-                and (last['high'] - last['close']) >= ZONE_WICK_P*PIP and last['close'] < last['open']):
-            setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + 2*PIP, 2)))
+                and (last['high'] - last['close']) >= wick_p*PIP and last['close'] < last['open']):
+            setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + buf_p*PIP, 2)))
     # CRT (Candle Range Theory): the prior 15m block = the "range candle"; the last few 1m bars SWEEP its
     # high/low (liquidity grab) and the last candle CLOSES BACK INSIDE the range = manipulation + reversal.
     # Distinct from liquidity_sweep (which needs an HTF zone): CRT's edge is the swept range-extreme + the
@@ -638,13 +657,13 @@ def main():
         sw = b[-5:]                                      # last 5 bars = the sweep+reclaim window (recent, timely)
         swlo = min(x['low'] for x in sw); swhi = max(x['high'] for x in sw)
         # bullish CRT: swept >=3p below the range low, last candle reclaimed back inside (bullish close), room up
-        if (swlo <= rlo - 3*PIP and last['close'] > rlo and last['close'] > last['open']
-                and (rhi - last['close']) >= 25*PIP):
-            setups.append(("LONG", "CRT sweep+reclaim", last['close'], round(swlo - 2*PIP, 2)))
+        if (swlo <= rlo - 3*VS*PIP and last['close'] > rlo and last['close'] > last['open']
+                and (rhi - last['close']) >= room_min*PIP):
+            setups.append(("LONG", "CRT sweep+reclaim", last['close'], round(swlo - buf_p*PIP, 2)))
         # bearish CRT: swept >=3p above the range high, last candle reclaimed back inside (bearish close), room down
-        if (swhi >= rhi + 3*PIP and last['close'] < rhi and last['close'] < last['open']
-                and (last['close'] - rlo) >= 25*PIP):
-            setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + 2*PIP, 2)))
+        if (swhi >= rhi + 3*VS*PIP and last['close'] < rhi and last['close'] < last['open']
+                and (last['close'] - rlo) >= room_min*PIP):
+            setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + buf_p*PIP, 2)))
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce/CRT) exempt
     if FL["volume_filter"] and not vol_ok and not AI:
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT"))]
@@ -670,12 +689,12 @@ def main():
         def chasing(side, why):
             if not any(k in why for k in ("trendline", "breakout", "breakdown", "impulse", "double")):
                 return False   # sweep / VWAP / retest are reversals — they trade the turn, exempt
-            return ext_up > MAX_CHASE_P if side == "LONG" else ext_dn > MAX_CHASE_P
+            return ext_up > chase_p if side == "LONG" else ext_dn > chase_p
         kept = []
         for s in setups:
             if chasing(s[0], s[1]):
                 run = ext_up if s[0] == "LONG" else ext_dn
-                print(f">> SKIP CHASE: {s[0]} [{s[1]}] — price already ran {run:.0f}p off the {CHASE_LOOKBACK}-bar base (>{MAX_CHASE_P}p); too late, would be buying the top.")
+                print(f">> SKIP CHASE: {s[0]} [{s[1]}] — price already ran {run:.0f}p off the {CHASE_LOOKBACK}-bar base (>{chase_p:.0f}p); too late, would be buying the top.")
             else:
                 kept.append(s)
         setups = kept
@@ -767,18 +786,18 @@ def main():
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     if side == "LONG":
-        sl_lvl = round(max(min(struct, entry - 30*PIP), entry - 35*PIP), 2); wall = nextR
+        sl_lvl = round(max(min(struct, entry - sl_lo_p*PIP), entry - sl_hi_p*PIP), 2); wall = nextR
     else:
-        sl_lvl = round(min(max(struct, entry + 30*PIP), entry + 35*PIP), 2); wall = nextS
+        sl_lvl = round(min(max(struct, entry + sl_lo_p*PIP), entry + sl_hi_p*PIP), 2); wall = nextS
     if FL.get("adaptive_tp", True) and wall is not None:
-        room = abs(wall - entry)/PIP - TP_BUFFER_P
-        if room < MIN_ROOM_P and not AI:
-            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{MIN_ROOM_P}p R:R too poor)."); return
-        if room < MIN_ROOM_P:   # AI mode: surface but flag the tight room
+        room = abs(wall - entry)/PIP - tp_buf
+        if room < room_min and not AI:
+            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{room_min:.0f}p R:R too poor)."); return
+        if room < room_min:   # AI mode: surface but flag the tight room
             print(f"   ⚠ CRAMPED: only {room:.0f}p clean room to next structure {wall} — poor R:R, judge carefully.")
-        tp2_p = max(20, min(100, room)); tp1_p = min(50, tp2_p*0.6)
+        tp2_p = max(tp2_cap*0.2, min(tp2_cap, room)); tp1_p = min(tp1_cap, tp2_p*0.6)
     else:
-        tp2_p, tp1_p = 100, 50
+        tp2_p, tp1_p = tp2_cap, tp1_cap
     if side == "LONG":
         tp1 = round(entry + tp1_p*PIP, 2); tp2 = round(entry + tp2_p*PIP, 2)
     else:
@@ -797,7 +816,7 @@ def main():
            f"• Trend: 30m {regime} ({bias})\n"
            f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence\n"
            f"• Room to next structure: {str(room_p)+'p' if room_p is not None else 'open'}"
-           f"{' ⚠tight' if room_p is not None and room_p < MIN_ROOM_P else ''}")
+           f"{' ⚠tight' if room_p is not None and room_p < room_min else ''}")
     msg = (f"{arrow} XAUUSD — CONFIRMED {side} [{grade}]\n\n"
            f"{ctx}\n\n"
            f"Entry: {entry}\n"
@@ -806,6 +825,7 @@ def main():
            f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
     trade = {"side": side, "entry": entry, "sl": sl_lvl, "tp1": tp1, "tp2": tp2, "tp1_p": tp1_p, "tp2_p": tp2_p,
+             "be_trig": be_trig,
              "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
              "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
              "chop_er": chop_er, "conf": conf, "room": room_p, "bias": bias}
@@ -834,7 +854,7 @@ def _fire(t, note=""):
                 "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"], "sl": t["sl"],
                 "tp1": t["tp1"], "rng10": t.get("rng10", ""), "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"),
                 "result": "PENDING", "exit": "", "pips": ""})
-    set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid)
+    set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid, t.get("be_trig", BE_TRIGGER_P))
     try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
     except Exception: pass
 
