@@ -30,6 +30,10 @@ export async function captureScreenshot({ region, filename, method } = {}) {
   }
 
   const client = await getClient();
+  // Force the (possibly backgrounded) window to render a fresh frame before capture.
+  // Without this, macOS stops repainting an occluded canvas and CDP returns a STALE frame
+  // (every alert ends up showing whatever was last on screen). bringToFront + settle fixes it.
+  try { await client.Page.bringToFront(); await new Promise(r => setTimeout(r, 350)); } catch {}
   let clip = undefined;
 
   if (region === 'chart') {
