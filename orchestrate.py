@@ -9,6 +9,7 @@ Light by design: only the focus pairs get the full --review (the heavy 30m regim
 """
 import subprocess, json, os, datetime as dt
 import scan_pairs
+from src.state_manager import StateManager
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 INSTR = json.load(open(os.path.join(TVDIR, "instruments.json")))
 FOCUS_MIN = 55          # review any pair scoring >= this
@@ -23,12 +24,14 @@ def pinned_pairs():
     except Exception: return []
 
 def active_pairs():
+    """Return list of symbols with active trades using StateManager."""
+    state_mgr = StateManager(namespace="scanner")
     out = []
     for sym in INSTR:
         if sym.startswith("_"): continue
-        try:
-            if json.load(open(_state(sym, "trade"))).get("active"): out.append(sym)
-        except Exception: pass
+        trade_state = state_mgr.get_trade_state(sym)
+        if trade_state and trade_state.get("active"):
+            out.append(sym)
     return out
 
 def review(sym):
