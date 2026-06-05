@@ -387,3 +387,56 @@ Files modified:
 
 Next: subtask-2-4 - Add scan timestamp tracking to main()
 
+[2026-06-05T11:12:00.000Z] ✅ COMPLETED: subtask-2-4 - Add scan timestamp tracking to main()
+
+Successfully added scan timestamp tracking to main() in scalp_fast.py:
+
+Changes Implemented:
+  - Added state_manager.save_scan_timestamp(SYMBOL) before all 14 return points in main()
+  - Ensures timestamp is tracked regardless of scan outcome:
+    * Line 493: ERR: no data
+    * Line 591: TOO QUIET (volatility gate)
+    * Line 595: NEWS BLACKOUT
+    * Line 600: COOLDOWN
+    * Line 778: heads-up suppressed (counter-trend)
+    * Line 789: heads-up suppressed (watch cooldown)
+    * Line 804: NO FAST SETUP
+    * Line 822: SKIP counter-zone poke
+    * Line 838: SKIP COUNTER-TREND
+    * Line 844: OFF-SESSION
+    * Line 856: SKIP CRAMPED
+    * Line 915: DRY RUN
+    * Line 921: REVIEW mode
+    * Line 924: after _fire(trade) - normal completion
+
+Pattern Followed:
+  - Timestamp saved just before each return statement
+  - Uses state_manager.save_scan_timestamp(SYMBOL) - timestamp defaults to current time
+  - Tracks scan completion for orchestrator visibility and health monitoring
+  - Works for any symbol (XAUUSD, GBPUSD, etc.)
+
+Purpose:
+  - Enables orchestrator to see when each symbol was last scanned
+  - Helps debug "why wasn't this symbol scanned?" issues
+  - Supports restart recovery by showing staleness of scan data
+
+Verification Passed:
+  - Created test script that saves and retrieves scan timestamp
+  - StateManager correctly stores and retrieves timestamp
+  - Result: OK (timestamp tracking working)
+
+Commit: 2b0eb52, 9f00082
+
+Files modified:
+  - scalp_fast.py (34 insertions, 10 deletions)
+  - implementation_plan.json (status updated to completed)
+
+Phase 2 Complete! All scalp_fast.py migrations to StateManager complete:
+  ✅ subtask-2-1: set_active_trade() migrated
+  ✅ subtask-2-2: check_active_trade() migrated
+  ✅ subtask-2-3: Cooldown management migrated
+  ✅ subtask-2-4: Scan timestamp tracking added
+
+Next: Phase 3 - Migrate scalp_scan.py to StateManager
+  → subtask-3-1: Replace load_state/save_state with StateManager
+
