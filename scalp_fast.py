@@ -14,6 +14,10 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 try:
     sys.path.insert(0, TVDIR); import news as newsmod   # FF economic-calendar blackout (cache-only, no fetch in scanner)
 except Exception: newsmod = None
+try:
+    sys.path.insert(0, TVDIR); from risk_manager import RiskManager
+except Exception:
+    RiskManager = None  # fallback if risk_manager not available
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -306,6 +310,7 @@ SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng
 SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
 RISK_USD = 20.0      # fixed $ risk per trade → lot = RISK_USD / (PIP_VALUE × stop_pips)
 PIP_VALUE = 10.0     # $ P/L per 1 pip per 1.0 lot (gold & USD-quoted forex ≈ 10; JPY/indices differ — set per symbol)
+risk_mgr = RiskManager() if RiskManager else None   # risk management engine
 USE_TPO = False      # read the Kioseff TPO indicator for VPOC/value-area (gold only); others use the computed profile
 LOT_MIN, LOT_MAX, LOT_STEP = 0.01, 100.0, 0.01   # broker volume constraints (per-instrument; sized lot is rounded to step + clamped)
 INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
@@ -995,6 +1000,14 @@ def main():
         except Exception: pass
         print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
         return
+    # Risk management check — block signal if limits breached
+    if risk_mgr:
+        check = risk_mgr.risk_check(SYMBOL, side)
+        if not check["allowed"]:
+            print("   🚫 SIGNAL BLOCKED BY RISK MANAGER:")
+            for reason in check["reasons"]:
+                print(f"      • {reason}")
+            return
     _fire(trade)
 
 def _fire(t, note=""):
