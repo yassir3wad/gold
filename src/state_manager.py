@@ -300,6 +300,55 @@ class StateManager:
         except Exception:
             return False
 
+    def set_cooldown(self, symbol: str, cooldown_minutes: int):
+        """
+        Set cooldown for a symbol (convenience method).
+
+        Args:
+            symbol: Trading symbol
+            cooldown_minutes: Cooldown duration in minutes
+        """
+        self.save_cooldown(symbol, time.time())
+
+    def in_cooldown(self, symbol: str, cooldown_minutes: int = 5) -> bool:
+        """
+        Check if symbol is in cooldown period (convenience method).
+
+        Args:
+            symbol: Trading symbol
+            cooldown_minutes: Cooldown duration in minutes (default: 5)
+
+        Returns:
+            True if in cooldown, False otherwise
+        """
+        return self.check_cooldown(symbol, cooldown_minutes * 60)
+
+    def get_cooldown_remaining(self, symbol: str, cooldown_minutes: int = 5) -> float:
+        """
+        Get remaining cooldown time in seconds (convenience method).
+
+        Args:
+            symbol: Trading symbol
+            cooldown_minutes: Cooldown duration in minutes (default: 5)
+
+        Returns:
+            Remaining cooldown time in seconds, or 0 if not in cooldown
+        """
+        try:
+            cd_time = self._state["cooldowns"].get(symbol)
+            if cd_time is None:
+                return 0.0
+
+            elapsed = time.time() - cd_time
+            remaining_seconds = (cooldown_minutes * 60) - elapsed
+
+            if remaining_seconds > 0:
+                return remaining_seconds
+            else:
+                return 0.0
+        except Exception:
+            return 0.0
+
     # Watch state methods
 
     def save_watch_state(self, symbol: str, watch_data: Dict[str, Any]):

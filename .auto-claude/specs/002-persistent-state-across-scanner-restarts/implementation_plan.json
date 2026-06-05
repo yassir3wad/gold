@@ -278,8 +278,9 @@
             "command": "python3 orchestrate.py && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "In main() print loop, add last scan time for each symbol: ts = sm.get_scan_timestamp(sym); if ts: print age in seconds. Helps debug 'why wasn't this symbol scanned?'"
+          "status": "completed",
+          "notes": "Completed: Initialized StateManager in main(). Added scan timestamp retrieval before each symbol review using state_manager.get_scan_timestamp(sym). Added scan timestamp recording after each review using state_manager.save_scan_timestamp(sym). Output now displays time since last scan (e.g., 'last: 15m ago') or 'first scan' for symbols not yet tracked. Enables debugging of scanner health and helps identify gaps in coverage.",
+          "updated_at": "2026-06-05T11:35:00.000000+00:00"
         }
       ]
     },
@@ -300,14 +301,17 @@
           "description": "Test fresh start with no existing state",
           "all_services": true,
           "files_to_modify": [],
-          "files_to_create": [],
+          "files_to_create": [
+            "test_fresh_start_local.py"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "manual",
             "instructions": "1. Delete ~/.tv_scanner_state.json if exists. 2. Run python3 scalp_fast.py --symbol XAUUSD. 3. Verify clean startup with no errors. 4. Check state file created at ~/.tv_scanner_state.json with valid schema."
           },
-          "status": "pending",
-          "notes": "Verify graceful cold start - scanner should initialize with empty state and create new state file."
+          "status": "completed",
+          "notes": "Completed: Created comprehensive integration test (test_fresh_start_local.py) that verifies fresh start behavior. Fixed missing StateManager convenience methods (in_cooldown, set_cooldown, get_cooldown_remaining) that scalp_fast.py was using but weren't implemented. Test validates: StateManager initializes cleanly with no existing state, state file created on first save with valid schema (version, active_trades, cooldowns, watch_state, scan_timestamps), all field types correct (dicts), basic state operations work (cooldowns, scan timestamps, active trades), state changes persist to disk immediately. Test passed successfully.",
+          "updated_at": "2026-06-05T11:31:00.000000+00:00"
         },
         {
           "id": "subtask-5-2",
@@ -542,6 +546,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:21:17.128Z",
+  "updated_at": "2026-06-05T09:26:08.753Z",
   "last_updated": "2026-06-05T09:17:15.865944+00:00"
 }
