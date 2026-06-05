@@ -69,6 +69,107 @@ Test the scanner by hand (no alerts/state): `python3 scalp_fast.py --dry`
 
 ---
 
+## Backtesting
+
+The system includes a comprehensive multi-day backtesting framework to validate strategy performance over historical data.
+
+### Quick Start
+
+```bash
+# Basic backtest over 15 days
+python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15
+
+# Walk-forward optimization (rolling train/test windows)
+python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-31 \
+    --walk-forward --train-days 5 --test-days 2
+
+# Monte Carlo simulation (test robustness by randomizing trade order)
+python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \
+    --monte-carlo --iterations 1000
+
+# Export results for analysis
+python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \
+    --export trades.csv --report summary.txt
+```
+
+### Features
+
+- **Sequential backtesting**: Test strategy over any date range using live TradingView 1m bar data
+- **Walk-forward optimization**: Sliding train/test windows to simulate real-world forward testing
+- **Monte Carlo simulation**: Randomize trade order 1000+ times to assess robustness and curve-fitting risk
+- **Advanced metrics**: Profit factor, max drawdown, Sharpe ratio, confidence intervals
+- **Export**: CSV trade log + text summary report for external analysis
+
+### Walk-Forward Mode
+
+Splits your date range into rolling windows:
+1. **Train** on N days (e.g., 5)
+2. **Test** on M days (e.g., 2)
+3. Slide forward by M days and repeat
+
+Reports both in-sample (training) and **out-of-sample (test)** metrics — focus on test results to avoid overfitting.
+
+Example output:
+```
+WINDOW 1/12
+Train: 2025-01-01 to 2025-01-05 (5 days)
+  Signals: 23  |  Wins: 14  |  Losses: 6  |  Net: +320 pips
+Test:  2025-01-06 to 2025-01-07 (2 days)
+  Signals: 8   |  Wins: 5   |  Losses: 2  |  Net: +140 pips
+```
+
+### Monte Carlo Simulation
+
+Randomizes trade order to test if results are order-dependent (a sign of curve-fitting). Reports 5th, 50th, and 95th percentile ranges:
+
+```
+MONTE CARLO SIMULATION (1000 iterations)
+Confidence intervals (5th, 50th, 95th percentiles):
+Net P&L:       -120 pips  |   +280 pips  |   +680 pips
+Win rate:       48.5%     |    52.0%     |    55.5%
+Max DD:         180 pips  |    240 pips  |    320 pips
+Sharpe ratio:   0.85      |    1.20      |    1.55
+```
+
+If the 5th percentile is profitable and drawdown is acceptable, the strategy is robust.
+
+### Filters
+
+Use `--enable-filters` to apply the same filters as `scalp_fast.py`:
+- **Session filter**: only London+NY hours (7-22 UTC)
+- **Chop filter**: skip trades when market efficiency ratio < 0.30 (ranging)
+- **News blackout**: skip manual blackout windows (edit `NEWS_BLACKOUT` in `backtest_multi_day.py`)
+
+### Output Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Signals** | Total trade setups detected |
+| **Wins** | TP1 hits within 10-bar horizon |
+| **Losses** | Stop loss hits |
+| **Timeouts** | Neither TP1 nor SL hit within 10 bars (exit at market) |
+| **Win rate** | Wins / (Wins + Losses), excluding timeouts |
+| **Net pips** | Cumulative P&L |
+| **Profit factor** | Gross profit / Gross loss |
+| **Max drawdown** | Largest peak-to-valley equity decline (pips & %) |
+| **Sharpe ratio** | Risk-adjusted returns (annualized) |
+
+### Requirements
+
+- **TradingView Desktop** running with CDP on port 9222
+- **XAUUSD 1m chart** open in TradingView
+- Python 3.7+ with `scalp_fast.py` in the same directory
+
+### Tips
+
+1. **Dry-run first**: Use `--dry-run` to preview dates before running
+2. **Start small**: Test 5-7 days first to verify setup
+3. **Use walk-forward**: Better than simple sequential for avoiding overfitting
+4. **Check Monte Carlo**: If 5th percentile is negative, strategy may be fragile
+5. **Export for analysis**: Use `--export trades.csv` to analyze patterns in Excel/Python
+
+---
+
 ## Files
 
 | File | Purpose |

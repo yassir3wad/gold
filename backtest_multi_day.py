@@ -1,6 +1,108 @@
 #!/usr/bin/env python3
 """Multi-day walk-forward backtesting framework.
-Iterates over a date range, running single-day backtests for each day."""
+
+DESCRIPTION:
+    Simulates the scalp_fast.py strategy over historical data by replaying 1-minute bars
+    from TradingView Desktop. Supports sequential backtesting, walk-forward optimization,
+    Monte Carlo simulation, and risk metrics calculation.
+
+USAGE:
+    # Basic sequential backtest over date range
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15
+
+    # Walk-forward optimization (rolling train/test windows)
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-31 \\
+        --walk-forward --train-days 5 --test-days 2
+
+    # Monte Carlo simulation (randomize trade order to test robustness)
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \\
+        --monte-carlo --iterations 1000
+
+    # Enable chop/session filters (same filters as scalp_fast.py)
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \\
+        --enable-filters
+
+    # Export results to CSV and text report
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \\
+        --export trades.csv --report summary.txt
+
+    # Dry-run (preview dates without running backtests)
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 --dry-run
+
+CLI FLAGS:
+    --start-date YYYY-MM-DD     Start date for backtest (required)
+    --end-date YYYY-MM-DD       End date for backtest (required)
+    --walk-forward              Enable walk-forward optimization mode
+    --train-days N              Training window size in days (default: 5, for walk-forward)
+    --test-days N               Testing window size in days (default: 2, for walk-forward)
+    --monte-carlo               Enable Monte Carlo simulation
+    --iterations N              Number of Monte Carlo iterations (default: 1000)
+    --enable-filters            Enable chop filter (efficiency ratio) and session filter
+    --dry-run                   Print dates without running backtests (preview mode)
+    --export FILE.csv           Export all trades to CSV file
+    --report FILE.txt           Export summary report to text file
+
+OUTPUT FORMAT:
+    Per-day results:
+        - Bars: number of 1-minute bars processed
+        - Signals: total trade setups detected
+        - TP1 wins / SL losses / Timeouts: outcome breakdown
+        - Win rate: percentage (excluding timeouts)
+        - Net pips: cumulative P&L for the day
+
+    Overall summary:
+        - Days tested
+        - Total signals, wins, losses, timeouts
+        - Overall win rate (excluding timeouts)
+        - Overall net pips
+        - Advanced metrics: profit factor, max drawdown, Sharpe ratio
+
+    Trade format (columns):
+        side | grade | pattern | entry | SL | TP1 | result | pips
+        Example: LONG  A   range break   2450.2  2445.7  2455.2  TP1    +50
+
+    Walk-forward output:
+        - Per-window training and testing results
+        - Aggregated test period metrics
+        - Per-window test net pips and win rate
+
+    Monte Carlo output:
+        - Confidence intervals (5th, 50th, 95th percentiles) for:
+          Net P&L, Win rate, Max drawdown, Sharpe ratio
+
+WALK-FORWARD OPTIMIZATION:
+    Splits the date range into sliding train/test windows to simulate real-world
+    forward testing. Each window:
+        1. Trains on N days (--train-days, e.g., 5)
+        2. Tests on M days (--test-days, e.g., 2)
+        3. Slides forward by M days and repeats
+
+    Example: 30-day range with train=5, test=2:
+        Window 1: Train Jan 1-5,   Test Jan 6-7
+        Window 2: Train Jan 6-10,  Test Jan 11-12
+        Window 3: Train Jan 11-15, Test Jan 16-17
+        ...
+
+    Reports both training and testing metrics, with focus on out-of-sample (test) performance.
+
+MONTE CARLO SIMULATION:
+    Randomizes the order of trades N times (--iterations) to assess robustness.
+    If results are sensitive to trade order, the strategy may be curve-fitted.
+    Reports percentile ranges (5th, 50th, 95th) for key metrics.
+
+FILTERS (--enable-filters):
+    When enabled, applies the same filters as scalp_fast.py:
+        - Session filter: only London+NY hours (7-22 UTC)
+        - Chop filter: skip trades when efficiency ratio < 0.30 (ranging market)
+        - News blackout: skip manual blackout windows (edit NEWS_BLACKOUT constant)
+
+NOTES:
+    - Requires TradingView Desktop running with CDP on port 9222
+    - Fetches 1m OHLCV data via tradingview-mcp CLI
+    - Simulates 10-bar (10-minute) horizon for TP1/SL/timeout resolution
+    - One trade at a time (no pyramiding)
+    - HTF levels (HTF_R, HTF_S) must be set in scalp_fast.py for grading
+"""
 import argparse, datetime as dt, json, subprocess, os, random
 import scalp_fast as S
 
