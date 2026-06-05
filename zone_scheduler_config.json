@@ -1,0 +1,23 @@
+{
+  "_comment": "Configuration for the automated HTF zone refresh scheduler. refresh_interval_hours = how often to automatically refresh zones. refresh_on_session_open = list of trading sessions that trigger a zone refresh when they open. stale_threshold_hours = warn if any zone file hasn't been updated in this many hours. enabled = master switch for the scheduler.",
+
+  "enabled": true,
+  "enabled_instruments": ["XAUUSD", "GBPUSD", "EURUSD"],
+  "refresh_interval_hours": 4,
+  "stale_threshold_hours": 6,
+
+  "refresh_on_session_open": ["london", "ny"],
+
+  "session_times": {
+    "_comment": "UTC times for session opens. Used to trigger zone refresh at session start.",
+    "asia": "00:00",
+    "london": "08:00",
+    "ny": "13:00"
+  },
+
+  "notifications": {
+    "send_on_refresh": true,
+    "send_on_stale_warning": true,
+    "include_change_summary": true
+  }
+}

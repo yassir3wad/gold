@@ -238,3 +238,400 @@ ones are honestly reported as "no data"). Run it daily — coverage sharpens as 
 (`pivots`, `chop_15m`, `rsi_series`, `_calc_vp`, …), the counterfactual simulator, the digest, the pre-flight
 helpers, and every `analyze_logs` helper. The engine is live (fresh process each tick), so **run `python3 test_trading.py` after ANY code change**
 before the loop picks it up. Add a failing test first when fixing a bug or adding a rule.
+
+---
+
+## 9. Zone Scheduler — Automated HTF Zone Refresh
+
+The **zone scheduler** keeps your higher-timeframe support/resistance zones fresh automatically. Stale zones (>6 hours old)
+are the most common source of bad confluence grading — when `zones_<sym>.json` hasn't been refreshed in 8+ hours, the
+system may flag confluence with obsolete levels, leading to false A+ grades on low-quality setups.
+
+**The scheduler solves this:** zones auto-refresh **every 4 hours** (configurable), **at session opens** (London/NY), and
+**on demand** (manual trigger). All refresh events send a Telegram summary of what changed.
+
+---
+
+### 8.1. What it does
+
+The scheduler runs as a **background daemon** (systemd service or standalone) and:
+
+1. **Interval refresh** — Every N hours (default: 4), refresh zones for all enabled instruments
+2. **Session-based refresh** — Refresh zones 5 min after London open (08:05 UTC) and NY open (13:05 UTC)
+3. **Stale zone monitoring** — Check zone file timestamps hourly; alert if any are >6h old
+4. **Telegram notifications** — Send formatted alerts after each refresh with change summary (e.g., "XAUUSD: +2 -1 ~1")
+5. **Health checks** — Startup health check + periodic checks to catch zones that go stale between refreshes
+
+**Instruments managed:** Configured in `zone_scheduler_config.json` → `enabled_instruments` (default: XAUUSD, GBPUSD, EURUSD).
+You can enable all 7 or just the pairs you trade.
+
+---
+
+### 8.2. Setup & Installation
+
+#### Prerequisites
+```bash
+# Install APScheduler (required for zone_scheduler.py)
+pip3 install apscheduler
+
+# Ensure TradingView Desktop is running with CDP on port 9222
+# The scheduler calls refresh_zones.py which reads the charts via MCP
+```
+
+#### Configuration
+
+Edit `~/tradingview-mcp/zone_scheduler_config.json`:
+
+```json
+{
+  "enabled": true,
+  "enabled_instruments": ["XAUUSD", "GBPUSD", "EURUSD"],   // which pairs to refresh
+  "refresh_interval_hours": 4,                              // how often to auto-refresh
+  "stale_threshold_hours": 6,                               // warn if zones older than this
+  "refresh_on_session_open": ["london", "ny"],              // trigger at session opens
+  "session_times": {
+    "london": "08:00",                                      // UTC time for session open
+    "ny": "13:00"
+  },
+  "notifications": {
+    "send_on_refresh": true,                                // Telegram alert on refresh
+    "send_on_stale_warning": true                           // Telegram alert on stale zones
+  }
+}
+```
+
+**Important:** The scheduler applies a **5-minute offset** to session times (configurable), so London refresh triggers at
+08:05 UTC, NY at 13:05 UTC. This gives the session time to establish initial ranges before zones are recalculated.
+
+---
+
+### 8.3. Running the Scheduler
+
+#### Option A: Systemd Service (Recommended for production)
+
+**Install as a system service** (survives reboots, auto-restarts on failure):
+
+```bash
+# 1. Edit service file to replace YOUR_USERNAME placeholder
+cd ~/tradingview-mcp
+sed -i "s/YOUR_USERNAME/$(whoami)/g" zone_scheduler.service
+
+# 2. Install the service
+sudo cp zone_scheduler.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable zone_scheduler
+sudo systemctl start zone_scheduler
+
+# 3. Verify it's running
+sudo systemctl status zone_scheduler
+```
+
+**Service management commands:**
+```bash
+sudo systemctl start zone_scheduler      # Start
+sudo systemctl stop zone_scheduler       # Stop
+sudo systemctl restart zone_scheduler    # Restart (e.g., after config change)
+sudo systemctl status zone_scheduler     # Check status
+sudo systemctl is-active zone_scheduler  # Quick health check
+```
+
+**View logs:**
+```bash
+# Live systemd journal logs
+sudo journalctl -u zone_scheduler -f
+
+# Or application log file
+tail -f ~/tradingview-mcp/logs/zone_scheduler.log
+```
+
+For full systemd setup details, see `ZONE_SCHEDULER_SYSTEMD_SETUP.md`.
+
+#### Option B: Standalone Daemon (Manual start)
+
+```bash
+# Run in background (--daemon flag)
+cd ~/tradingview-mcp
+python3 zone_scheduler.py --daemon
+
+# Run in foreground (debug mode, see live logs)
+python3 zone_scheduler.py
+
+# Run once and exit (useful for testing)
+python3 zone_scheduler.py --once
+```
+
+**To stop:** `pkill -f zone_scheduler.py` or Ctrl+C (foreground mode).
+
+---
+
+### 8.4. Manual Refresh Commands
+
+Sometimes you want to refresh zones **immediately** (e.g., after a major news event or when you add a new pair):
+
+#### CLI Wrapper (Recommended)
+
+```bash
+# Refresh all enabled instruments
+bash ~/tradingview-mcp/refresh_zones_now.sh
+
+# Refresh specific symbol
+bash ~/tradingview-mcp/refresh_zones_now.sh --symbol XAUUSD
+
+# Dry-run (preview what would be refreshed without changing files)
+bash ~/tradingview-mcp/refresh_zones_now.sh --dry-run
+
+# Refresh + send Telegram notification
+bash ~/tradingview-mcp/refresh_zones_now.sh --notify
+
+# Combined: single symbol + notify
+bash ~/tradingview-mcp/refresh_zones_now.sh --symbol GBPUSD --notify
+```
+
+#### Direct Python Script
+
+```bash
+# Refresh all
+python3 ~/tradingview-mcp/refresh_all_zones.py
+
+# Refresh with notification
+python3 ~/tradingview-mcp/refresh_all_zones.py --notify
+
+# Refresh single symbol
+python3 ~/tradingview-mcp/refresh_all_zones.py --symbol NAS100 --notify
+```
+
+#### Telegram Bot Commands
+
+If you have the Telegram bot handler running (`telegram_bot_handler.py`):
+
+```
+/refresh_zones              → Refresh all enabled instruments
+/refresh_zones XAUUSD       → Refresh only XAUUSD
+/help                       → Show available commands
+```
+
+**Start the bot:**
+```bash
+python3 ~/tradingview-mcp/telegram_bot_handler.py
+```
+
+The bot sends an immediate "🔄 Refreshing zones..." acknowledgment, triggers the refresh, and sends a detailed summary when complete.
+
+---
+
+### 8.5. Monitoring Zone Health
+
+#### Check Zone Freshness
+
+```bash
+# Check all zone files, warn if >6h old (default threshold)
+python3 ~/tradingview-mcp/check_zone_health.py
+
+# Custom staleness threshold (e.g., warn if >2h old)
+python3 ~/tradingview-mcp/check_zone_health.py --max-age 2
+```
+
+**Output example:**
+```
+Checking zone file health (max age: 6 hours)...
+
+✓ XAUUSD: fresh (2.3 hours old) — last updated 2026-06-05 10:15:23
+✓ GBPUSD: fresh (3.1 hours old) — last updated 2026-06-05 09:27:45
+⚠ EURUSD: stale (8.7 hours old) — last updated 2026-06-05 04:02:10
+
+Summary: 2 fresh, 1 stale, 0 missing
+```
+
+**Exit codes:** 0 = all fresh, 1 = stale or missing zones detected (useful for scripting/monitoring).
+
+#### Integrated Health Check
+
+The scheduler automatically:
+- Runs a **startup health check** when it starts (sends Telegram alert if zones are stale)
+- Runs **hourly health checks** while running (sends alert if zones go stale between refreshes)
+
+You can also trigger a manual check:
+```bash
+python3 ~/tradingview-mcp/zone_scheduler.py --check-health
+```
+
+---
+
+### 8.6. Logs & Debugging
+
+All scheduler operations are logged to **`~/tradingview-mcp/logs/zone_scheduler.log`** with rotation (10MB max, 5 backups).
+
+**View logs:**
+```bash
+# Tail live logs
+tail -f ~/tradingview-mcp/logs/zone_scheduler.log
+
+# View recent errors
+grep ERROR ~/tradingview-mcp/logs/zone_scheduler.log | tail -20
+
+# Check when last refresh happened
+grep "Refreshing zones" ~/tradingview-mcp/logs/zone_scheduler.log | tail -5
+
+# See zone change summaries
+grep "zones changed" ~/tradingview-mcp/logs/zone_scheduler.log | tail -10
+```
+
+**Log format:** `[YYYY-MM-DD HH:MM:SS] LEVEL: message`
+
+**Example log entries:**
+```
+[2026-06-05 08:05:12] INFO: Session refresh triggered: london
+[2026-06-05 08:05:14] INFO: Refreshing zones for XAUUSD...
+[2026-06-05 08:05:42] INFO: XAUUSD: zones changed: +2 -1 ~0
+[2026-06-05 08:05:43] INFO: Telegram notification sent
+[2026-06-05 12:00:00] INFO: Zone health check: 3 fresh, 0 stale, 0 missing
+```
+
+**Systemd journal logs** (if running as service):
+```bash
+# Live logs with timestamps
+sudo journalctl -u zone_scheduler -f -o short-iso
+
+# Last 100 lines
+sudo journalctl -u zone_scheduler -n 100
+
+# Errors only
+sudo journalctl -u zone_scheduler -p err
+```
+
+---
+
+### 8.7. Troubleshooting
+
+#### Zones aren't refreshing
+
+**Check scheduler is running:**
+```bash
+# Systemd service
+sudo systemctl status zone_scheduler
+
+# Standalone daemon
+ps aux | grep zone_scheduler.py
+```
+
+**Check TradingView Desktop is running:**
+```bash
+# The scheduler calls refresh_zones.py which reads charts via MCP on port 9222
+# Ensure TradingView Desktop is open with CDP enabled
+
+# Test manual refresh
+python3 ~/tradingview-mcp/refresh_zones.py --symbol XAUUSD
+```
+
+**Check logs for errors:**
+```bash
+tail -50 ~/tradingview-mcp/logs/zone_scheduler.log | grep ERROR
+```
+
+#### Stale zone warnings persist
+
+If you keep getting stale zone warnings even though the scheduler is running:
+
+1. **Check enabled_instruments** in `zone_scheduler_config.json` — are all the pairs you trade enabled?
+2. **Check refresh_interval_hours** — if it's >6h, zones will go stale between refreshes (default is 4h, which is safe)
+3. **Check TradingView is running** — if the app crashes or CDP disconnects, refresh_zones.py will fail silently
+4. **Force a manual refresh** to reset zone timestamps:
+   ```bash
+   bash ~/tradingview-mcp/refresh_zones_now.sh --notify
+   ```
+
+#### Telegram notifications not sending
+
+**Check telegram_config.json exists:**
+```bash
+ls -l ~/tradingview-mcp/telegram_config.json
+```
+
+**Test Telegram connectivity:**
+```bash
+python3 ~/tradingview-mcp/telegram_notify.py --test --dry-run
+```
+
+**Check notification settings in zone_scheduler_config.json:**
+```json
+"notifications": {
+  "send_on_refresh": true,
+  "send_on_stale_warning": true
+}
+```
+
+#### Scheduler crashes or restarts frequently
+
+**Check resource limits** (if running as systemd service):
+```bash
+sudo systemctl status zone_scheduler
+# Look for "memory limit hit" or "CPU quota exceeded"
+```
+
+**Increase limits** in `zone_scheduler.service` if needed:
+```ini
+MemoryLimit=512M     # Increase if memory errors
+CPUQuota=50%         # Increase if CPU throttling
+```
+
+**Check for Python errors:**
+```bash
+sudo journalctl -u zone_scheduler -p err -n 50
+```
+
+#### Configuration changes not taking effect
+
+After editing `zone_scheduler_config.json`, **restart the scheduler**:
+
+```bash
+# Systemd service
+sudo systemctl restart zone_scheduler
+
+# Standalone daemon
+pkill -f zone_scheduler.py && python3 ~/tradingview-mcp/zone_scheduler.py --daemon
+```
+
+---
+
+### 8.8. Integration with Orchestration
+
+The zone scheduler runs **independently** of the orchestration loop (`orchestrate.sh`). They work together:
+
+- **Orchestration loop** (every 1 min) → scans pairs, triggers AI-reviewed trades, **reads zones from `zones_<sym>.json`**
+- **Zone scheduler** (every 4h + session opens) → **writes fresh zones to `zones_<sym>.json`**
+
+**Key points:**
+- The orchestration loop **never refreshes zones itself** — it only reads them
+- The zone scheduler **only refreshes zones** — it doesn't scan or trade
+- They communicate via the zone files (`zones_xauusd.json`, etc.)
+- This separation ensures **the scanner is fast** (no zone recalculation during scans) and **zones stay fresh** (scheduled background refresh)
+
+**When zones are stale during a scan:** The scanner still uses the old zones (it doesn't know they're stale). This is why
+the scheduler's health checks + alerts are critical — they catch staleness before it degrades trading decisions.
+
+---
+
+### 8.9. Quick Reference
+
+| Task | Command |
+|------|---------|
+| **Start scheduler (systemd)** | `sudo systemctl start zone_scheduler` |
+| **Stop scheduler (systemd)** | `sudo systemctl stop zone_scheduler` |
+| **Check scheduler status** | `sudo systemctl status zone_scheduler` |
+| **View logs (systemd)** | `sudo journalctl -u zone_scheduler -f` |
+| **View logs (file)** | `tail -f ~/tradingview-mcp/logs/zone_scheduler.log` |
+| **Manual refresh (all pairs)** | `bash ~/tradingview-mcp/refresh_zones_now.sh --notify` |
+| **Manual refresh (one pair)** | `bash ~/tradingview-mcp/refresh_zones_now.sh --symbol XAUUSD --notify` |
+| **Check zone health** | `python3 ~/tradingview-mcp/check_zone_health.py` |
+| **Test configuration** | `python3 ~/tradingview-mcp/zone_scheduler.py --test-session-schedule` |
+| **Run once and exit** | `python3 ~/tradingview-mcp/zone_scheduler.py --once` |
+| **Dry-run refresh** | `bash ~/tradingview-mcp/refresh_zones_now.sh --dry-run` |
+
+**Config files:**
+- Zone scheduler config: `~/tradingview-mcp/zone_scheduler_config.json`
+- Telegram config: `~/tradingview-mcp/telegram_config.json`
+- Systemd service: `/etc/systemd/system/zone_scheduler.service`
+
+**Documentation:**
+- Full systemd setup guide: `~/tradingview-mcp/ZONE_SCHEDULER_SYSTEMD_SETUP.md`
+- E2E test results: `~/tradingview-mcp/E2E_TEST_RESULTS.md`
