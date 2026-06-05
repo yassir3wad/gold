@@ -232,6 +232,10 @@ def compute_reference_levels():
     finally:
         tv("timeframe", "1")   # always restore 1m
 
+    # Log computed reference levels with timestamp (audit trail)
+    ts = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    print(f"[{ts}] computed reference levels: PDH={pdh} PDL={pdl} ASIA_H={asia_h} ASIA_L={asia_l}")
+
     return {"pdh": pdh, "pdl": pdl, "asia_h": asia_h, "asia_l": asia_l}
 
 def load_zones():
@@ -245,6 +249,14 @@ def load_zones():
     pdl_val = computed.get("pdl") if computed.get("pdl") is not None else PDL
     asia_h_val = computed.get("asia_h") if computed.get("asia_h") is not None else ASIA_H
     asia_l_val = computed.get("asia_l") if computed.get("asia_l") is not None else ASIA_L
+
+    # Log which values are being used (computed vs fallback) with timestamp
+    ts = _dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    pdh_src = "computed" if computed.get("pdh") is not None else "fallback"
+    pdl_src = "computed" if computed.get("pdl") is not None else "fallback"
+    asia_h_src = "computed" if computed.get("asia_h") is not None else "fallback"
+    asia_l_src = "computed" if computed.get("asia_l") is not None else "fallback"
+    print(f"[{ts}] load_zones: PDH={pdh_val}({pdh_src}) PDL={pdl_val}({pdl_src}) ASIA_H={asia_h_val}({asia_h_src}) ASIA_L={asia_l_val}({asia_l_src})")
 
     z = None
     try:
