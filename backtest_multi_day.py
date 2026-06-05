@@ -257,6 +257,56 @@ def monte_carlo_simulation(all_trades, iterations):
         'sharpe': {'p5': percentiles(results['sharpe'], 5), 'p50': percentiles(results['sharpe'], 50), 'p95': percentiles(results['sharpe'], 95)}
     }
 
+def export_trades_csv(filename, all_results):
+    """Export all trades to CSV file."""
+    import csv
+    with open(filename, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['date', 'side', 'grade', 'pattern', 'entry', 'sl', 'tp1', 'outcome', 'pips'])
+        for result in all_results:
+            date = result['date']
+            for trade in result['trades']:
+                writer.writerow([date, trade[0], trade[1], trade[2], trade[3], trade[4], trade[5], trade[6], trade[7]])
+
+def export_summary_report(filename, period_stats, all_results):
+    """Export summary report to text file."""
+    with open(filename, 'w') as f:
+        f.write("="*60 + "\n")
+        f.write("BACKTEST SUMMARY REPORT\n")
+        f.write("="*60 + "\n\n")
+
+        # Date range
+        dates = [r['date'] for r in all_results]
+        f.write(f"Date range: {min(dates)} to {max(dates)}\n")
+        f.write(f"Days tested: {period_stats['days']}\n\n")
+
+        # Overall statistics
+        f.write("--- Overall Statistics ---\n")
+        f.write(f"Total signals: {period_stats['signals']}\n")
+        f.write(f"TP1 wins: {period_stats['wins']}\n")
+        f.write(f"SL losses: {period_stats['losses']}\n")
+        f.write(f"Timeouts: {period_stats['timeouts']}\n")
+        f.write(f"Win rate (excl timeouts): {period_stats['win_rate']:.1f}%\n")
+        f.write(f"Net P&L: {period_stats['net_pips']:+.0f} pips\n\n")
+
+        # Advanced metrics
+        all_trades = [t for r in all_results for t in r['trades']]
+        profit_factor = calculate_profit_factor(all_trades)
+        max_dd, max_dd_pct = calculate_max_drawdown(all_trades)
+        sharpe = calculate_sharpe_ratio(all_trades)
+
+        f.write("--- Advanced Metrics ---\n")
+        pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
+        f.write(f"Profit factor: {pf_str}\n")
+        f.write(f"Max drawdown: {max_dd:.0f} pips ({max_dd_pct:.1f}%)\n")
+        f.write(f"Sharpe ratio: {sharpe:.2f}\n\n")
+
+        # Per-day breakdown
+        f.write("--- Per-Day Breakdown ---\n")
+        for result in all_results:
+            wr = (result['wins']/ (result['wins']+result['losses'])*100) if (result['wins'] or result['losses']) else 0
+            f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | WR:{wr:5.1f}% | Net:{result['net_pips']:+6.0f} pips\n")
+
 def main():
     parser = argparse.ArgumentParser(description="Multi-day walk-forward backtesting")
     parser.add_argument("--start-date", required=True, type=parse_date, help="Start date (YYYY-MM-DD)")
@@ -267,6 +317,8 @@ def main():
     parser.add_argument("--monte-carlo", action="store_true", help="Enable Monte Carlo simulation")
     parser.add_argument("--iterations", type=int, default=1000, help="Number of Monte Carlo iterations (default: 1000)")
     parser.add_argument("--dry-run", action="store_true", help="Print dates without running backtests")
+    parser.add_argument("--export", type=str, help="Export trades to CSV file")
+    parser.add_argument("--report", type=str, help="Export summary report to text file")
     args = parser.parse_args()
 
     if args.start_date > args.end_date:
@@ -461,6 +513,24 @@ def main():
                     print(f"Sharpe ratio: {mc_results['sharpe']['p5']:7.2f}      |  {mc_results['sharpe']['p50']:7.2f}      |  {mc_results['sharpe']['p95']:7.2f}")
                 else:
                     print("\nNo trades to run Monte Carlo simulation on.")
+
+            # Export results if requested
+            if args.export:
+                export_trades_csv(args.export, all_results)
+                print(f"\nTrades exported to: {args.export}")
+
+            if args.report:
+                period_stats = {
+                    'days': len(days),
+                    'signals': total_signals,
+                    'wins': total_wins,
+                    'losses': total_losses,
+                    'timeouts': total_timeouts,
+                    'net_pips': total_net,
+                    'win_rate': overall_wr
+                }
+                export_summary_report(args.report, period_stats, all_results)
+                print(f"Summary report exported to: {args.report}")
 
 if __name__=="__main__":
     main()
