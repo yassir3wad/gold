@@ -98,6 +98,30 @@ def test_persistence_roundtrip():
         os.remove(path)
 
 
+def test_day_efficiency():
+    # straight-line uptrend over the morning window -> displacement ≈ range -> ~1.0 (directional)
+    B = lambda t, c: {"time": t, "high": c + 0.5, "low": c - 0.5, "close": float(c)}
+    base = 1_000_000  # 1970-ish, hour 0 UTC; window default covers all
+    trend = [B(base + i * 60, 100 + i) for i in range(60)]
+    dr = am.day_efficiency(trend, start_hour=0, end_hour=24)
+    check("day_eff: straight trend -> disp/range near 1", dr is not None and dr > 0.9)
+    # round-trip: up then back to start -> displacement ≈ 0 (choppy)
+    chop = [B(base + i * 60, 100 + i) for i in range(30)] + [B(base + (30 + i) * 60, 130 - i) for i in range(30)]
+    drc = am.day_efficiency(chop, start_hour=0, end_hour=24)
+    check("day_eff: round-trip -> disp/range near 0", drc is not None and drc < 0.15)
+    check("day_eff: too few bars -> None", am.day_efficiency([B(base, 100)], start_hour=0, end_hour=24) is None)
+
+
+def test_featurize_dctx():
+    check("dctx: directional when day_dr high", am.featurize(row() | {"day_dr": 0.7})["dctx"] == "directional")
+    check("dctx: choppy when day_dr low", am.featurize(row() | {"day_dr": 0.2})["dctx"] == "choppy")
+    check("dctx: unknown when absent", am.featurize(row())["dctx"] == "unknown")
+    # adding dctx must not break grouping when it's constant across a cell
+    rows = [row(won=True)] * 3 + [row(won=False)]
+    m = am.Model(alpha=1.0, min_support=4).train(rows)
+    check("dctx: constant dctx keeps one cell (n=4)", m.score(row())["n"] == 4)
+
+
 def test_recovers_known_boundary():
     # the empirical truth from 3 backtest days: momentum loses, CRT/trendline win.
     # the model must rank CRT strictly above momentum after training on that shape.
@@ -112,7 +136,8 @@ def test_recovers_known_boundary():
 def main():
     for fn in (test_featurize, test_score_laplace, test_backoff_to_family_then_global,
                test_decide_offsession_hard_veto, test_decide_threshold,
-               test_persistence_roundtrip, test_recovers_known_boundary):
+               test_persistence_roundtrip, test_day_efficiency, test_featurize_dctx,
+               test_recovers_known_boundary):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

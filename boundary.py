@@ -13,6 +13,7 @@ import sys, json, datetime as dt
 from collections import defaultdict
 from backtest_multi_day import simulate_trade
 from score_signals import verdict
+import approval_model as am
 
 PIP = 0.10
 HORIZON = 15
@@ -24,6 +25,7 @@ def fnum(x, d=0.0):
 def load_day(date):
     sigs = json.load(open(f"/tmp/replay_sim_{date}.json"))
     bars = sorted(json.load(open(f"/tmp/bars_{date}.json")), key=lambda b: b["time"])
+    day_dr = am.day_efficiency(bars, 6, 9)   # morning directional efficiency -> day-type context
     rows = []
     for s in sigs:
         fut = [b for b in bars if b["time"] > s["t"]][:HORIZON]
@@ -36,7 +38,7 @@ def load_day(date):
             "date": date, "side": s["side"], "regime": reg, "why": s.get("why", "?"),
             "rsi": rsi, "er": er, "session": s.get("session", "?"),
             "counter": counter, "outcome": o, "pips": round(pips),
-            "v": verdict(s), "won": o == "TP1", "lost": o == "SL",
+            "v": verdict(s), "won": o == "TP1", "lost": o == "SL", "day_dr": day_dr,
         })
     return rows
 

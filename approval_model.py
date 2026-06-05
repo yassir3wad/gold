@@ -19,9 +19,25 @@ The dominant real signal is setup family (momentum impulse 30%/-160p vs CRT +137
 U-shaped (extremes win, mid-zone loses); counter-trend is not a disqualifier. This table learns
 exactly that instead of vetoing it.
 """
-import json
+import json, datetime as dt
 
 RSI_BUCKETS = ((30, "<30"), (45, "30-45"), (55, "45-55"), (70, "55-70"))   # upper-exclusive; else ">70"
+DCTX_DIRECTIONAL = 0.5   # morning displacement/range >= this => "directional" (trend) day, else "choppy"
+
+
+def day_efficiency(bars, start_hour=6, end_hour=9):
+    """Morning directional efficiency = |net displacement| / total range over the [start,end) UTC window.
+    ~1.0 => price went straight somewhere (trend day); ~0 => round-trip (chop). None if too few bars.
+    This is the day-type read the backtest flagged as the dominant P&L driver — and it's measurable
+    EARLY (morning only), so it can gate the day before most signals fire."""
+    w = [b for b in bars if start_hour <= dt.datetime.utcfromtimestamp(b["time"]).hour < end_hour]
+    if len(w) < 2:
+        return None
+    w.sort(key=lambda b: b["time"])
+    rng = max(b["high"] for b in w) - min(b["low"] for b in w)
+    if rng <= 0:
+        return None
+    return abs(w[-1]["close"] - w[0]["close"]) / rng
 
 
 def _fnum(x, d=0.0):
@@ -48,16 +64,19 @@ def _align(side, regime):
 def featurize(signal):
     """Map a raw signal dict to its calibration features."""
     why = signal.get("why") or "?"
+    dr = signal.get("day_dr")
+    dctx = "unknown" if dr is None else ("directional" if _fnum(dr) >= DCTX_DIRECTIONAL else "choppy")
     return {
         "family": why.split()[0] if why.split() else "?",
         "align": _align(signal.get("side"), signal.get("regime")),
         "rsi": _rsi_bucket(_fnum(signal.get("rsi"), 50.0)),
         "session": str(signal.get("session", "?")),
+        "dctx": dctx,
     }
 
 
 def _cell_key(f):
-    return f"{f['family']}|{f['align']}|{f['rsi']}|{f['session']}"
+    return f"{f['family']}|{f['align']}|{f['rsi']}|{f['session']}|{f['dctx']}"
 
 
 class Model:
