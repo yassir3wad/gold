@@ -42,9 +42,7 @@ PDH, PDL = 4496.7, 4426.4          # prior-day high / low
 ASIA_H, ASIA_L = 4484.0, 4443.3    # Asian-session range (06-04, complete 00-07 UTC)
 SESSION_UTC = set(range(7, 22))    # London+NY active hours (UTC); outside = quiet
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
-CD_FILE = os.path.expanduser("~/.tv_fast_cd.json")
 COOLDOWN_MIN = 5                   # no new signal for N minutes after one fires (anti-clustering)
-WATCH_CD_FILE = os.path.expanduser("~/.tv_fast_watch.json")
 WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same zone area for N min
 WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
 CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
@@ -281,7 +279,7 @@ def init_symbol(sym):
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
     global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
     global LOT_MIN, LOT_MAX, LOT_STEP
-    global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
+    global VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
     global state_manager
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
@@ -295,8 +293,6 @@ def init_symbol(sym):
     TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
     if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
     s = SYMBOL.lower()
-    CD_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_cd.json")
-    WATCH_CD_FILE = os.path.expanduser(f"~/.tv_fast_{s}_watch.json")
     VP_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_vp.json")
     TG_STATE      = os.path.expanduser(f"~/.tv_fast_{s}_tg.json")
     TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
@@ -597,10 +593,8 @@ def main():
     if FL["news_filter"] and (news or ff_bo):
         print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'})."); return
 
-    try: cd_t = json.load(open(CD_FILE)).get("t", 0)
-    except Exception: cd_t = 0
-    cd_left = COOLDOWN_MIN*60 - (time.time() - cd_t)
-    if cd_left > 0 and not AI:
+    if state_manager.in_cooldown(SYMBOL) and not AI:
+        cd_left = state_manager.get_cooldown_remaining(SYMBOL)
         print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
 
     setups = []
@@ -785,8 +779,7 @@ def main():
             print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a {sidehint.lower()} trigger here = A+. Waiting.")
             # heads-up cooldown: don't spam as price wiggles across overlapping levels (round#, zone, VWAP band).
             # Only re-ping if WATCH_CD_MIN elapsed OR price moved to a genuinely new zone (>WATCH_NEW_ZONE_P away).
-            try: w = json.load(open(WATCH_CD_FILE))
-            except Exception: w = {}
+            w = state_manager.get_watch_state(SYMBOL) or {}
             new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P and htf[2] != w.get("label")
             recent = (time.time() - w.get("t", 0)) < WATCH_CD_MIN*60
             if recent and not new_zone:
@@ -800,8 +793,7 @@ def main():
             # Only AI-approved CONFIRMED entries (+ TP/SL/BE) reach the phone. (Autonomous non-review mode still pings.)
             if not DRY and not REVIEW:
                 notify_telegram(wmsg, f"watch|{htf[2]}")
-                try: json.dump({"t": time.time(), "price": price, "label": htf[2]}, open(WATCH_CD_FILE, "w"))
-                except Exception: pass
+                state_manager.set_watch_state(SYMBOL, {"t": time.time(), "price": price, "label": htf[2]})
         else:
             print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
         return
@@ -924,8 +916,7 @@ def _fire(t, note=""):
                 "tp1": t["tp1"], "rng10": t.get("rng10", ""), "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"),
                 "result": "PENDING", "exit": "", "pips": ""})
     set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid, t.get("be_trig", BE_TRIGGER_P))
-    try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
-    except Exception: pass
+    state_manager.set_cooldown(SYMBOL, COOLDOWN_MIN)  # start cooldown
 
 def _read_pending():
     try: return json.load(open(PENDING_FILE))
