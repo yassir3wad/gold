@@ -72,7 +72,9 @@ def main():
         t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
             if z["valid"]:
-                zones.append({**z, "t1": t1, "tf": lab})
+                c = b[z["i"]]
+                strong = Z.big_candle(b, z["i"], 20) and Z.small_opposite_wick(c) and Z.volume_fib(b, z["i"], 20)
+                zones.append({**z, "t1": t1, "tf": lab, "strong_lvl": strong, "green": c["close"] > c["open"]})
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
 
@@ -89,13 +91,13 @@ def main():
         mid = zmid(z)
         if any(abs(mid - q) < 15 for q in seen):
             continue
-        # BOXES are buy/sell ZONES (not support/resistance — that's the line layer). Role by position.
-        if z["hi"] < cur_price:
-            buy, role = True, "buy zone"
-        elif z["lo"] > cur_price:
-            buy, role = False, "sell zone"
+        # role by position; but if the origin candle is a STRONG level candle (big + volume + small wick),
+        # it's a support/resistance ZONE (green->support, red->resistance), not a generic buy/sell zone.
+        buy = z["hi"] < cur_price if (z["hi"] < cur_price or z["lo"] > cur_price) else (z["kind"] == "demand")
+        if z.get("strong_lvl"):
+            role = "support" if z["green"] else "resistance"
         else:
-            buy = z["kind"] == "demand"; role = "buy zone" if buy else "sell zone"
+            role = "buy zone" if buy else "sell zone"
         if (buy and nbuy >= 5) or (not buy and nsell >= 5):
             continue
         flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
