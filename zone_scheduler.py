@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import signal
 import subprocess
@@ -46,8 +47,12 @@ def setup_logging(verbose=False):
     console_handler.setLevel(log_level)
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
 
-    # File handler
-    file_handler = logging.FileHandler(LOG_FILE)
+    # File handler with rotation (10MB max, keep 5 backups)
+    file_handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(log_format, date_format))
 

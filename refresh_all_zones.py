@@ -6,8 +6,42 @@ for each symbol. Run with --dry-run to preview without executing.
     python3 refresh_all_zones.py --symbol XAUUSD  # refresh single symbol
     python3 refresh_all_zones.py --notify     # send Telegram notification after refresh
 """
-import subprocess, json, os, sys
+import subprocess, json, os, sys, logging
+from logging.handlers import RotatingFileHandler
 import telegram_notify
+
+# --- Logging Setup ---
+LOG_FILE = os.path.expanduser("~/tradingview-mcp/logs/zone_scheduler.log")
+
+def setup_logging():
+    """Configure logging to both console and file with rotation."""
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+    log_format = '[%(asctime)s] %(levelname)s: %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    # File handler with rotation (10MB max, keep 5 backups)
+    file_handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    # Root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 DRY_RUN = "--dry-run" in sys.argv
 NOTIFY = "--notify" in sys.argv
@@ -45,37 +79,39 @@ def compare_zones(old_zones, new_zones):
     return {"added": added, "removed": removed, "modified": modified, "unchanged": unchanged}
 
 def main():
+    setup_logging()
+
     try:
         instruments = json.load(open(os.path.join(TVDIR, "instruments.json")))
     except Exception as e:
-        print(f"error reading instruments.json: {e}")
+        logging.error(f"error reading instruments.json: {e}")
         return
     symbols = [k for k in instruments.keys() if not k.startswith("_")]
     if SINGLE_SYMBOL:
         if SINGLE_SYMBOL not in symbols:
-            print(f"error: symbol {SINGLE_SYMBOL} not found in instruments.json")
+            logging.error(f"symbol {SINGLE_SYMBOL} not found in instruments.json")
             return
         symbols = [SINGLE_SYMBOL]
     if not symbols:
-        print("no instruments found in instruments.json")
+        logging.warning("no instruments found in instruments.json")
         return
     if DRY_RUN:
-        print(f"would refresh {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}:")
+        logging.info(f"would refresh {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}:")
         for sym in symbols:
             desc = instruments[sym].get('desc', '')
             old_zones = load_zones(sym)
             status = "no changes" if old_zones else "new zones file"
-            print(f"  {sym:8} — {desc} ({status})")
+            logging.info(f"  {sym:8} — {desc} ({status})")
         if NOTIFY:
             # In dry-run mode with notify, show what notification would be sent
             telegram_notify.send_alert("🔄 Zones Refreshed", "Dry run mode - no actual refresh", dry_run=True)
         return
-    print(f"refreshing {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}...")
+    logging.info(f"refreshing {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}...")
     total_changes = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
     changes_by_symbol = {}
     for idx, sym in enumerate(symbols, 1):
         desc = instruments[sym].get('desc', '')
-        print(f"\n[{idx}/{len(symbols)}] {sym} — {desc}")
+        logging.info(f"[{idx}/{len(symbols)}] {sym} — {desc}")
         old_zones = load_zones(sym)
         try:
             result = subprocess.run(
@@ -89,26 +125,26 @@ def main():
                 for k in diff:
                     total_changes[k] += diff[k]
                 if diff["added"] + diff["removed"] + diff["modified"] == 0:
-                    print(f"  ✓ no changes")
+                    logging.info(f"  ✓ no changes")
                 else:
                     change_parts = []
                     if diff["added"]: change_parts.append(f"+{diff['added']}")
                     if diff["removed"]: change_parts.append(f"-{diff['removed']}")
                     if diff["modified"]: change_parts.append(f"~{diff['modified']}")
-                    print(f"  ✓ zones changed: {' '.join(change_parts)}")
+                    logging.info(f"  ✓ zones changed: {' '.join(change_parts)}")
             else:
-                print(f"  ✗ failed (exit {result.returncode})")
-                if result.stderr: print(f"     {result.stderr.strip()}")
+                logging.error(f"  ✗ failed (exit {result.returncode})")
+                if result.stderr: logging.error(f"     {result.stderr.strip()}")
         except subprocess.TimeoutExpired:
-            print(f"  ✗ timeout after 60s")
+            logging.error(f"  ✗ timeout after 60s")
         except Exception as e:
-            print(f"  ✗ error: {e}")
+            logging.error(f"  ✗ error: {e}")
     if len(symbols) > 1:
-        print(f"\ncompleted refresh for {len(symbols)} instruments")
+        logging.info(f"completed refresh for {len(symbols)} instruments")
         if total_changes["added"] + total_changes["removed"] + total_changes["modified"] > 0:
-            print(f"total changes: +{total_changes['added']} -{total_changes['removed']} ~{total_changes['modified']}")
+            logging.info(f"total changes: +{total_changes['added']} -{total_changes['removed']} ~{total_changes['modified']}")
         else:
-            print("no changes detected")
+            logging.info("no changes detected")
 
     # Send Telegram notification if requested
     if NOTIFY and changes_by_symbol:
