@@ -49,6 +49,8 @@ def orch_log(line):
     except Exception: pass
 
 def main():
+    state_mgr = StateManager(namespace="scanner")
+
     rows = []
     for sym, cfg in INSTR.items():
         if sym.startswith("_"): continue
@@ -63,9 +65,14 @@ def main():
     print("scores: " + score_str)
     held = []
     for sym in sorted(focus):
+        last_scan = state_mgr.get_scan_timestamp(sym)
+        last_scan_str = f" (last: {int((dt.datetime.now().timestamp() - last_scan) / 60)}m ago)" if last_scan else " (first scan)"
+
         is_held = review(sym)
+        state_mgr.save_scan_timestamp(sym)
+
         tag = "ACTIVE-TRADE" if sym in act else ("pinned" if sym in pin else "focus")
-        print(f"-- reviewed {sym} [{tag}]" + ("  *** HELD — REVIEW ***" if is_held else "  (nothing held)"))
+        print(f"-- reviewed {sym} [{tag}]{last_scan_str}" + ("  *** HELD — REVIEW ***" if is_held else "  (nothing held)"))
         if is_held: held.append(sym)
     if held:
         print("\n>> HELD trades: " + ", ".join(held))
