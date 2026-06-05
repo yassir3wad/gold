@@ -18,8 +18,9 @@ except Exception: pass
 PIP = _cfg.get("pip", 0.10)
 if _cfg.get("chart"): os.environ["TV_CHART"] = str(_cfg["chart"])   # pin reads to this symbol's window
 ZONES_FILE = os.path.join(TVDIR, f"zones_{SYMBOL.lower()}.json")
-MERGE = 20 * PIP   # cluster levels within ~20 pips into one zone (pip-scaled per instrument)
-PAD = 20 * PIP     # zone half-width padding (pip-scaled; was hardcoded $2 for gold)
+MERGE = 12 * PIP   # max cluster SPAN (pip-scaled): levels within this window form one zone; bounded by cluster START so dense levels can't daisy-chain
+PAD = 4 * PIP      # zone half-width padding around the clustered span (pip-scaled; tight so a zone has a precise edge to react to)
+MAX_W = 25 * PIP   # hard ceiling on final zone width — if a merged zone exceeds this, recenter to mid ± MAX_W/2 (anti-blowup safety net)
 DECIMALS = max(0, int(round(-math.log10(PIP)))) + 1   # price rounding precision per instrument (gold 2, EUR 5, US30 1, JPY 3)
 
 def tv(*a):
@@ -45,10 +46,8 @@ def main():
         sh, sl = pivots(b)
         for p in sh[-6:]: cands.append((round(p, DECIMALS), tag))
         for p in sl[-6:]: cands.append((round(p, DECIMALS), tag))
-        for s in tv('values').get('studies', []):
-            if 'Moving Average' in s.get('name', ''):
-                try: cands.append((round(float(s['values']['EMA'].replace(',', '')), DECIMALS), tag+'EMA'))
-                except Exception: pass
+        # NOTE: EMAs intentionally excluded as zone sources — they drift across the lookback, smear levels,
+        # and inflate confluence (the old "x56" blobs). EMAs remain the scanner's trend filter, not static zones.
         if tf == 'D' and len(b) >= 2:
             pdh, pdl = round(b[-2]['high'], DECIMALS), round(b[-2]['low'], DECIMALS)
             cands += [(pdh, 'PDH'), (pdl, 'PDL')]
@@ -60,7 +59,7 @@ def main():
     cands.sort()
     clusters = []
     for p, src in cands:
-        if clusters and p - clusters[-1]['hi'] <= MERGE:
+        if clusters and p - clusters[-1]['lo'] <= MERGE:   # bound by cluster START so span can't exceed MERGE (no daisy-chain)
             c = clusters[-1]; c['hi'] = max(c['hi'], p); c['srcs'].append(src); c['ps'].append(p)
         else:
             clusters.append({'lo': p, 'hi': p, 'srcs': [src], 'ps': [p]})
@@ -77,7 +76,10 @@ def main():
             merged.append(z)
     def fmt(z):
         mid = round(sum(z['ps'])/len(z['ps']), DECIMALS); srcs = sorted(set(z['srcs']))
-        return (z['lo'], z['hi'], f"{mid} ({'+'.join(srcs[:4])}, x{len(z['srcs'])})", mid)
+        lo, hi = z['lo'], z['hi']
+        if hi - lo > MAX_W:   # safety net: never let a zone exceed MAX_W; recenter tightly on the confluence mid
+            lo, hi = round(mid - MAX_W/2, DECIMALS), round(mid + MAX_W/2, DECIMALS)
+        return (lo, hi, f"{mid} ({'+'.join(srcs[:4])}, x{len(z['srcs'])})", mid)
     zones = [fmt(z) for z in merged]
     R = sorted([z for z in zones if z[3] > price], key=lambda z: z[3])[:6]
     S = sorted([z for z in zones if z[3] < price], key=lambda z: -z[3])[:6]

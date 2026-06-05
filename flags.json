@@ -22,5 +22,6 @@
   "range_filter": true,
   "session_sweep": true,
   "ai_decide": true,
-  "zone_bounce": true
+  "zone_bounce": true,
+  "hard_floor": true
 }
