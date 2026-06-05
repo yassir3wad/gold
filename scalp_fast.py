@@ -802,7 +802,7 @@ def main():
             # Only AI-approved CONFIRMED entries (+ TP/SL/BE) reach the phone. (Autonomous non-review mode still pings.)
             if not DRY and not REVIEW:
                 notify_telegram(wmsg, f"watch|{htf[2]}")
-                state_manager.set_watch_state(SYMBOL, {"t": time.time(), "price": price, "label": htf[2]})
+                state_manager.save_watch_state(SYMBOL, {"t": time.time(), "price": price, "label": htf[2]})
         else:
             print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
         state_manager.save_scan_timestamp(SYMBOL)
