@@ -97,9 +97,37 @@ def test_key_level_decay():
               for zz in Z.mark_key_levels([C(100,105,99,104,10)]*3, left=1, right=1)))
 
 
+def test_big_candle():
+    pre = [C(100, 101, 99, 100.2, 10) for _ in range(2)]
+    post = [C(100, 101, 99, 100.2, 10) for _ in range(2)]
+    bars = pre + [C(100, 110, 99, 109, 100)] + post           # big green at index 2 (body 9, vol 100)
+    check("big: large body + high volume passes", Z.big_candle(bars, 2, lookback=5) is True)
+    check("big: small body fails (vs the big one in window)", Z.big_candle(bars, 4, lookback=5) is False)
+    busy = [C(100, 101, 99, 100.2, 100) for _ in range(4)]   # high-volume neighbors for contrast
+    low_vol = busy + [C(100, 110, 99, 109, 10)]              # big body but LOW volume vs neighbors
+    check("big: big body but low volume fails", Z.big_candle(low_vol, 4, lookback=5) is False)
+
+
+def test_sr_levels_and_flip():
+    small = [C(100, 101, 99, 100.2, 10) for _ in range(4)]
+    # big GREEN -> support at its open
+    sg = small + [C(100, 110, 99, 109, 100)]
+    s = Z.sr_levels(sg, lookback=5)
+    check("SR: big green -> support at open", any(x["role"] == "support" and approx(x["price"], 100) for x in s))
+    # big RED -> resistance at its open
+    sr_ = small + [C(109, 110, 99, 100, 100)]
+    r = Z.sr_levels(sr_, lookback=5)
+    check("SR: big red -> resistance at open", any(x["role"] == "resistance" and approx(x["price"], 109) for x in r))
+    # polarity flip: support, then a later candle CLOSES below it -> role becomes resistance
+    flip = small + [C(100, 110, 99, 109, 100), C(99, 100, 90, 95, 10)]   # closes 95 < support 100
+    f = Z.sr_levels(flip, lookback=6)
+    sup = next(x for x in f if x["origin"] == "support")
+    check("SR: broken support flips to resistance", sup["flipped"] is True and sup["role"] == "resistance")
+
+
 def main():
     for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
-               test_key_level_bos_and_score, test_key_level_decay):
+               test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

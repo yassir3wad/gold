@@ -7,6 +7,7 @@ Pins to a dedicated chart; nothing wired into the engine. For visual review befo
 """
 import argparse, subprocess, os, json, time
 import zones_sd as Z
+import patterns as P
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 TAG = "REVIEW"
@@ -52,16 +53,22 @@ def main():
     BLUE  = json.dumps({"linecolor": "rgba(70,130,220,0.8)", "linestyle": 2})
     GRAY  = json.dumps({"linecolor": "rgba(150,150,150,0.7)", "linestyle": 2})
 
+    SUP = json.dumps({"linecolor": "rgba(0,210,90,0.85)", "linestyle": 0, "linewidth": 2})   # support line (green)
+    RES = json.dumps({"linecolor": "rgba(240,70,70,0.85)", "linestyle": 0, "linewidth": 2})   # resistance line (red)
+
     tv(CH, "symbol", "XAUUSD")
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     tv(CH, "draw", "clear")
-    drawn = {"demand": 0, "supply": 0, "KL": 0, "va": 0}
+    drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0}
+    cur_price = None
+    sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
-    for tf, n, lab in [("D", 40, "D"), ("240", 60, "4H"), ("60", 140, "1H")]:
+    # --- buy/sell ZONES (demand/supply order-block boxes) ---
+    for tf, n, lab in [("D", 40, "D"), ("240", 80, "4H"), ("60", 160, "1H")]:
         b = bars_tf(CH, tf, n)
         if not b:
             continue
-        t1 = b[-1]["time"]
+        t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
             kl = z["key_level"]
             tag = f"{lab} {z['kind']}" + (f" KL {z['score']}" if kl else "")
@@ -69,6 +76,20 @@ def main():
             rect(CH, z["time"], z["lo"], t1, z["hi"], tag, ov)
             drawn[z["kind"]] += 1
             if kl: drawn["KL"] += 1
+        for x in Z.sr_levels(b, lookback=20):
+            sr.append((x["price"], x["role"], x["flipped"], lab))
+
+    # --- support / resistance LEVELS (big high-volume candle; role flips on break) ---
+    def draw_sr(role, color):
+        seen = []
+        for p, fl, l in sorted([(p, fl, l) for p, r, fl, l in sr if r == role]):
+            if any(abs(p - q) < 6 for q in seen):
+                continue
+            seen.append(p)
+            hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color)
+            drawn[role] += 1
+    draw_sr("support", SUP)
+    draw_sr("resistance", RES)
 
     b30 = bars_tf(CH, "30", 400)
     if b30:

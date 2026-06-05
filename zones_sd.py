@@ -130,6 +130,44 @@ def mark_key_levels(bars, left=3, right=3, lookback=20, level=0.5, max_touches=3
     return sorted(zones, key=lambda z: -z["score"])
 
 
+def big_candle(bars, i, lookback=20, level=0.5):
+    """A 'big' candle = large body AND high volume, both at/above the `level` fib of the recent range."""
+    w = bars[max(0, i - lookback + 1):i + 1]
+    bodies = [abs(b["close"] - b["open"]) for b in w]
+    bmin, bmax = min(bodies), max(bodies)
+    body = abs(bars[i]["close"] - bars[i]["open"])
+    big = body >= bmin + level * (bmax - bmin)
+    return bool(big and volume_fib(bars, i, lookback, level))
+
+
+def sr_levels(bars, lookback=20, level=0.5):
+    """Support/resistance LEVELS from big high-volume candles (distinct from order-block zones):
+      - big GREEN candle -> support at its open (launch base)
+      - big RED candle   -> resistance at its open
+    Polarity flip: once a later candle CLOSES through the level, it flips to the opposite role.
+    Returns dicts {price, origin, role, flipped, i, time}."""
+    out = []
+    for i, c in enumerate(bars):
+        if not big_candle(bars, i, lookback, level):
+            continue
+        if c["close"] > c["open"]:
+            origin, px = "support", c["open"]
+        elif c["close"] < c["open"]:
+            origin, px = "resistance", c["open"]
+        else:
+            continue
+        flipped = False
+        for b in bars[i + 1:]:
+            if origin == "support" and b["close"] < px:
+                flipped = True; break
+            if origin == "resistance" and b["close"] > px:
+                flipped = True; break
+        role = ("resistance" if origin == "support" else "support") if flipped else origin
+        out.append({"price": round(px, 2), "origin": origin, "role": role,
+                    "flipped": flipped, "i": i, "time": c.get("time")})
+    return out
+
+
 def value_area(bars, bin_size=1.0, va_pct=0.70):
     """Volume-by-price profile -> (POC, VAH, VAL). Volume assigned to each bar's typical price bin;
     value area grows from POC outward (greedier side first) until va_pct of volume is enclosed."""
