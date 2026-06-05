@@ -9,6 +9,7 @@ Usage:
   python zone_scheduler.py --interval 2              # run every 2 hours
   python zone_scheduler.py --daemon                  # run as background daemon
   python zone_scheduler.py --once                    # run one refresh cycle then exit
+  python zone_scheduler.py --check-health            # check zone file health and exit
   python zone_scheduler.py --help                    # show this help message
 """
 import argparse
@@ -205,6 +206,142 @@ def _parse_changes_from_output(line):
 
     return changes
 
+# --- Zone Health Check ---
+def check_zone_health(send_alert=False):
+    """Check all zone files for staleness and optionally send alerts.
+
+    Args:
+        send_alert: If True, send Telegram alert for stale zones
+
+    Returns:
+        dict with health status: {
+            'stale_count': int,
+            'fresh_count': int,
+            'missing_count': int,
+            'stale_symbols': list of str
+        }
+    """
+    config = load_config()
+    instruments = config.get("enabled_instruments", [])
+    stale_threshold_hours = config.get("stale_threshold_hours", 6)
+    notifications_enabled = config.get("notifications_enabled", True)
+
+    if not instruments:
+        logging.warning("No enabled instruments in config, skipping health check")
+        return {
+            'stale_count': 0,
+            'fresh_count': 0,
+            'missing_count': 0,
+            'stale_symbols': []
+        }
+
+    logging.info(f"Running zone health check (stale threshold: {stale_threshold_hours}h)")
+
+    tvdir = os.path.expanduser("~/tradingview-mcp")
+    current_time = time.time()
+    max_age_seconds = stale_threshold_hours * 3600
+
+    stale_count = 0
+    fresh_count = 0
+    missing_count = 0
+    stale_symbols = []
+
+    results = []
+
+    for symbol in instruments:
+        zone_file = os.path.join(tvdir, f"zones_{symbol.lower()}.json")
+
+        if not os.path.exists(zone_file):
+            missing_count += 1
+            logging.warning(f"  ✗ {symbol}: zone file missing")
+            results.append({
+                "symbol": symbol,
+                "status": "missing"
+            })
+            continue
+
+        try:
+            with open(zone_file, 'r') as f:
+                zone_data = json.load(f)
+
+            zone_ts = zone_data.get("ts")
+            if zone_ts is None:
+                logging.warning(f"  ✗ {symbol}: no timestamp field in zone file")
+                results.append({
+                    "symbol": symbol,
+                    "status": "error",
+                    "message": "No timestamp field"
+                })
+                continue
+
+            age_seconds = current_time - zone_ts
+            age_hours = age_seconds / 3600
+
+            if age_seconds > max_age_seconds:
+                stale_count += 1
+                stale_symbols.append(symbol)
+                logging.warning(f"  ⚠ {symbol}: STALE ({age_hours:.1f}h old)")
+                results.append({
+                    "symbol": symbol,
+                    "status": "stale",
+                    "age_hours": round(age_hours, 1)
+                })
+            else:
+                fresh_count += 1
+                logging.info(f"  ✓ {symbol}: fresh ({age_hours:.1f}h old)")
+                results.append({
+                    "symbol": symbol,
+                    "status": "fresh",
+                    "age_hours": round(age_hours, 1)
+                })
+
+        except json.JSONDecodeError as e:
+            logging.error(f"  ✗ {symbol}: invalid JSON - {e}")
+            results.append({
+                "symbol": symbol,
+                "status": "error",
+                "message": f"Invalid JSON: {e}"
+            })
+        except Exception as e:
+            logging.error(f"  ✗ {symbol}: error - {e}")
+            results.append({
+                "symbol": symbol,
+                "status": "error",
+                "message": str(e)
+            })
+
+    # Log summary
+    logging.info(f"Health check complete: {fresh_count} fresh, {stale_count} stale, {missing_count} missing")
+
+    # Send alert if stale zones found and notifications enabled
+    if send_alert and notifications_enabled and (stale_count > 0 or missing_count > 0):
+        alert_lines = []
+
+        if stale_count > 0:
+            alert_lines.append(f"⚠ {stale_count} stale zone file(s) (>{stale_threshold_hours}h old):")
+            for r in results:
+                if r["status"] == "stale":
+                    alert_lines.append(f"  • {r['symbol']}: {r['age_hours']}h old")
+
+        if missing_count > 0:
+            alert_lines.append(f"\n✗ {missing_count} missing zone file(s):")
+            for r in results:
+                if r["status"] == "missing":
+                    alert_lines.append(f"  • {r['symbol']}")
+
+        alert_lines.append("\nRun zone_scheduler.py to refresh zones")
+
+        alert_message = "\n".join(alert_lines)
+        telegram_notify.send_alert("⚠️ Stale Zones Detected", alert_message, dry_run=False)
+        logging.info("Telegram alert sent for stale zones")
+
+    return {
+        'stale_count': stale_count,
+        'fresh_count': fresh_count,
+        'missing_count': missing_count,
+        'stale_symbols': stale_symbols
+    }
+
 # --- Scheduler Setup ---
 class ZoneScheduler:
     """Main scheduler daemon that manages interval-based and session-based refresh triggers."""
@@ -294,6 +431,15 @@ class ZoneScheduler:
         logging.info(f"Enabled instruments: {', '.join(self.config.get('enabled_instruments', []))}")
         logging.info("=" * 60)
 
+        # Run startup health check
+        logging.info("Running startup health check...")
+        health_status = check_zone_health(send_alert=True)
+
+        # If stale zones detected on startup, offer to run immediate refresh
+        if health_status['stale_count'] > 0:
+            logging.warning(f"Found {health_status['stale_count']} stale zone(s) on startup")
+            logging.info("Consider running immediate refresh with --once flag")
+
         # Add scheduled jobs
         self.add_interval_job()
         self.add_session_jobs()
@@ -314,8 +460,18 @@ class ZoneScheduler:
         # Keep running until interrupted
         try:
             logging.info("Scheduler running. Press Ctrl+C to stop.")
+            last_health_check = time.time()
+            health_check_interval = 3600  # Check health every hour
+
             while self.running:
                 time.sleep(1)
+
+                # Periodic health check (hourly)
+                if time.time() - last_health_check >= health_check_interval:
+                    logging.info("Running periodic health check...")
+                    check_zone_health(send_alert=True)
+                    last_health_check = time.time()
+
         except (KeyboardInterrupt, SystemExit):
             self.stop()
 
@@ -383,7 +539,26 @@ Configuration:
         help='Print session schedule configuration and exit (for testing)'
     )
 
+    parser.add_argument(
+        '--check-health',
+        action='store_true',
+        help='Run health check on zone files and exit (checks for stale zones)'
+    )
+
     args = parser.parse_args()
+
+    # Health check mode: run health check and exit (before importing dependencies)
+    if args.check_health:
+        setup_logging(verbose=args.verbose)
+        logging.info("Running zone health check...")
+        health_status = check_zone_health(send_alert=False)
+
+        # Exit with error code if stale or missing zones found
+        if health_status['stale_count'] > 0 or health_status['missing_count'] > 0:
+            sys.exit(1)
+        else:
+            logging.info("✓ All zone files are healthy")
+            sys.exit(0)
 
     # Test mode: print session schedule and exit (before importing dependencies)
     if args.test_session_schedule:
