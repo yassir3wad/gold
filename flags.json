@@ -11,7 +11,7 @@
   "ema_levels": true,
   "anti_chase": true,
   "adaptive_tp": true,
-  "rsi_filter": false,
+  "rsi_filter": true,
   "trend_regime": true,
   "confluence": true,
   "volume_profile": true,

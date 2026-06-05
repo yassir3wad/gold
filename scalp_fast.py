@@ -253,7 +253,7 @@ FLAGS_FILE = os.path.expanduser("~/tradingview-mcp/flags.json")
 DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bottom": True,
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
-                 "anti_chase": True, "adaptive_tp": True, "rsi_filter": False, "trend_regime": True,  # rsi_filter OFF: RSI is informational only, never gates entries (no exhaustion block, no divergence upgrade)
+                 "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
