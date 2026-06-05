@@ -117,8 +117,23 @@ def zone_crossings(bars, zone):
     return crossings
 
 
+def _merge_to_extreme(zones, kind):
+    """Among PRICE-OVERLAPPING same-kind zones, keep the EXTREME (highest supply / lowest demand) so the zone
+    anchors to the origin swing (A), not a lower/inner continuation swing (B)."""
+    out = []
+    for z in sorted(zones, key=lambda z: z["i"]):
+        hit = next((o for o in out if z["lo"] <= o["hi"] and z["hi"] >= o["lo"]), None)
+        if hit is None:
+            out.append(z)
+        elif (kind == "supply" and z["hi"] > hit["hi"]) or (kind == "demand" and z["lo"] < hit["lo"]):
+            out[out.index(hit)] = z   # replace with the more extreme one
+    return out
+
+
 def find_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    return find_demand_zones(bars, left, right, lookback, level) + find_supply_zones(bars, left, right, lookback, level)
+    d = _merge_to_extreme(find_demand_zones(bars, left, right, lookback, level), "demand")
+    s = _merge_to_extreme(find_supply_zones(bars, left, right, lookback, level), "supply")
+    return d + s
 
 
 def caused_bos(bars, i, kind, lookback=20):
