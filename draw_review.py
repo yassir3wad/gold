@@ -76,6 +76,11 @@ def main():
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
 
+    # drop a lower-TF (1h) zone if a higher-TF (4h) zone fully covers it (100% containment)
+    hi_tf = [z for z in zones if z["tf"] == "4H"]
+    zones = [z for z in zones if not (z["tf"] == "1H" and
+             any(h["lo"] <= z["lo"] and h["hi"] >= z["hi"] for h in hi_tf))]
+
     zmid = lambda z: (z["lo"] + z["hi"]) / 2
     # buy/sell zones don't care about volume/color — only KEY LEVEL (BOS) ranks them; then nearest to price
     zones.sort(key=lambda z: (0 if z["key_level"] else 1, abs(zmid(z) - cur_price)))
