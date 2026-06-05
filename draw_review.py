@@ -70,6 +70,8 @@ def main():
             continue
         t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
+            if not z["valid"]:                    # traversed both ways -> consumed/invalid, don't draw
+                continue
             # CURRENT role by position vs price: below = support(buy/green), above = resistance(sell/red).
             if z["hi"] < cur_price:
                 buy, role = True, "support"

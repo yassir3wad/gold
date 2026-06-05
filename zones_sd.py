@@ -39,27 +39,56 @@ def supply_zone(c):
 
 
 def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
+    """Demand at a swing LOW: origin = the GREEN high-volume reversal candle at/just-after the low (so a
+    red capitulation low still gets a zone). Zone = swing-low extreme -> reversal candle's body open."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "L":
             continue
-        i = p["i"]; c = bars[i]
-        if is_green(c) and volume_fib(bars, i, lookback, level):
-            lo, hi = demand_zone(c)
-            out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
+        i = p["i"]
+        cand = next((j for j in (i, i + 1) if j < len(bars) and is_green(bars[j])
+                     and volume_fib(bars, j, lookback, level)), None)
+        if cand is None:
+            continue
+        lo, hi = bars[i]["low"], bars[cand]["open"]
+        if hi <= lo:
+            hi = bars[cand]["close"]
+        out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": bars[i].get("time")})
     return out
 
 
 def find_supply_zones(bars, left=3, right=3, lookback=20, level=0.5):
+    """Supply at a swing HIGH: origin = the RED high-volume reversal candle at/just-after the high.
+    Zone = reversal candle's body open -> swing-high extreme."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "H":
             continue
-        i = p["i"]; c = bars[i]
-        if is_red(c) and volume_fib(bars, i, lookback, level):
-            lo, hi = supply_zone(c)
-            out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
+        i = p["i"]
+        cand = next((j for j in (i, i + 1) if j < len(bars) and is_red(bars[j])
+                     and volume_fib(bars, j, lookback, level)), None)
+        if cand is None:
+            continue
+        lo, hi = bars[cand]["open"], bars[i]["high"]
+        if lo >= hi:
+            lo = bars[cand]["close"]
+        out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": bars[i].get("time")})
     return out
+
+
+def zone_crossings(bars, zone):
+    """Times price has DECISIVELY crossed the zone (closed beyond it, alternating sides) since formation:
+    0 = fresh; 1 = broken once (role flips); >=2 = traversed both ways = consumed/invalid."""
+    lo, hi, i = zone["lo"], zone["hi"], zone["i"]
+    side = None; crossings = 0
+    for b in bars[i + 1:]:
+        s = "above" if b["close"] > hi else "below" if b["close"] < lo else None
+        if s is None:
+            continue
+        if side and s != side:
+            crossings += 1
+        side = s
+    return crossings
 
 
 def find_zones(bars, left=3, right=3, lookback=20, level=0.5):
@@ -125,7 +154,9 @@ def mark_key_levels(bars, left=3, right=3, lookback=20, level=0.5, max_touches=3
         z["bos"] = caused_bos(bars, z["i"], z["kind"])
         z["touches"] = touches(bars, z)
         z["broken"] = is_broken(bars, z)
-        z["score"] = kl_score_from(z["bos"], z["broken"], z["touches"], max_touches)
+        z["crossings"] = zone_crossings(bars, z)
+        z["valid"] = z["crossings"] < 2            # traversed both ways (>=2) => consumed/invalid
+        z["score"] = kl_score_from(z["bos"], z["broken"], z["touches"], max_touches) if z["valid"] else 0.0
         z["key_level"] = z["score"] > 0
     return sorted(zones, key=lambda z: -z["score"])
 
