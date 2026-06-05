@@ -1,0 +1,34 @@
+{
+  "project_type": "single",
+  "services": {
+    "scanner": {
+      "path": ".",
+      "tech_stack": ["python3", "json"],
+      "entry_points": ["scalp_fast.py", "scalp_scan.py", "orchestrate.py", "scan_pairs.py"],
+      "dev_command": "python3 scalp_fast.py",
+      "test_command": "python3 -m pytest tests/",
+      "dependencies": ["chrome-remote-interface", "tradingview-mcp"]
+    },
+    "mcp_server": {
+      "path": ".",
+      "tech_stack": ["node", "javascript", "chrome-devtools-protocol"],
+      "entry_points": ["src/server.js", "src/cli/index.js"],
+      "port": null,
+      "dev_command": "npm start",
+      "test_command": "npm test"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": "json_files",
+    "state_storage": "filesystem",
+    "telegram_integration": true
+  },
+  "conventions": {
+    "state_file_location": "~/.tv_*",
+    "per_symbol_naming": "~/.tv_fast_{symbol}_{type}.json",
+    "logging": "logs/{symbol}/YYYY-MM-DD.csv",
+    "scanner_cycle": "60_seconds"
+  },
+  "instruments": ["XAUUSD", "GBPUSD", "NAS100", "US30", "EURUSD", "USDJPY", "AUDUSD"]
+}

@@ -1,0 +1,65 @@
+{
+  "files_to_modify": {
+    "scanner": [
+      "scalp_fast.py",
+      "scalp_scan.py",
+      "orchestrate.py"
+    ]
+  },
+  "files_to_create": [
+    "src/state_manager.py"
+  ],
+  "files_to_reference": [
+    "scalp_fast.py",
+    "scan_pairs.py",
+    "orchestrate.py"
+  ],
+  "patterns": {
+    "state_persistence": "Current pattern: json.dump/load per file (CD_FILE, TRADE_STATE, WATCH_CD_FILE, VP_FILE)",
+    "error_handling": "try/except with silent fallback to default/empty state",
+    "file_locations": "os.path.expanduser('~/.tv_fast_{symbol}_{type}.json')",
+    "per_symbol_state": "Each symbol has separate state files (_trade, _cd, _watch, _vp, _tg, _skip)",
+    "trade_lifecycle": "set_active_trade() → check_active_trade() → log_signal()",
+    "cooldown_pattern": "Store {'t': time.time()} and check time.time() - t < COOLDOWN_SECONDS"
+  },
+  "existing_implementations": {
+    "description": "State management is ALREADY implemented but fragmented across multiple files",
+    "relevant_files": [
+      "scalp_fast.py:323-336 (set_active_trade)",
+      "scalp_fast.py:338-385 (check_active_trade)",
+      "scalp_fast.py:304-321 (log_signal)",
+      "scalp_fast.py:249 (TRADE_STATE)",
+      "scalp_scan.py:204-212 (load_state/save_state)",
+      "orchestrate.py:25-32 (active_pairs)"
+    ],
+    "state_structure": {
+      "trade_state": {
+        "active": "bool",
+        "id": "signal_id",
+        "side": "LONG|SHORT",
+        "entry": "price",
+        "sl": "stop_loss",
+        "tp1": "take_profit_1",
+        "tp2": "take_profit_2",
+        "tp1_hit": "bool",
+        "be_trig": "breakeven_trigger_pips",
+        "t0": "timestamp",
+        "mfe": "max_favorable_excursion",
+        "be_moved": "bool"
+      },
+      "cooldown_state": {
+        "t": "timestamp"
+      },
+      "watch_state": {
+        "t": "timestamp",
+        "price": "price_at_heads_up",
+        "label": "htf_level_label"
+      }
+    }
+  },
+  "risk_assessment": {
+    "level": "medium",
+    "reasoning": "Modifying live trading scanner state management - data loss could result in duplicate alerts or missed TP/SL updates",
+    "mitigation": "Atomic writes, schema validation, graceful degradation on corruption"
+  }
+}

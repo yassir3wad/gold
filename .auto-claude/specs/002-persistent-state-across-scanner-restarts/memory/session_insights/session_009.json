@@ -1,0 +1,114 @@
+{
+  "session_number": 9,
+  "timestamp": "2026-06-05T09:14:18.919604+00:00",
+  "subtasks_completed": [
+    "subtask-2-4"
+  ],
+  "discoveries": {
+    "file_insights": [
+      {
+        "file": "scalp_fast.py",
+        "changes": "Added state_manager.save_scan_timestamp(SYMBOL) calls before all 14 return statements in main()",
+        "impact": "comprehensive_instrumentation",
+        "key_locations": [
+          "Line 493: ERR no data",
+          "Line 591: TOO QUIET volatility gate",
+          "Line 595: NEWS BLACKOUT",
+          "Line 600: COOLDOWN",
+          "Line 778: heads-up suppressed counter-trend",
+          "Line 789: heads-up suppressed watch cooldown",
+          "Line 804: NO FAST SETUP",
+          "Line 822: SKIP counter-zone poke",
+          "Line 838: SKIP COUNTER-TREND",
+          "Line 844: OFF-SESSION",
+          "Line 856: SKIP CRAMPED",
+          "Line 915: DRY RUN",
+          "Line 921: REVIEW mode",
+          "Line 924: after _fire(trade) normal completion"
+        ]
+      },
+      {
+        "file": ".auto-claude/specs/002-persistent-state-across-scanner-restarts/build-progress.txt",
+        "changes": "Updated with subtask-2-4 completion details and Phase 2 summary",
+        "impact": "documentation_and_tracking"
+      },
+      {
+        "file": ".auto-claude/specs/002-persistent-state-across-scanner-restarts/implementation_plan.json",
+        "changes": "Updated subtask-2-4 status from pending to completed with detailed notes",
+        "impact": "project_state_management"
+      }
+    ],
+    "patterns_discovered": [
+      {
+        "pattern": "Exhaustive return point instrumentation",
+        "description": "Every exit path from main() receives timestamp tracking, ensuring scanner health visibility regardless of outcome",
+        "instances": 14,
+        "consistency": "100% - all returns covered"
+      },
+      {
+        "pattern": "Timestamp save before return",
+        "description": "state_manager.save_scan_timestamp(SYMBOL) placed immediately before each return statement",
+        "benefit": "Ensures tracking occurs even if return is unexpected"
+      },
+      {
+        "pattern": "Gate-driven early returns",
+        "description": "Multiple validation gates (volatility, news, cooldown, structure) return early with timestamp tracking",
+        "gates_covered": 14
+      }
+    ],
+    "gotchas_discovered": [
+      {
+        "gotcha": "All exit paths must be covered",
+        "detail": "Cannot miss even one return statement or timestamp tracking becomes incomplete, defeating the purpose of scanner health monitoring",
+        "severity": "high",
+        "mitigation": "Comprehensive diff review to verify each return has corresponding timestamp save"
+      },
+      {
+        "gotcha": "Distinguishing normal vs error returns",
+        "detail": "Same timestamp save applies to all outcomes - early error detection vs successful signal - all equally important for orchestrator visibility",
+        "severity": "medium"
+      }
+    ],
+    "approach_outcome": {
+      "status": "SUCCESS",
+      "description": "Completed subtask-2-4: Added scan timestamp tracking to main()",
+      "deliverables": [
+        "14 instrumentation points added across all return paths",
+        "Verification test created and passed (timestamp storage/retrieval confirmed)",
+        "Phase 2 of scalp_fast.py StateManager migration complete"
+      ],
+      "next_phase": "Phase 3 - Migrate scalp_scan.py to StateManager (subtask-3-1)"
+    },
+    "recommendations": [
+      {
+        "type": "code_pattern",
+        "suggestion": "Apply exhaustive return-point instrumentation pattern to other core functions (scalp_scan.py) for consistent audit logging across scanner modules"
+      },
+      {
+        "type": "documentation",
+        "suggestion": "Maintain a map of all instrumented return paths per function to prevent future regressions or missed coverage during refactoring"
+      },
+      {
+        "type": "testing",
+        "suggestion": "Create integration test that validates timestamp updates across all exit conditions (error, gate, normal) to prevent silent instrumentation loss"
+      },
+      {
+        "type": "architecture",
+        "suggestion": "Consider decorator pattern for timestamp tracking to reduce code duplication if this pattern spreads to multiple functions"
+      }
+    ],
+    "subtask_id": "subtask-2-4",
+    "session_num": 9,
+    "success": true,
+    "changed_files": [
+      ".auto-claude/specs/002-persistent-state-across-scanner-restarts/build-progress.txt",
+      ".auto-claude/specs/002-persistent-state-across-scanner-restarts/implementation_plan.json",
+      "scalp_fast.py"
+    ]
+  },
+  "what_worked": [
+    "Implemented subtask: subtask-2-4"
+  ],
+  "what_failed": [],
+  "recommendations_for_next_session": []
+}

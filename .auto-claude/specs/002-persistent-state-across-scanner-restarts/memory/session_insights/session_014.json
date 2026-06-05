@@ -1,0 +1,134 @@
+{
+  "session_number": 14,
+  "timestamp": "2026-06-05T09:32:16.175591+00:00",
+  "subtasks_completed": [
+    "subtask-5-1"
+  ],
+  "discoveries": {
+    "file_insights": [
+      {
+        "file": "src/state_manager.py",
+        "type": "implementation",
+        "change": "Added 3 convenience wrapper methods (lines 303-365)",
+        "details": "set_cooldown(), in_cooldown(default 5min), get_cooldown_remaining() - these methods were referenced in scalp_fast.py but were missing from StateManager implementation, representing a gap from subtask-2-3"
+      },
+      {
+        "file": "test_fresh_start_local.py",
+        "type": "new_test",
+        "change": "Created comprehensive integration test",
+        "details": "Tests StateManager initialization with no existing state, verifies lazy file creation on first save, validates schema (version, active_trades, cooldowns, watch_state, scan_timestamps), confirms all field types are dicts, tests cooldown operations and scan timestamp tracking using local temp directory"
+      },
+      {
+        "file": ".auto-claude/specs/002-persistent-state-across-scanner-restarts/implementation_plan.json",
+        "type": "documentation",
+        "change": "Updated subtask-5-1 status to completed",
+        "details": "Plan now tracks that fresh start test was implemented and all validation passed"
+      },
+      {
+        "file": ".auto-claude/specs/002-persistent-state-across-scanner-restarts/build-progress.txt",
+        "type": "documentation",
+        "change": "Added detailed progress entry for subtask-5-1",
+        "details": "Documented bug discovery (missing methods), fix implementation, test results, and verification outcomes"
+      }
+    ],
+    "patterns_discovered": [
+      {
+        "name": "Lazy Initialization",
+        "description": "StateManager initializes without creating state file; file created automatically on first save operation",
+        "evidence": "Test shows file doesn't exist after init but exists after save_cooldown() call"
+      },
+      {
+        "name": "Convenience Wrapper Methods",
+        "description": "Adding domain-specific wrapper methods with sensible defaults over low-level APIs",
+        "evidence": "set_cooldown(symbol, minutes) wraps save_cooldown(); in_cooldown(symbol, minutes=5) wraps check_cooldown()"
+      },
+      {
+        "name": "Schema Validation Pattern",
+        "description": "Integration tests verify not just functionality but also correct schema structure and field types",
+        "evidence": "Test checks state file contains required fields with correct types (all dicts) after operations"
+      },
+      {
+        "name": "Local Testing Pattern",
+        "description": "Using temporary directories for tests instead of home directory to avoid permission issues",
+        "evidence": "test_fresh_start_local.py uses tempfile.mkdtemp() instead of ~/.tv_scanner_state.json"
+      }
+    ],
+    "gotchas_discovered": [
+      {
+        "issue": "Missing method implementation gap",
+        "description": "scalp_fast.py was calling in_cooldown(), set_cooldown(), and get_cooldown_remaining() on StateManager but these methods did not exist",
+        "severity": "high",
+        "root_cause": "Subtask-2-3 verification only checked for import errors, not actual runtime method calls",
+        "resolution": "Added 3 missing convenience methods to StateManager"
+      },
+      {
+        "issue": "Incomplete verification strategy",
+        "description": "Previous subtask verification tested import success but didn't catch missing method calls that would fail at runtime",
+        "severity": "medium",
+        "impact": "Method gaps only discovered during actual integration testing in subtask-5-1",
+        "lesson": "Verification must include both import checks and representative method calls"
+      },
+      {
+        "issue": "Permission issues with home directory",
+        "description": "Testing with ~/.tv_scanner_state.json can cause permission/ownership problems in some environments",
+        "severity": "medium",
+        "solution": "Use local temp directories for tests; production code can use home directory"
+      }
+    ],
+    "approach_outcome": "SUCCESS",
+    "outcome_details": {
+      "status": "completed",
+      "tests_passed": 8,
+      "key_achievements": [
+        "Identified and fixed missing StateManager convenience methods",
+        "Created comprehensive integration test covering all fresh start scenarios",
+        "Verified lazy initialization behavior works correctly",
+        "Confirmed state file schema is valid after operations",
+        "Verified atomic writes persist state changes immediately",
+        "All convenience methods (set_cooldown, in_cooldown, get_cooldown_remaining) working correctly",
+        "scalp_fast.py now imports successfully with updated StateManager"
+      ],
+      "validation_results": "\u2713 StateManager initializes cleanly with no existing state; \u2713 State file created on first save with valid schema; \u2713 All required fields present with correct types; \u2713 All state operations work from fresh start; \u2713 State changes persist immediately via atomic writes"
+    },
+    "recommendations": [
+      {
+        "priority": "high",
+        "category": "verification",
+        "recommendation": "Add static/runtime method validation to catch missing method implementations earlier",
+        "rationale": "Current approach (import check) missed 3 missing methods that only surfaced during integration testing"
+      },
+      {
+        "priority": "high",
+        "category": "testing",
+        "recommendation": "Create integration test suite that actually exercises all referenced methods, not just imports",
+        "rationale": "Would have caught the missing convenience methods before subtask-5-1"
+      },
+      {
+        "priority": "medium",
+        "category": "documentation",
+        "recommendation": "Document lazy initialization behavior prominently in StateManager docstring",
+        "rationale": "Helps future developers understand when state file is created vs. when it's initialized in memory"
+      },
+      {
+        "priority": "medium",
+        "category": "testing",
+        "recommendation": "Use temporary directories for all filesystem-based tests to avoid environment-specific permission issues",
+        "rationale": "Makes tests portable and prevents failures in restrictive permission environments"
+      }
+    ],
+    "subtask_id": "subtask-5-1",
+    "session_num": 14,
+    "success": true,
+    "changed_files": [
+      ".auto-claude/specs/002-persistent-state-across-scanner-restarts/build-progress.txt",
+      ".auto-claude/specs/002-persistent-state-across-scanner-restarts/implementation_plan.json",
+      "src/state_manager.py",
+      "test_fresh_start_local.py"
+    ]
+  },
+  "what_worked": [
+    "Implemented subtask: subtask-5-1"
+  ],
+  "what_failed": [],
+  "recommendations_for_next_session": []
+}
