@@ -4,10 +4,13 @@ for each symbol. Run with --dry-run to preview without executing.
     python3 refresh_all_zones.py              # refresh all
     python3 refresh_all_zones.py --dry-run    # list what would be refreshed
     python3 refresh_all_zones.py --symbol XAUUSD  # refresh single symbol
+    python3 refresh_all_zones.py --notify     # send Telegram notification after refresh
 """
 import subprocess, json, os, sys
+import telegram_notify
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 DRY_RUN = "--dry-run" in sys.argv
+NOTIFY = "--notify" in sys.argv
 SINGLE_SYMBOL = None
 if "--symbol" in sys.argv:
     idx = sys.argv.index("--symbol")
@@ -63,9 +66,13 @@ def main():
             old_zones = load_zones(sym)
             status = "no changes" if old_zones else "new zones file"
             print(f"  {sym:8} — {desc} ({status})")
+        if NOTIFY:
+            # In dry-run mode with notify, show what notification would be sent
+            telegram_notify.send_alert("🔄 Zones Refreshed", "Dry run mode - no actual refresh", dry_run=True)
         return
     print(f"refreshing {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}...")
     total_changes = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
+    changes_by_symbol = {}
     for idx, sym in enumerate(symbols, 1):
         desc = instruments[sym].get('desc', '')
         print(f"\n[{idx}/{len(symbols)}] {sym} — {desc}")
@@ -78,6 +85,7 @@ def main():
             if result.returncode == 0:
                 new_zones = load_zones(sym)
                 diff = compare_zones(old_zones, new_zones)
+                changes_by_symbol[sym] = diff
                 for k in diff:
                     total_changes[k] += diff[k]
                 if diff["added"] + diff["removed"] + diff["modified"] == 0:
@@ -101,6 +109,11 @@ def main():
             print(f"total changes: +{total_changes['added']} -{total_changes['removed']} ~{total_changes['modified']}")
         else:
             print("no changes detected")
+
+    # Send Telegram notification if requested
+    if NOTIFY and changes_by_symbol:
+        summary = telegram_notify.format_zone_summary(changes_by_symbol)
+        telegram_notify.send_alert("🔄 Zones Refreshed", summary, dry_run=False)
 
 if __name__ == "__main__":
     main()

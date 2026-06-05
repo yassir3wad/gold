@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime
+import telegram_notify
 
 # --- Configuration ---
 DEFAULT_INTERVAL_HOURS = 4
@@ -67,7 +68,8 @@ def load_config():
         "session_refresh_enabled": True,
         "session_offset_minutes": 5,
         "enabled_instruments": ["XAUUSD", "GBPUSD", "EURUSD"],
-        "stale_threshold_hours": 6
+        "stale_threshold_hours": 6,
+        "notifications_enabled": True
     }
 
     if not os.path.exists(CONFIG_FILE):
@@ -126,6 +128,7 @@ def refresh_zones_job():
     try:
         config = load_config()
         instruments = config.get("enabled_instruments", [])
+        notifications_enabled = config.get("notifications_enabled", True)
 
         if not instruments:
             logging.warning("No enabled instruments in config, skipping refresh")
@@ -136,6 +139,7 @@ def refresh_zones_job():
         # Call refresh_all_zones.py for each enabled instrument
         tvdir = os.path.expanduser("~/tradingview-mcp")
         refresh_script = os.path.join(tvdir, "refresh_all_zones.py")
+        changes_by_symbol = {}
 
         for symbol in instruments:
             logging.info(f"Refreshing zones for {symbol}")
@@ -149,11 +153,16 @@ def refresh_zones_job():
                 )
 
                 if result.returncode == 0:
-                    # Log output if there were changes
+                    # Parse output to extract change statistics
                     if result.stdout:
                         for line in result.stdout.strip().split('\n'):
                             if line:
                                 logging.debug(f"  {line}")
+                            # Parse change line like "  ✓ zones changed: +2 -1 ~0"
+                            if "zones changed:" in line:
+                                changes_by_symbol[symbol] = _parse_changes_from_output(line)
+                            elif "no changes" in line and symbol not in changes_by_symbol:
+                                changes_by_symbol[symbol] = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
                     logging.info(f"Successfully refreshed {symbol}")
                 else:
                     logging.error(f"Failed to refresh {symbol} (exit {result.returncode})")
@@ -167,8 +176,34 @@ def refresh_zones_job():
 
         logging.info("Zone refresh cycle completed successfully")
 
+        # Send Telegram notification if enabled and we have changes
+        if notifications_enabled and changes_by_symbol:
+            summary = telegram_notify.format_zone_summary(changes_by_symbol)
+            telegram_notify.send_alert("🔄 Zones Refreshed", summary, dry_run=False)
+            logging.info("Telegram notification sent")
+
     except Exception as e:
         logging.error(f"Error during zone refresh: {e}", exc_info=True)
+
+def _parse_changes_from_output(line):
+    """Parse change statistics from refresh output line.
+    Example: '  ✓ zones changed: +2 -1 ~0' -> {'added': 2, 'removed': 1, 'modified': 0}
+    """
+    changes = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
+    parts = line.split("zones changed:")
+    if len(parts) < 2:
+        return changes
+
+    tokens = parts[1].strip().split()
+    for token in tokens:
+        if token.startswith('+'):
+            changes["added"] = int(token[1:])
+        elif token.startswith('-'):
+            changes["removed"] = int(token[1:])
+        elif token.startswith('~'):
+            changes["modified"] = int(token[1:])
+
+    return changes
 
 # --- Scheduler Setup ---
 class ZoneScheduler:
