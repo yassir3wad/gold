@@ -220,17 +220,16 @@ def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
     Returns (skip: bool, reasons: list[str]).
       PRIMARY  — negative reward:risk: TP1 < RR_FLOOR × stop = no usable room, un-tradeable in any direction
                  (the dominant 'neg R:R, TP1 +6p vs SL -18p' chop-spam that gets hand-rejected every tick).
-      SECONDARY — a THIN-room setup that is ALSO a dead-chop / counter-trend / wrong-way-RSI fade.
-    Conservative: a genuine setup (positive R:R with room) trips neither and still reaches review. Pure fn."""
+      SECONDARY — a THIN-room setup that is ALSO a dead-chop / counter-trend fade.
+    Conservative: a genuine setup (positive R:R with room) trips neither and still reaches review. Pure fn.
+    NOTE: RSI is intentionally NOT used here — per directive it is informational only, never a gate."""
     reasons = []
     if rr1 is not None and rr1 < RR_FLOOR:
         reasons.append(f"neg R:R {rr1:.2f} (TP1 < {RR_FLOOR}×SL)")
     counter   = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
-    rsi_wrong = rsi is not None and ((side == "LONG" and rsi > 70) or (side == "SHORT" and rsi < 30))  # buying top / selling bottom
-    if room is not None and room < HARD_ROOM_P * VS and (chop_er < HARD_CHOP_ER or counter or rsi_wrong):
+    if room is not None and room < HARD_ROOM_P * VS and (chop_er < HARD_CHOP_ER or counter):
         reasons += ([f"dead chop ER{chop_er}"] if chop_er < HARD_CHOP_ER else []) + \
-                   ([f"counter-{regime}"] if counter else []) + \
-                   ([f"RSI{rsi:.0f} wrong-way"] if (rsi_wrong and rsi is not None) else [])
+                   ([f"counter-{regime}"] if counter else [])
     return (bool(reasons), reasons)
 
 REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT")   # fade / mean-reversion setups
@@ -254,7 +253,7 @@ FLAGS_FILE = os.path.expanduser("~/tradingview-mcp/flags.json")
 DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bottom": True,
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
-                 "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
+                 "anti_chase": True, "adaptive_tp": True, "rsi_filter": False, "trend_regime": True,  # rsi_filter OFF: RSI is informational only, never gates entries (no exhaustion block, no divergence upgrade)
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
