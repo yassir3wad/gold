@@ -8,6 +8,10 @@ import scalp_fast as S
 PIP = 0.10
 GATE = 40        # vol gate: last-10-bar range in pips
 HORIZON = 10     # 10-min rule: TP1 must hit within 10 bars
+CHOP_ER = 0.30   # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
+SESSION_UTC = set(range(7, 22))  # London+NY active hours (UTC); outside = quiet
+
+ENABLE_FILTERS = False  # global flag controlled by --enable-filters
 
 def tv(*a):
     r = subprocess.run(["node","src/cli/index.js",*a], cwd=os.path.dirname(os.path.abspath(__file__)),
@@ -27,9 +31,36 @@ def line(p1,p2):
     if x2==x1: return None
     m=(y2-y1)/(x2-x1); return m, y1-m*x1
 
+def chop_15m(b):
+    """Range/chop detector on the 15m TF (resampled from the 1m bars in hand — no TF switch).
+    Kaufman efficiency ratio = |net move| / sum(|bar-to-bar moves|): ~1 = clean trend, ~0 = chop.
+    Returns (is_chop, er)."""
+    c = [b[i]['close'] for i in range(len(b)-1, -1, -15)][::-1]   # ~12 15m closes ending at the current bar
+    if len(c) < 5: return (False, 1.0)
+    denom = sum(abs(c[k]-c[k-1]) for k in range(1, len(c)))
+    er = abs(c[-1]-c[0]) / denom if denom else 0.0
+    return (er < CHOP_ER, round(er, 2))
+
+def in_session(ts):
+    """Check if timestamp falls within London+NY active hours (UTC)."""
+    import datetime as _dt
+    return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
+
 def detect(b):
     """Mirror scalp_fast: return (side, entry, struct, why) or None for the window b (last bar = trigger)."""
     n=len(b); last=b[-1]
+
+    # Apply filters if enabled
+    if ENABLE_FILTERS:
+        # Session filter: skip if outside London+NY hours
+        if not in_session(last.get('time', 0)):
+            return None
+
+        # Chop filter: skip if market is ranging (low efficiency ratio)
+        is_chop, er = chop_15m(b)
+        if is_chop:
+            return None
+
     rng10=(max(x['high'] for x in b[-10:])-min(x['low'] for x in b[-10:]))/PIP
     if rng10<GATE: return None
     body=last['close']-last['open']; body_p=abs(body)/PIP
@@ -308,6 +339,7 @@ def export_summary_report(filename, period_stats, all_results):
             f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | WR:{wr:5.1f}% | Net:{result['net_pips']:+6.0f} pips\n")
 
 def main():
+    global ENABLE_FILTERS
     parser = argparse.ArgumentParser(description="Multi-day walk-forward backtesting")
     parser.add_argument("--start-date", required=True, type=parse_date, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end-date", required=True, type=parse_date, help="End date (YYYY-MM-DD)")
@@ -319,7 +351,11 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Print dates without running backtests")
     parser.add_argument("--export", type=str, help="Export trades to CSV file")
     parser.add_argument("--report", type=str, help="Export summary report to text file")
+    parser.add_argument("--enable-filters", action="store_true", help="Enable chop filter (efficiency ratio) and session filter")
     args = parser.parse_args()
+
+    # Set global filter flag
+    ENABLE_FILTERS = args.enable_filters
 
     if args.start_date > args.end_date:
         parser.error(f"start-date {args.start_date} is after end-date {args.end_date}")
