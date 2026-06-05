@@ -80,6 +80,39 @@ def load_config():
         logging.error(f"Error loading config {CONFIG_FILE}: {e}, using defaults")
         return defaults
 
+# --- Session Timing ---
+def get_session_times():
+    """Calculate session open times in UTC.
+
+    Returns dict with session timing info:
+    {
+        'london': {'open_utc': 7, 'close_utc': 16, 'tz': 'Europe/London'},
+        'ny': {'open_utc': 13, 'close_utc': 22, 'tz': 'America/New_York'},
+        'asia': {'open_utc': 0, 'close_utc': 7, 'tz': 'Asia/Tokyo'}
+    }
+
+    These are baseline UTC hours. Actual session boxes on chart may vary
+    based on DST and the Trading Sessions indicator settings.
+    Matches the fallback UTC windows used in refresh_zones.py.
+    """
+    return {
+        'london': {
+            'open_utc': 7,
+            'close_utc': 16,
+            'tz': 'Europe/London'
+        },
+        'ny': {
+            'open_utc': 13,
+            'close_utc': 22,
+            'tz': 'America/New_York'
+        },
+        'asia': {
+            'open_utc': 0,
+            'close_utc': 7,
+            'tz': 'Asia/Tokyo'
+        }
+    }
+
 # --- Zone Refresh Job ---
 def refresh_zones_job():
     """Execute zone refresh for all enabled instruments.
