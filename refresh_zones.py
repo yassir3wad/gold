@@ -17,7 +17,13 @@ try:
 except Exception: pass
 PIP = _cfg.get("pip", 0.10)
 if _cfg.get("chart"): os.environ["TV_CHART"] = str(_cfg["chart"])   # pin reads to this symbol's window
+if "--chart" in sys.argv:
+    try: os.environ["TV_CHART"] = sys.argv[sys.argv.index("--chart")+1]   # backtest: pin reads to the replay chart
+    except Exception: pass
 ZONES_FILE = os.path.join(TVDIR, f"zones_{SYMBOL.lower()}.json")
+if "--out" in sys.argv:
+    try: ZONES_FILE = os.path.expanduser(sys.argv[sys.argv.index("--out")+1])   # backtest: write the isolated date-faithful zone file (never the live one)
+    except Exception: pass
 MERGE = 12 * PIP   # max cluster SPAN (pip-scaled): levels within this window form one zone; bounded by cluster START so dense levels can't daisy-chain
 PAD = 4 * PIP      # zone half-width padding around the clustered span (pip-scaled; tight so a zone has a precise edge to react to)
 MAX_W = 25 * PIP   # hard ceiling on final zone width — if a merged zone exceeds this, recenter to mid ± MAX_W/2 (anti-blowup safety net)

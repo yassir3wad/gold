@@ -11,8 +11,11 @@ Isolation (so the LIVE loop is never touched):
     python3 replay_sim.py --date 2026-06-04 --chart eFMec2F9 --start-hour 6 --end-hour 22
 """
 import argparse, subprocess, os, json, re, time, datetime as dt
-TVDIR = os.path.expanduser("~/tradingview-mcp")
+TVDIR = os.path.expanduser("~/tradingview-mcp")        # node CLI runs here (node_modules lives in main tree)
+SCRIPTDIR = os.path.dirname(os.path.abspath(__file__)) # run THIS checkout's engine (worktree) by absolute path
 SUFFIX = "xauusd_bt"
+BASE_TF = "5"                                                   # execution timeframe (minutes); set from --tf in main
+ZONEFILE = os.path.expanduser(f"~/tradingview-mcp/zones_{SUFFIX}.json")   # isolated, date-faithful zone file (never the live one)
 
 def tv(chart, *a):
     env = dict(os.environ); env["TV_CHART"] = chart
@@ -22,13 +25,42 @@ def tv(chart, *a):
     except Exception:
         return {}
 
+def regen_zones(chart):
+    """Rebuild the isolated zone file from the replay chart (date-faithful) and redraw it on the chart."""
+    try:
+        subprocess.run(["python3", os.path.join(SCRIPTDIR, "refresh_zones.py"), "--symbol", "XAUUSD", "--chart", chart, "--out", ZONEFILE],
+                       cwd=TVDIR, capture_output=True, text=True, timeout=150)
+    except Exception:
+        pass
+    tv(chart, "timeframe", BASE_TF)   # refresh_zones switches TF (and leaves it on 1m) — restore the 5m execution TF
+    draw_zones(chart)
+
+def draw_zones(chart):
+    """Draw the current zone file as labeled horizontal lines (clears prior drawings on this backtest chart first)."""
+    try:
+        z = json.load(open(ZONEFILE))
+    except Exception:
+        return
+    tv(chart, "draw", "clear")                                  # backtest chart is ours — safe to clear+redraw
+    lines = []
+    for entry in z.get("htf_r", []) + z.get("htf_s", []):       # HTF S/R zones -> mid-line
+        if len(entry) >= 2:
+            lo, hi = entry[0], entry[1]; lab = entry[2] if len(entry) > 2 else "zone"
+            lines.append(((lo + hi) / 2, lab))
+    for key, lab in [("pdh", "PDH"), ("pdl", "PDL"), ("asia_h", "Asia H"), ("asia_l", "Asia L")]:
+        v = z.get(key)
+        if v:
+            lines.append((v, lab))
+    for price, lab in lines:
+        tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{price}", "--text", f"{lab} [BT-ZONE]")
+
 def cursor_unix(chart):
     return tv(chart, "replay", "status").get("current_date")
 
 def run_scanner(chart):
-    env = dict(os.environ); env["TV_CHART_OVERRIDE"] = chart; env["STATE_SUFFIX"] = SUFFIX
+    env = dict(os.environ); env["TV_CHART_OVERRIDE"] = chart; env["STATE_SUFFIX"] = SUFFIX; env["TV_BASE_TF"] = BASE_TF
     try:
-        r = subprocess.run(["python3", "scalp_fast.py", "--symbol", "XAUUSD", "--dry"],
+        r = subprocess.run(["python3", os.path.join(SCRIPTDIR, "scalp_fast.py"), "--symbol", "XAUUSD", "--dry"],
                            cwd=TVDIR, capture_output=True, text=True, timeout=90, env=env)
         return r.stdout
     except Exception:
@@ -54,14 +86,18 @@ def main():
     ap.add_argument("--end-hour", type=int, default=24)    # UTC
     ap.add_argument("--regime-refresh", type=int, default=15)  # clear VP/regime cache every N analyzed steps
     ap.add_argument("--max-steps", type=int, default=1600)
+    ap.add_argument("--tf", default="5")                       # execution timeframe (minutes) — 5m, no more 1m
     a = ap.parse_args()
+    global BASE_TF; BASE_TF = a.tf
     CH = a.chart
     target = dt.datetime.strptime(a.date, "%Y-%m-%d").date()
     vpfile = os.path.expanduser(f"~/.tv_fast_{SUFFIX}_vp.json")
+    zone_every = max(1, 60 // int(a.tf))                       # regenerate + redraw zones every ~1h of replay time
 
-    tv(CH, "symbol", "XAUUSD"); tv(CH, "timeframe", "1")
+    tv(CH, "symbol", "XAUUSD"); tv(CH, "timeframe", a.tf)
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
-    print(f"replay sim: {a.date}  window {a.start_hour:02d}:00-{a.end_hour:02d}:00 UTC  chart {CH}\n")
+    regen_zones(CH)                                            # initial date-faithful zones for this day, drawn on chart
+    print(f"replay sim: {a.date}  window {a.start_hour:02d}:00-{a.end_hour:02d}:00 UTC  chart {CH}  TF={a.tf}m  zones/{zone_every} steps\n")
 
     out = f"/tmp/replay_sim_{a.date}.json"; barfile = f"/tmp/bars_{a.date}.json"
     signals = []; allbars = {}; analyzed = 0; last_key = None; last_step = -99
@@ -76,6 +112,8 @@ def main():
         if a.regime_refresh and analyzed % a.regime_refresh == 0:
             try: os.remove(vpfile)                       # force a fresh 30m-regime read at the current cursor
             except Exception: pass
+        if analyzed and analyzed % zone_every == 0:      # ~hourly: rebuild date-faithful zones at the current cursor + redraw
+            regen_zones(CH)
         analyzed += 1
         for b in tv(CH, "ohlcv", "-n", "3").get("bars", []):   # capture real bars for outcome scoring (one pass)
             allbars[b["time"]] = b

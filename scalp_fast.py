@@ -53,6 +53,8 @@ BE_TRIGGER_P = 35                  # once a trade runs +this many pips favorable
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
+BASE_TF = int(os.environ.get("TV_BASE_TF", "1"))   # execution timeframe in minutes (1m default; 5m via TV_BASE_TF=5)
+ER_STRIDE = max(1, 15 // BASE_TF)  # bars per 15m step (15 on 1m, 3 on 5m) so the ER stays a 15m-sampled read
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
 RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
                                    # is structurally un-tradeable (no room / negative R:R) and is auto-skipped
@@ -193,8 +195,8 @@ def volume_profile():
             if h5 and h1 and h2:
                 regime = "UP" if h5 > h1 > h2 else ("DOWN" if h5 < h1 < h2 else "flat")
     finally:
-        if tid: tv("indicator", "toggle", tid, "--hidden")   # ALWAYS hide (even on error) — TPO stays off the 1m chart
-        tv("timeframe", "1")
+        if tid: tv("indicator", "toggle", tid, "--hidden")   # ALWAYS hide (even on error) — TPO stays off the chart
+        tv("timeframe", str(BASE_TF))   # restore the execution TF (1m live, 5m backtest) — not hardcoded 1m
     try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime}, open(VP_FILE, "w"))
     except Exception: pass
     return poc, vah, val, regime
@@ -335,7 +337,7 @@ def init_symbol(sym):
     TG_STATE      = os.path.expanduser(f"~/.tv_fast_{s}_tg.json")
     TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
     PENDING_FILE  = os.path.expanduser(f"~/.tv_fast_{s}_pending.json")
-    ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{SYMBOL.lower()}.json")   # zones stay keyed to the REAL symbol (read-only, shared) — never the backtest suffix
+    ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{s}.json")   # live: zones_<sym>.json; backtest (STATE_SUFFIX set): isolated zones_<suffix>.json so date-faithful regeneration never touches live zones
 
 def _log_path():
     """Per-pair-per-day log: logs/<symbol>/<YYYY-MM-DD>.csv (the auto-learn dataset, split by instrument & day)."""
@@ -513,7 +515,8 @@ def chop_15m(b):
     """Range/chop detector on the 15m TF (resampled from the 1m bars in hand — no TF switch).
     Kaufman efficiency ratio = |net move| / sum(|bar-to-bar moves|): ~1 = clean trend, ~0 = chop.
     Returns (is_chop, er)."""
-    c = [b[i]['close'] for i in range(len(b)-1, -1, -15)][::-1]   # ~12 15m closes ending at the current bar
+    c = [b[i]['close'] for i in range(len(b)-1, -1, -ER_STRIDE)][::-1]   # 15m-sampled closes (TF-aware stride)
+    c = c[-12:]                                                          # keep ~3h (12 x 15m) regardless of base TF
     if len(c) < 5: return (False, 1.0)
     denom = sum(abs(c[k]-c[k-1]) for k in range(1, len(c)))
     er = abs(c[-1]-c[0]) / denom if denom else 0.0
@@ -546,7 +549,7 @@ def main():
     AI = FL.get("ai_decide", False)   # AI-decides mode: bypass ALL blocking filters, surface every setup + context for Claude to judge
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
-    tv("timeframe", "1")
+    tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
     if price is None or len(b) < 40:
