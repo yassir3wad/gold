@@ -17,11 +17,20 @@ counter-trend) and **draw them on the chart**.
   Dry-run verified; **live draw deferred** (the backtest chart was busy and the live XAUUSD chart id
   wasn't identifiable from the tab list — ready to fire when the chart is free).
 
-## Already in the engine (surprise)
+## Already in the engine (surprise) — and why they fire 0×
 `double-top break`, `double-bottom break`, and `range/triangle breakout` are **already implemented** and
-flagged ON — but they fired **0×** in 9 backtest days. So "add double-top/triangle" is really "fix the
-existing detection that's too strict." `flag` is not implemented (and momentum-style continuation is our
-worst family — low priority). Channel and fib are genuinely new.
+flagged ON — but they fired **0×** in 9 backtest days. Reading the code (`scalp_fast.py:666–679`): it's
+**not a bug, it's strict-by-design**:
+- Double-top fires only on `dtop AND strong-bearish-candle AND close < lo15` — two equal highs *and* a
+  strong bearish candle *and* a break of the **entire 15-bar low**, all in one bar. Rare on 1m.
+- Triangle needs `range15 < 35p` (real compression) + strong candle breaking the 15-bar extreme.
+
+The textbook trigger is a break of the **neckline** (the valley between peaks, which is *higher* than
+`lo15`), which `patterns.detect_double` computes and which would fire earlier/more often. **But:** we have
+*zero* edge data on these (they never fired), and the cost finding says more signals = more spread bleed
+unless they clear ~3p. So loosening them to the neckline trigger is a hypothesis to **backtest first**,
+not a change to ship. `flag` is not implemented (momentum-style continuation is our worst family — skip).
+Channel and fib are genuinely new.
 
 ## Does pattern context actually find the high-edge trades? (`pattern_edge.py`)
 Retro-tagged every captured signal with its channel/fib context (no look-ahead) and compared edge after
