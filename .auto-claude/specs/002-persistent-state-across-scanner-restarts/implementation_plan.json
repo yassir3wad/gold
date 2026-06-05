@@ -206,8 +206,9 @@
             "command": "python3 scalp_scan.py 80 && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Update lines 205-212. Import StateManager. Replace load_state() with sm.get_signal_key() and save_state(k) with sm.save_signal_key(k). Use instrument='XAUUSD' (hardcoded in this scanner)."
+          "status": "completed",
+          "notes": "Completed: Migrated scalp_scan.py to use StateManager. Imported StateManager from src/state_manager. Initialized StateManager instance with 'scalp_scan' namespace. Replaced load_state() to use state_manager.get_watch_state('XAUUSD'). Replaced save_state(k) to use state_manager.save_watch_state('XAUUSD', {'key': k}). Signal deduplication key now persists across scanner restarts. Verified with comprehensive integration tests showing state persistence, duplicate detection, and restart resilience.",
+          "updated_at": "2026-06-05T09:17:15.865937+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -225,8 +226,9 @@
             "command": "python3 scalp_scan.py 80 && python3 -c \"from src.state_manager import StateManager; sm = StateManager('scanner'); print('OK' if sm.get_scan_timestamp('XAUUSD') else 'FAIL')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Add sm.save_scan_timestamp('XAUUSD') at the start of main() after successful data fetch."
+          "status": "completed",
+          "notes": "Completed: Added StateManager instance with 'scanner' namespace at start of main() function. Added scan_state.save_scan_timestamp('XAUUSD') call at end of main() to record successful scan completion. Timestamp is saved regardless of signal outcome, enabling orchestrator to track scanner health and last scan times.",
+          "updated_at": "2026-06-05T11:20:00.000000+00:00"
         }
       ]
     },
@@ -539,6 +541,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:08:35.470Z",
-  "last_updated": "2026-06-05T08:59:19.051399+00:00"
+  "updated_at": "2026-06-05T09:18:03.342Z",
+  "last_updated": "2026-06-05T09:17:15.865944+00:00"
 }

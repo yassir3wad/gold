@@ -440,3 +440,94 @@ Phase 2 Complete! All scalp_fast.py migrations to StateManager complete:
 Next: Phase 3 - Migrate scalp_scan.py to StateManager
   → subtask-3-1: Replace load_state/save_state with StateManager
 
+[2026-06-05T11:16:00.000Z] ✅ COMPLETED: subtask-3-1 - Replace load_state/save_state with StateManager
+
+Successfully migrated scalp_scan.py to use StateManager for signal deduplication:
+
+Changes Implemented:
+  - Added import: "from src.state_manager import StateManager"
+  - Initialized StateManager instance in main() with 'scalp_scan' namespace
+  - Replaced load_state() function to use state_manager.get_watch_state('XAUUSD')
+  - Replaced save_state(k) function to use state_manager.save_watch_state('XAUUSD', {'key': k})
+  - Modified save_state to handle None by saving empty dict {}
+  - Signal deduplication key now persists across scanner restarts
+
+Pattern Followed:
+  - StateManager initialized once per scan with namespace="scalp_scan"
+  - Signal key stored in watch_state for XAUUSD symbol (hardcoded in this scanner)
+  - load_state() retrieves key from watch_data.get("key") if watch_data exists
+  - save_state(None) clears state by saving empty dict
+  - save_state(key) saves {"key": key} for deduplication tracking
+
+Behavioral Preservation:
+  - Duplicate signal suppression still works: same zone-touch key prevents re-alerting
+  - State clears when no trade zone is active (save_state(None) called)
+  - Signal keys remain in format: "LONG@4350.0-4360.0" or "SHORT@4420.0-4430.0"
+
+Verification:
+  - Created comprehensive test script testing all state patterns
+  - Verified state persistence across StateManager instances (restart simulation)
+  - Verified duplicate signal detection logic
+  - Verified state clearing behavior
+  - All 6 tests passed successfully
+
+Benefits:
+  - Signal deduplication now survives scanner restarts
+  - No more lost "already alerted this zone" context after crash/reboot
+  - Consistent with scalp_fast.py StateManager pattern
+  - Atomic writes prevent corrupted state files
+
+Commit: d01a99a
+
+Files modified:
+  - scalp_scan.py (10 insertions, 7 deletions)
+  - implementation_plan.json (status updated to completed)
+
+Next: subtask-3-2 - Add scan timestamp tracking
+
+[2026-06-05T11:20:00.000Z] ✅ COMPLETED: subtask-3-2 - Add scan timestamp tracking
+
+Successfully added scan timestamp tracking to scalp_scan.py:
+
+Changes Implemented:
+  - Added StateManager initialization in main() with namespace='scanner'
+  - Added scan_state.save_scan_timestamp('XAUUSD') at end of main() after all analysis completes
+  - Timestamp records successful scan completion regardless of signal outcome
+  - Enables orchestrator visibility of last scan times for XAUUSD
+
+Pattern Followed:
+  - StateManager instance created at start of main() function
+  - Timestamp saved after all verdict and EMA filter logic completes
+  - Uses namespace='scanner' (same as scalp_fast.py) for consistent orchestrator access
+  - Timestamp defaults to current time via StateManager method
+
+Integration:
+  - Works alongside existing 'scalp_scan' namespace StateManager for watch state
+  - Two StateManager instances coexist: one for signal deduplication, one for scan timestamps
+  - Consistent with scalp_fast.py pattern where scan timestamps use 'scanner' namespace
+  - Orchestrator can now query scan_state.get_scan_timestamp('XAUUSD') to check scanner health
+
+Benefits:
+  - Scan timestamps survive scanner restarts
+  - Orchestrator can detect stale scans or scanner downtime
+  - Helps debug "why wasn't this symbol scanned?" issues
+  - Supports restart recovery and health monitoring
+
+Verification:
+  - Created test script verifying StateManager('scanner') can save and retrieve timestamps
+  - Code review confirms correct method name (save_scan_timestamp not set_scan_timestamp)
+  - Timestamp saved after all scan logic completes successfully
+
+Commit: 84fe581
+
+Files modified:
+  - scalp_scan.py (7 insertions)
+  - implementation_plan.json (status updated to completed)
+
+Phase 3 Complete\! All scalp_scan.py migrations to StateManager complete:
+  ✅ subtask-3-1: load_state/save_state migrated
+  ✅ subtask-3-2: Scan timestamp tracking added
+
+Next: Phase 4 - Migrate orchestrate.py to StateManager
+  → subtask-4-1: Replace active_pairs() to use StateManager
+
