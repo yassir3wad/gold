@@ -29,50 +29,42 @@ def volume_fib(bars, i, lookback=20, level=0.5):
 
 
 def demand_zone(c):
-    """Green origin candle -> (low wick, body open). Body bottom of a green candle is its open."""
-    return (c["low"], c["open"])
+    """Buy zone = low wick -> body bottom (min(open,close)), works for a red or green swing-low candle."""
+    return (c["low"], min(c["open"], c["close"]))
 
 
 def supply_zone(c):
-    """Red origin candle -> (body open, high wick). Body top of a red candle is its open."""
-    return (c["open"], c["high"])
+    """Sell zone = body top (max(open,close)) -> high wick."""
+    return (max(c["open"], c["close"]), c["high"])
 
 
 def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """Demand at a swing LOW: origin = the GREEN high-volume reversal candle at/just-after the low (so a
-    red capitulation low still gets a zone). Zone = swing-low extreme -> reversal candle's body open."""
+    """A buy zone at EVERY swing LOW (the swing-low candle, any color). green + high-volume -> 'strong'."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "L":
             continue
-        i = p["i"]
-        cand = next((j for j in (i, i + 1) if j < len(bars) and is_green(bars[j])
-                     and volume_fib(bars, j, lookback, level)), None)
-        if cand is None:
-            continue
-        lo, hi = bars[i]["low"], bars[cand]["open"]
+        i = p["i"]; c = bars[i]
+        lo, hi = demand_zone(c)
         if hi <= lo:
-            hi = bars[cand]["close"]
-        out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": bars[i].get("time")})
+            hi = max(c["open"], c["close"])
+        strong = is_green(c) and volume_fib(bars, i, lookback, level)
+        out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": c.get("time"), "strong": strong})
     return out
 
 
 def find_supply_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """Supply at a swing HIGH: origin = the RED high-volume reversal candle at/just-after the high.
-    Zone = reversal candle's body open -> swing-high extreme."""
+    """A sell zone at EVERY swing HIGH (any color). red + high-volume -> 'strong'."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "H":
             continue
-        i = p["i"]
-        cand = next((j for j in (i, i + 1) if j < len(bars) and is_red(bars[j])
-                     and volume_fib(bars, j, lookback, level)), None)
-        if cand is None:
-            continue
-        lo, hi = bars[cand]["open"], bars[i]["high"]
+        i = p["i"]; c = bars[i]
+        lo, hi = supply_zone(c)
         if lo >= hi:
-            lo = bars[cand]["close"]
-        out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": bars[i].get("time")})
+            lo = min(c["open"], c["close"])
+        strong = is_red(c) and volume_fib(bars, i, lookback, level)
+        out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": c.get("time"), "strong": strong})
     return out
 
 
