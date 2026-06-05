@@ -825,3 +825,36 @@ Files Created:
 
 Next: subtask-5-4 - Test cooldown persistence across restart
 
+
+## Latest Update - 2026-06-05 11:42:00
+
+### ✅ Subtask 5-4: Test Cooldown Persistence Across Restart - COMPLETED
+
+Created comprehensive integration test (test_cooldown_persistence.py) that validates cooldown persistence across scanner restarts.
+
+**Test Coverage (7 phases):**
+1. ✓ Signal fires and cooldown starts (timestamp saved to state)
+2. ✓ Scanner restart preserves cooldown state from disk
+3. ✓ Duplicate signals correctly blocked within cooldown window after restart
+4. ✓ Cooldown expires correctly after duration elapses
+5. ✓ New signals can fire after cooldown expiration
+6. ✓ New cooldown persists across another restart
+7. ✓ Multi-symbol cooldown isolation (XAUUSD cooldown doesn't affect GBPUSD)
+
+**Acceptance Criteria Verified:**
+- ✓ Cooldown set when signal fires (line 943 in scalp_fast.py)
+- ✓ Cooldown timestamp persists to disk in unified state file
+- ✓ Cooldown check after restart (line 601 in scalp_fast.py) correctly blocks duplicate signals
+- ✓ Duplicate Telegram alerts prevented after restart
+- ✓ Cooldown remaining time calculated correctly across restarts
+- ✓ Multiple restarts preserve cooldown state correctly
+- ✓ Per-symbol cooldown isolation works correctly
+
+**User Story Validated:**
+"I don't want to receive duplicate Telegram alerts after restarting the scanner" ✅
+
+This test validates the SECOND PRIMARY use case from the spec: duplicate alert prevention across restarts.
+
+## Next Steps
+- Continue with phase 5 integration tests
+- Test orchestrator multi-instrument state tracking (subtask-5-5)

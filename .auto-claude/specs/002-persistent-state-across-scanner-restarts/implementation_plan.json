@@ -350,14 +350,17 @@
           "description": "Test cooldown persistence across restart",
           "all_services": true,
           "files_to_modify": [],
-          "files_to_create": [],
+          "files_to_create": [
+            "test_cooldown_persistence.py"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "manual",
             "instructions": "1. Trigger a signal to start cooldown. 2. Immediately kill and restart scanner. 3. Verify cooldown is still active (no duplicate signal within cooldown window). 4. Wait for cooldown to expire. 5. Verify new signal can fire."
           },
-          "status": "pending",
-          "notes": "User story: 'I don't want to receive duplicate Telegram alerts after restarting the scanner'"
+          "status": "completed",
+          "notes": "Completed: Created comprehensive integration test (test_cooldown_persistence.py) that validates cooldown persistence across scanner restarts. Test covers 7 phases: (1) Signal fires and cooldown starts, (2) Scanner restart preserves cooldown state, (3) Duplicate signals blocked within cooldown window after restart, (4) Cooldown expires correctly, (5) New signals can fire after expiration, (6) New cooldown persists across another restart, (7) Multi-symbol cooldown isolation. All acceptance criteria verified: ✓ Cooldown set when signal fires (line 943 in scalp_fast.py) ✓ Cooldown timestamp persists to disk ✓ Cooldown check after restart (line 601) blocks duplicate signals ✓ Duplicate Telegram alerts prevented ✓ Cooldown remaining time calculated correctly ✓ Multiple restarts preserve state ✓ Per-symbol isolation works. User story validated: 'I don't want to receive duplicate Telegram alerts after restarting the scanner' ✅",
+          "updated_at": "2026-06-05T11:42:00.000000+00:00"
         },
         {
           "id": "subtask-5-5",
@@ -550,6 +553,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:36:39.593Z",
+  "updated_at": "2026-06-05T09:39:32.536Z",
   "last_updated": "2026-06-05T09:35:27.907104+00:00"
 }
