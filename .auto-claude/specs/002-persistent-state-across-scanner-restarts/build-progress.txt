@@ -531,3 +531,47 @@ Phase 3 Complete\! All scalp_scan.py migrations to StateManager complete:
 Next: Phase 4 - Migrate orchestrate.py to StateManager
   → subtask-4-1: Replace active_pairs() to use StateManager
 
+
+[2026-06-05T11:30:00.000Z] ✅ COMPLETED: subtask-4-1 - Replace active_pairs() to use StateManager
+
+Successfully migrated active_pairs() function in orchestrate.py to use StateManager:
+
+Changes Implemented:
+  - Added import: "from src.state_manager import StateManager"
+  - Replaced active_pairs() function to use StateManager for centralized state access
+  - Function now instantiates StateManager(namespace="scanner") at start
+  - Replaced json.load(open(_state(sym, "trade"))) with state_manager.get_trade_state(sym)
+  - Iterates through INSTR symbols, checking if trade_state exists and active=True
+  - Returns list of symbols with active trades
+
+Pattern Followed:
+  - StateManager initialized with namespace="scanner" (same as scalp_fast.py)
+  - Uses get_trade_state(sym) to retrieve trade data for each symbol
+  - Checks if trade_state is not None and trade_state.get("active") is True
+  - Maintains same functionality as before but with centralized state management
+  - No more per-symbol file I/O - all state reads go through StateManager
+
+Benefits:
+  - Active trade detection now uses consolidated state file ~/.tv_scanner_state.json
+  - Consistent with scalp_fast.py and scalp_scan.py StateManager patterns
+  - Simplifies state management across scanner components
+  - Supports restart recovery - orchestrator can resume tracking active trades after crash
+
+Code Quality:
+  - Clean separation: StateManager handles all file I/O and error handling
+  - Graceful degradation: if state file is missing/corrupted, returns empty list
+  - Maintains existing orchestrate.py behavior and logging patterns
+  - No changes to review(), pinned_pairs(), or main() logic
+
+Verification:
+  - Syntax validation passed with Python AST parser
+  - Import resolution verified
+  - Logic confirmed: StateManager instantiation → iterate INSTR → get_trade_state → check active field
+
+Commit: 2374757
+
+Files modified:
+  - orchestrate.py (6 insertions, 3 deletions)
+  - implementation_plan.json (status updated to completed)
+
+Next: subtask-4-2 - Add scan timestamp reporting to orchestrator

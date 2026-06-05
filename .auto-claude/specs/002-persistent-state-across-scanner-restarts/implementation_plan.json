@@ -258,8 +258,9 @@
             "command": "python3 -c \"import orchestrate; pairs = orchestrate.active_pairs(); print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Update lines 25-32. Import StateManager. Replace json.load from _state(sym, 'trade') with sm.get_active_trade(sym). Return symbols where trade state exists and active=True."
+          "status": "completed",
+          "notes": "Completed: Imported StateManager from src.state_manager. Replaced active_pairs() function to use state_manager.get_trade_state(sym) instead of reading individual JSON files. Function now instantiates StateManager with 'scanner' namespace, iterates through INSTR symbols, and returns list of symbols where trade state exists and active=True. Maintains same functionality with centralized state management.",
+          "updated_at": "2026-06-05T11:30:00.000000+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -541,6 +542,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:18:03.342Z",
+  "updated_at": "2026-06-05T09:21:17.128Z",
   "last_updated": "2026-06-05T09:17:15.865944+00:00"
 }
