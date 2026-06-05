@@ -146,6 +146,18 @@ def is_broken(bars, zone):
     return False
 
 
+def wick_broken(bars, zone):
+    """A KEY LEVEL fails if price pierces the zone's far edge with a WICK (even without closing through):
+    demand -> any later low < zone low; supply -> any later high > zone high."""
+    lo, hi, i = zone["lo"], zone["hi"], zone["i"]
+    for b in bars[i + 1:]:
+        if zone["kind"] == "demand" and b["low"] < lo:
+            return True
+        if zone["kind"] == "supply" and b["high"] > hi:
+            return True
+    return False
+
+
 def kl_score_from(bos, broken, touches, max_touches=3):
     """Pure score: KEY LEVEL = BOS-confirmed, not broken, not exhausted. Fresh=1.0, decays 0.25 per retest,
     dead (0) once broken / not-a-KL / >= max_touches reactions."""
@@ -170,7 +182,8 @@ def mark_key_levels(bars, left=3, right=3, lookback=20, level=0.5, max_touches=3
         z["crossings"] = zone_crossings(bars, z)
         z["valid"] = z["crossings"] < 2            # traversed both ways (>=2) => consumed/invalid
         z["impulse"] = is_impulse_kl(bars, z["i"], z["kind"])   # opposite-impulse-in + impulse-out
-        kl_ok = z["bos"] and z["impulse"]                       # a KL needs BOTH the BOS and the impulse structure
+        z["wick_broken"] = wick_broken(bars, z)                 # a wick through the level = KL failure
+        kl_ok = z["bos"] and z["impulse"] and not z["wick_broken"]   # KL needs BOS + impulse + never wicked through
         z["score"] = kl_score_from(kl_ok, z["broken"], z["touches"], max_touches) if z["valid"] else 0.0
         z["key_level"] = z["score"] > 0
     return sorted(zones, key=lambda z: -z["score"])

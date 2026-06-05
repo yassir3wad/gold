@@ -88,6 +88,10 @@ def test_key_level_bos_and_score():
     # broken variant: after the rally, a later candle CLOSES below the demand zone -> invalid
     bk = bars + [C(100,101,90,91,10)]   # i7 closes 91 < zone low 94 (i4 stays the swing low)
     check("KL: closed-through zone -> broken -> score 0", approx(Z.key_level_score(bk, dz), 0.0))
+    # wick-through variant: a later candle WICKS below the zone (closes back above) -> KL failure
+    wb = bars + [C(100, 101, 92, 98, 10)]   # low 92 < zone low 94 (wick), close 98 back above
+    wz = next(z for z in Z.mark_key_levels(wb, left=1, right=1) if z["i"] == 4)
+    check("KL: wick through the level = KL failure", wz["wick_broken"] and not wz["key_level"])
 
 
 def test_key_level_decay():
