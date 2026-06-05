@@ -199,6 +199,41 @@ def volume_profile():
     except Exception: pass
     return poc, vah, val, regime
 
+def compute_reference_levels():
+    """Fetch daily OHLCV and compute PDH/PDL from previous day's high/low, plus Asian session range.
+    Returns dict with pdh, pdl, asia_h, asia_l keys. Temporarily switches TF; restores 1m on exit."""
+    pdh = pdl = asia_h = asia_l = None
+    try:
+        # Fetch daily bars for PDH/PDL
+        tv("timeframe", "D")
+        bars = tv("ohlcv", "-n", "3").get("bars", [])
+        if len(bars) >= 2:
+            pdh = round(bars[-2]["high"], PXD)
+            pdl = round(bars[-2]["low"], PXD)
+
+        # Fetch 15m bars for Asian session range (last complete 00-07 UTC session)
+        tv("timeframe", "15")
+        bars_15m = tv("ohlcv", "-n", "300").get("bars", [])
+        if bars_15m:
+            import datetime as dt
+            now = dt.datetime.utcnow()
+            # Find last complete Asian session (00-07 UTC)
+            target_day = now.date() if now.hour >= 7 else (now.date() - dt.timedelta(days=1))
+            asian_bars = []
+            for bar in bars_15m:
+                bar_time = dt.datetime.utcfromtimestamp(bar["time"])
+                if bar_time.date() == target_day and 0 <= bar_time.hour < 7:
+                    asian_bars.append(bar)
+            if asian_bars:
+                asia_h = round(max(b["high"] for b in asian_bars), PXD)
+                asia_l = round(min(b["low"] for b in asian_bars), PXD)
+    except Exception:
+        pass
+    finally:
+        tv("timeframe", "1")   # always restore 1m
+
+    return {"pdh": pdh, "pdl": pdl, "asia_h": asia_h, "asia_l": asia_l}
+
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
     when stale (>ZONES_TTL); falls back to the hardcoded constants if no usable file exists.
