@@ -155,6 +155,10 @@ def round_levels(price):
 
 def main():
     count = int(sys.argv[1]) if len(sys.argv) > 1 else 80
+
+    # Initialize StateManager for scan timestamp tracking
+    scan_state = StateManager(namespace="scanner")
+
     tv("timeframe", "15")   # self-heal: this scanner operates on 15m (in case fast-mode left it on 1m)
     q = tv("quote"); price = q.get("last")
     if price is None: print("ERR: no quote"); return
@@ -283,6 +287,9 @@ def main():
                 save_state(key); print(f">> SIGNAL: {side}{long_label}")
         else:
             print(wait_msg)
+
+    # Record successful scan completion
+    scan_state.save_scan_timestamp("XAUUSD")
 
 if __name__ == "__main__":
     main()
