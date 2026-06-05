@@ -101,7 +101,8 @@ def main():
         kl = z["key_level"] and not flipped
         flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
         ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
-        rect(CH, z["time"], z["lo"], z["t1"], z["hi"], f"{z['tf']} {role}{flag}", ov)
+        right_edge = z["t1"] + 50 * 4 * 3600   # extend boxes ~50 4h-bars into the empty right side
+        rect(CH, z["time"], z["lo"], right_edge, z["hi"], f"{z['tf']} {role}{flag}", ov)
         seen.append(mid); drawn["demand" if buy else "supply"] += 1
         if kl: drawn["KL"] += 1
         nbuy += buy; nsell += (not buy)
