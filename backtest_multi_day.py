@@ -189,6 +189,15 @@ def calculate_max_drawdown(trades):
     max_dd_pct=(max_dd/peak*100) if peak>0 else 0
     return max_dd, max_dd_pct
 
+def calculate_profit_factor(trades):
+    """Calculate profit factor (gross profit / gross loss).
+    Returns profit factor or 0 if no losing trades."""
+    if not trades: return 0
+    gross_profit=sum(t[7] for t in trades if t[7]>0)
+    gross_loss=abs(sum(t[7] for t in trades if t[7]<0))
+    if gross_loss==0: return 0 if gross_profit==0 else float('inf')
+    return gross_profit/gross_loss
+
 def calculate_sharpe_ratio(trades, risk_free_rate=0):
     """Calculate Sharpe ratio from trade returns.
     Returns annualized Sharpe ratio (assuming 252 trading days)."""
@@ -207,7 +216,7 @@ def monte_carlo_simulation(all_trades, iterations):
     Returns dict with percentile results for each metric."""
     if not all_trades: return None
 
-    results={'net_pips':[], 'win_rate':[], 'max_dd':[], 'max_dd_pct':[], 'sharpe':[]}
+    results={'net_pips':[], 'win_rate':[], 'profit_factor':[], 'max_dd':[], 'max_dd_pct':[], 'sharpe':[]}
 
     for _ in range(iterations):
         # Shuffle trade order
@@ -219,11 +228,14 @@ def monte_carlo_simulation(all_trades, iterations):
         wins=len([t for t in trades if t[6]=="TP1"])
         losses=len([t for t in trades if t[6]=="SL"])
         win_rate=(wins/(wins+losses)*100) if (wins or losses) else 0
+        profit_factor=calculate_profit_factor(trades)
         max_dd, max_dd_pct=calculate_max_drawdown(trades)
         sharpe=calculate_sharpe_ratio(trades)
 
         results['net_pips'].append(net_pips)
         results['win_rate'].append(win_rate)
+        # Handle inf values in profit_factor for percentile calculation
+        results['profit_factor'].append(profit_factor if profit_factor != float('inf') else 999)
         results['max_dd'].append(max_dd)
         results['max_dd_pct'].append(max_dd_pct)
         results['sharpe'].append(sharpe)
@@ -239,6 +251,7 @@ def monte_carlo_simulation(all_trades, iterations):
         'iterations': iterations,
         'net_pips': {'p5': percentiles(results['net_pips'], 5), 'p50': percentiles(results['net_pips'], 50), 'p95': percentiles(results['net_pips'], 95)},
         'win_rate': {'p5': percentiles(results['win_rate'], 5), 'p50': percentiles(results['win_rate'], 50), 'p95': percentiles(results['win_rate'], 95)},
+        'profit_factor': {'p5': percentiles(results['profit_factor'], 5), 'p50': percentiles(results['profit_factor'], 50), 'p95': percentiles(results['profit_factor'], 95)},
         'max_dd': {'p5': percentiles(results['max_dd'], 5), 'p50': percentiles(results['max_dd'], 50), 'p95': percentiles(results['max_dd'], 95)},
         'max_dd_pct': {'p5': percentiles(results['max_dd_pct'], 5), 'p50': percentiles(results['max_dd_pct'], 50), 'p95': percentiles(results['max_dd_pct'], 95)},
         'sharpe': {'p5': percentiles(results['sharpe'], 5), 'p50': percentiles(results['sharpe'], 50), 'p95': percentiles(results['sharpe'], 95)}
@@ -324,6 +337,15 @@ def main():
             total_test_net = sum(w['test']['net_pips'] for w in window_results)
             overall_test_wr = (total_test_wins / (total_test_wins+total_test_losses)*100) if (total_test_wins or total_test_losses) else 0
 
+            # Collect all test trades for advanced metrics
+            all_test_trades = []
+            for w in window_results:
+                for r in w['test']['daily_results']:
+                    all_test_trades.extend(r['trades'])
+            test_profit_factor = calculate_profit_factor(all_test_trades)
+            test_max_dd, test_max_dd_pct = calculate_max_drawdown(all_test_trades)
+            test_sharpe = calculate_sharpe_ratio(all_test_trades)
+
             print(f"Windows tested: {len(window_results)}")
             print(f"Test period signals: {total_test_signals}")
             print(f"Test period wins: {total_test_wins}")
@@ -331,6 +353,11 @@ def main():
             print(f"Test period timeouts: {total_test_timeouts}")
             print(f"Test period win rate: {overall_test_wr:.0f}%")
             print(f"Test period net: {total_test_net:+.0f} pips (~${total_test_net:+.0f} @0.1 lot)")
+            print(f"\n--- Advanced Metrics (Test Periods) ---")
+            test_pf_str = f"{test_profit_factor:.2f}" if test_profit_factor != float('inf') else "∞"
+            print(f"Profit factor: {test_pf_str}")
+            print(f"Max drawdown: {test_max_dd:.0f} pips ({test_max_dd_pct:.1f}%)")
+            print(f"Sharpe ratio: {test_sharpe:.2f}")
 
             print("\nPer-window test results:")
             for w in window_results:
@@ -398,6 +425,13 @@ def main():
             total_timeouts = sum(r['timeouts'] for r in all_results)
             total_net = sum(r['net_pips'] for r in all_results)
             overall_wr = (total_wins / (total_wins+total_losses)*100) if (total_wins or total_losses) else 0
+
+            # Collect all trades for advanced metrics
+            all_trades = [t for r in all_results for t in r['trades']]
+            profit_factor = calculate_profit_factor(all_trades)
+            max_dd, max_dd_pct = calculate_max_drawdown(all_trades)
+            sharpe = calculate_sharpe_ratio(all_trades)
+
             print(f"Days tested: {len(days)}")
             print(f"Total signals: {total_signals}")
             print(f"Total TP1 wins: {total_wins}")
@@ -405,6 +439,11 @@ def main():
             print(f"Total timeouts: {total_timeouts}")
             print(f"Overall win rate (excl timeouts): {overall_wr:.0f}%")
             print(f"Overall net: {total_net:+.0f} pips (~${total_net:+.0f} @0.1 lot)")
+            print(f"\n--- Advanced Metrics ---")
+            pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
+            print(f"Profit factor: {pf_str}")
+            print(f"Max drawdown: {max_dd:.0f} pips ({max_dd_pct:.1f}%)")
+            print(f"Sharpe ratio: {sharpe:.2f}")
 
             # Run Monte Carlo simulation if requested
             if args.monte_carlo:
