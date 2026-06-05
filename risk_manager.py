@@ -102,8 +102,41 @@ class RiskManager:
         Returns:
             dict: {"per_instrument": {symbol: count, ...}, "total": int}
         """
-        # TODO: Implement in subtask-2-3
-        return {"per_instrument": {}, "total": 0}
+        import glob
+
+        per_instrument = {}
+        total = 0
+
+        # Scan for all trade state files matching the pattern
+        home = os.path.expanduser("~")
+        pattern = os.path.join(home, ".tv_fast_*_trade.json")
+
+        for filepath in glob.glob(pattern):
+            try:
+                with open(filepath, 'r') as f:
+                    trade_state = json.load(f)
+
+                # Check if this is an active trade
+                if trade_state.get("active", False):
+                    # Extract symbol from filename: ~/.tv_fast_SYMBOL_trade.json
+                    basename = os.path.basename(filepath)
+                    # Remove prefix ".tv_fast_" and suffix "_trade.json"
+                    if basename.startswith(".tv_fast_") and basename.endswith("_trade.json"):
+                        symbol = basename[9:-11]  # Strip ".tv_fast_" (9 chars) and "_trade.json" (11 chars)
+                    else:
+                        # Handle default file: ~/.tv_fast_trade.json (no symbol in name, default to XAUUSD)
+                        symbol = "XAUUSD"
+
+                    # Count this position
+                    per_instrument[symbol] = per_instrument.get(symbol, 0) + 1
+                    total += 1
+
+            except Exception as e:
+                # Skip files that can't be read or parsed
+                print(f"[WARNING] Could not read trade state {filepath}: {e}", file=sys.stderr)
+                continue
+
+        return {"per_instrument": per_instrument, "total": total}
 
     def check_correlation(self, symbol, direction):
         """
