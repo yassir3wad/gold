@@ -262,6 +262,16 @@ def small_opposite_wick(c, frac=0.4):
     return (c["close"] - c["low"]) <= frac * rng   # red -> opposite wick is the LOWER wick
 
 
+def has_direction_wick(c):
+    """The level needs a rejection wick in ITS direction: a SUPPORT (green) needs a LOWER wick (low below the
+    body bottom); a RESISTANCE (red) needs an UPPER wick. No in-direction wick (even tiny) -> disqualified."""
+    if c["close"] > c["open"]:
+        return c["low"] < min(c["open"], c["close"])
+    if c["close"] < c["open"]:
+        return c["high"] > max(c["open"], c["close"])
+    return False
+
+
 def sr_levels(bars, lookback=20, level=0.5):
     """Support/resistance LEVELS from big high-volume candles (distinct from order-block zones):
       - big GREEN candle -> support at its open (launch base)
@@ -270,7 +280,7 @@ def sr_levels(bars, lookback=20, level=0.5):
     Returns dicts {price, origin, role, flipped, i, time}."""
     out = []
     for i, c in enumerate(bars):
-        if not big_candle(bars, i, lookback, level) or not small_opposite_wick(c):
+        if not big_candle(bars, i, lookback, level) or not small_opposite_wick(c) or not has_direction_wick(c):
             continue
         if c["close"] > c["open"]:
             origin, px = "support", c["open"]

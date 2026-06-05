@@ -138,6 +138,10 @@ def test_sr_levels_and_flip():
     longwick = small + [C(100, 130, 99, 109, 100)]   # upper wick 130->109 = 21 of 31 range -> disqualify
     check("SR: green with long upper wick is NOT support",
           not any(x["origin"] == "support" for x in Z.sr_levels(longwick, lookback=5)))
+    # a green candle with NO lower wick cannot be support (no rejection tail in its direction)
+    nolowwick = small + [C(100, 112, 100, 110, 100)]   # low == open -> no lower wick
+    check("SR: green with no lower wick is NOT support",
+          not any(x["origin"] == "support" for x in Z.sr_levels(nolowwick, lookback=5)))
 
 
 def main():

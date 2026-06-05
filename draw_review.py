@@ -73,7 +73,8 @@ def main():
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
             if z["valid"]:
                 c = b[z["i"]]
-                strong = Z.big_candle(b, z["i"], 20) and Z.small_opposite_wick(c) and Z.volume_fib(b, z["i"], 20)
+                strong = (Z.big_candle(b, z["i"], 20) and Z.small_opposite_wick(c)
+                          and Z.has_direction_wick(c) and Z.volume_fib(b, z["i"], 20))
                 zones.append({**z, "t1": t1, "tf": lab, "strong_lvl": strong, "green": c["close"] > c["open"]})
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
