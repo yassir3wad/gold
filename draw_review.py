@@ -70,15 +70,20 @@ def main():
             continue
         t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
-            role = z["kind"]
-            if z["broken"]:                       # price CLOSED through -> polarity flip (supply<->demand)
-                role = "demand" if role == "supply" else "supply"
-            kl = z["key_level"]
-            flag = " (flip)" if z["broken"] else (f" KL {z['score']}" if kl else "")
+            # CURRENT role by position vs price: below = support(buy/green), above = resistance(sell/red).
+            if z["hi"] < cur_price:
+                buy, role = True, "support"
+            elif z["lo"] > cur_price:
+                buy, role = False, "resistance"
+            else:
+                buy, role = (z["kind"] == "demand"), z["kind"]   # straddling price -> keep origin
+            flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
+            kl = z["key_level"] and not flipped
+            flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
             tag = f"{lab} {role}{flag}"
-            ov = (GREEN_KL if kl else GREEN) if role == "demand" else (RED_KL if kl else RED)
+            ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
             rect(CH, z["time"], z["lo"], t1, z["hi"], tag, ov)
-            drawn[role] += 1
+            drawn["demand" if buy else "supply"] += 1
             if kl: drawn["KL"] += 1
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
