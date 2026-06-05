@@ -11,6 +11,7 @@ A signal needs a rejection candle (on the CLOSED 15m bar) + 3 confluences, and m
 with-trend (EMA filter). Usage: python3 scalp_scan.py [bar_count]
 """
 import subprocess, json, os, sys
+from src.state_manager import StateManager
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 ZONE_PAD = 3.0          # half-width of an S/R zone around a clustered level
@@ -201,15 +202,17 @@ def main():
             if abs(lv - price) < 2: near_fib = r; break
 
     # ---- verdict with de-dup ----
-    state_file = os.path.expanduser("~/.tv_scalp_state.json")
+    state_manager = StateManager(namespace="scalp_scan")
+
     def load_state():
-        try:
-            with open(state_file) as f: return json.load(f).get("key")
-        except Exception: return None
+        watch_data = state_manager.get_watch_state("XAUUSD")
+        return watch_data.get("key") if watch_data else None
+
     def save_state(k):
-        try:
-            with open(state_file, "w") as f: json.dump({"key": k}, f)
-        except Exception: pass
+        if k is None:
+            state_manager.save_watch_state("XAUUSD", {})
+        else:
+            state_manager.save_watch_state("XAUUSD", {"key": k})
 
     side = zone = None
     if in_dem or in_htf_buy or (in_ote and fib["side"] == "DEMAND"):
