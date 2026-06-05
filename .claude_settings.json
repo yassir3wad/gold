@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/**)",
+      "Write(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/**)",
+      "Edit(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/**)",
+      "Glob(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/**)",
+      "Grep(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/**)",
+      "Read(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/.auto-claude/specs/002-persistent-state-across-scanner-restarts/**)",
+      "Write(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/.auto-claude/specs/002-persistent-state-across-scanner-restarts/**)",
+      "Edit(/Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts/.auto-claude/specs/002-persistent-state-across-scanner-restarts/**)",
+      "Read(/Users/yassir3wad/tradingview-mcp/.auto-claude/**)",
+      "Write(/Users/yassir3wad/tradingview-mcp/.auto-claude/**)",
+      "Edit(/Users/yassir3wad/tradingview-mcp/.auto-claude/**)",
+      "Glob(/Users/yassir3wad/tradingview-mcp/.auto-claude/**)",
+      "Grep(/Users/yassir3wad/tradingview-mcp/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__query-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

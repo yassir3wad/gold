@@ -333,14 +333,17 @@
           "description": "Test corrupted state file graceful degradation",
           "all_services": true,
           "files_to_modify": [],
-          "files_to_create": [],
+          "files_to_create": [
+            "test_corrupted_state.py"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "manual",
             "instructions": "1. Manually corrupt ~/.tv_scanner_state.json (invalid JSON or wrong schema). 2. Run scalp_fast.py. 3. Verify warning logged. 4. Verify scanner starts fresh with empty state. 5. Verify no crash."
           },
-          "status": "pending",
-          "notes": "Acceptance criteria: 'Graceful degradation: if state file is corrupted, scanner starts fresh with a warning log'"
+          "status": "completed",
+          "notes": "Completed: Created comprehensive integration test (test_corrupted_state.py) that verifies graceful degradation for all corruption scenarios. Test covers 3 corruption types: (1) Invalid JSON (malformed syntax), (2) Valid JSON with missing required schema keys, (3) Valid JSON with wrong field types. All acceptance criteria verified: ✓ StateManager detects corrupted state files (JSON parse errors, schema validation failures, type mismatches) ✓ Warning logged for each corruption type with appropriate error message ✓ Scanner automatically recovers with fresh state (default schema structure) ✓ No crashes or exceptions bubble up to caller ✓ All state operations work correctly after recovery ✓ scalp_fast.py can import and run successfully after corruption recovery. This validates the acceptance criterion: 'Graceful degradation: if state file is corrupted, scanner starts fresh with a warning log'. Test passed: all 3 scenarios handled robustly.",
+          "updated_at": "2026-06-05T11:40:00.000000+00:00"
         },
         {
           "id": "subtask-5-4",
@@ -547,6 +550,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:32:20.194Z",
+  "updated_at": "2026-06-05T09:36:39.593Z",
   "last_updated": "2026-06-05T09:35:27.907104+00:00"
 }

@@ -759,3 +759,69 @@ Files created:
 
 Next: subtask-5-3 - Test corrupted state file graceful degradation
 
+
+[2026-06-05T11:40:00.000Z] ✅ COMPLETED: subtask-5-3 - Test corrupted state file graceful degradation
+
+Successfully tested and verified StateManager's graceful degradation for corrupted state files:
+
+Test Implementation (test_corrupted_state.py):
+  - Comprehensive integration test covering 3 corruption scenarios
+  - Tests invalid JSON, missing schema keys, and wrong field types
+  - Verifies warning logs, fresh state recovery, and no crashes
+  - Uses temporary test directory to avoid modifying production state
+
+Scenario 1: Invalid JSON (Malformed Syntax)
+  - Created state file with syntax error: {"version": "1.0", "active_trades": {INVALID JSON HERE
+  - ✓ StateManager initialized without crash
+  - ✓ Warning logged: "State file corrupted (invalid JSON): Expecting property name..."
+  - ✓ Scanner started with fresh state (get_trade_state returns None)
+  - ✓ State operations work correctly after recovery (cooldowns, timestamps)
+
+Scenario 2: Valid JSON but Missing Required Keys
+  - Created state file missing: cooldowns, watch_state, scan_timestamps
+  - ✓ StateManager initialized without crash
+  - ✓ Warning logged: "State file schema validation failed. Starting with fresh state."
+  - ✓ Fresh state file created with all required keys
+  - ✓ All field types are correct (dicts)
+
+Scenario 3: Valid JSON but Wrong Field Types
+  - Created state file with active_trades as list instead of dict
+  - ✓ StateManager initialized without crash
+  - ✓ Warning logged: "State file schema validation failed. Starting with fresh state."
+  - ✓ Fresh state has correct types (all fields are dicts)
+  - ✓ Scanner recovered with valid schema
+
+Final Verification:
+  - ✓ scalp_fast.py imports successfully after state corruption
+  - ✓ Scanner code remains operational after recovery
+  - ✓ All state operations work correctly (cooldowns, trades, timestamps)
+
+Acceptance Criteria Verified:
+  ✅ Graceful degradation: corrupted state file → warning log + fresh state
+  ✅ Invalid JSON handled: appropriate warning with error details
+  ✅ Schema validation: missing keys and wrong types detected
+  ✅ No crashes: StateManager initialization always succeeds
+  ✅ Automatic recovery: scanner continues operating with fresh state
+  ✅ Scanner integration: scalp_fast.py works after corruption recovery
+
+Test Results:
+  - All 3 corruption scenarios passed
+  - All warnings logged correctly with descriptive messages
+  - Fresh state created with valid schema in all cases
+  - No exceptions or crashes in any scenario
+  - State operations work immediately after recovery
+
+This validates the PRIMARY acceptance criterion from spec.md:
+"Graceful degradation: if state file is corrupted, scanner starts fresh with a warning log"
+
+User Story Fulfilled:
+  ✅ Corrupted state files don't crash the scanner
+  ✅ Trader receives clear warning about corruption
+  ✅ Scanner automatically recovers and continues operating
+  ✅ No manual intervention required for corruption recovery
+
+Files Created:
+  - test_corrupted_state.py (comprehensive 3-scenario corruption test)
+
+Next: subtask-5-4 - Test cooldown persistence across restart
+
