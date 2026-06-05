@@ -165,11 +165,21 @@ The one feature that separates winners from losers consistently across all 9 day
 | **momentum (impulse)** | 70 | 37% | **−269p** |
 
 **Two families account for −510p of losses (momentum −269, break-and-retest −241).** Suppressing just
-those two turns trade-all from −98p to **≈ +412p** over 9 days. Momentum-impulse = chasing extended
-moves; break-and-retest (n=10, thin but 0% win) = trading the obvious continuation everyone sees. Both are
-*categorical* (setup type), so this is far more robust than a fragile continuous threshold. The engine
-already partially suppresses breakout/momentum below `CHOP_ER=0.30`, but momentum still fired 70× and lost
-— the suppression isn't reaching them.
+those two turns trade-all from −98p to **≈ +412p** over 9 days. Both are *categorical* (setup type), so
+this is far more robust than a fragile continuous threshold.
+
+**Per-day robustness (important nuance):**
+- **break-and-retest** is **uniformly negative** — every day it fires it loses or breaks even (n=10 total,
+  worst 06-03 −96p). Thin sample, but zero upside on any day. *Suppressing it is pure downside-removal.*
+- **momentum-impulse** loses on **7 of 9 days** (−269p net) **but earns +85p on 05-25, a trend day**
+  (8/14 W). It is *not* uniformly bad — it bleeds on chop days and pays on the right trend day. It's also
+  the engine's namesake ("FAST momentum scalp scanner … 50–100 pip bursts"). *Suppressing it is net +EV
+  over 9 days but sacrifices trend-day bursts* — a genuine trade-off, not a free win.
+
+The engine already partially suppresses breakout/momentum below `CHOP_ER=0.30`, but momentum still fired
+70× — the ER suppression isn't reaching them. Both families are gated by existing `flags.json` switches
+(`momentum_impulse`, `break_retest`) via `flag_for()` at `scalp_fast.py:788` — suppression needs **no code
+change**, only a flag flip.
 
 ---
 
