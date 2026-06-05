@@ -38,11 +38,13 @@ TRENDLINE_FILTER = "Auto Trendlines"
 
 
 def read_trendlines(chart, tv=None):
-    """Read the 'Auto Trendlines' indicator's current line levels (higher-TF trendlines). Returns a list of
-    prices; empty if the indicator isn't on the chart. Mandatory confluence input alongside SMC."""
+    """Read the 'Auto Trendlines' indicator's line levels. NOTE: that indicator draws DIAGONAL lines, which
+    the line-reader can't extract (returns 0 horizontal levels) — so this is empty in practice. Trendline
+    confluence is computed from our own HTF trendlines instead (see patterns/htf_trendlines)."""
     tv = tv or _default_tv
     studies = tv(chart, "data", "lines", "--study-filter", TRENDLINE_FILTER).get("studies", [])
-    return list(studies[0].get("horizontal_levels", [])) if studies else []
+    s = next((x for x in studies if x.get("name") == "Auto Trendlines"), None)
+    return list(s.get("horizontal_levels", [])) if s else []
 
 
 def in_box(price, boxes, pad=0.0):
