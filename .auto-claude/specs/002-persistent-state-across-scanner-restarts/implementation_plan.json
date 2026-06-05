@@ -175,8 +175,8 @@
             "command": "python3 scalp_fast.py --symbol XAUUSD && python3 -c \"from src.state_manager import StateManager; sm = StateManager('scanner'); ts = sm.get_scan_timestamp('XAUUSD'); print('OK' if ts else 'FAIL')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "At the start of main() (after init_symbol), call sm.save_scan_timestamp(SYMBOL). This tracks last successful scan per instrument for orchestrator visibility."
+          "status": "completed",
+          "notes": "Completed: Added state_manager.save_scan_timestamp(SYMBOL) before all 14 return points in main() to ensure timestamp is tracked regardless of scan outcome (error, no data, volatility gate, news blackout, cooldown, no setup, DRY mode, REVIEW mode, or successful signal). This ensures scanner health monitoring and orchestrator visibility of last scan times."
         }
       ]
     },
@@ -539,6 +539,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:05:31.188Z",
+  "updated_at": "2026-06-05T09:08:35.470Z",
   "last_updated": "2026-06-05T08:59:19.051399+00:00"
 }
