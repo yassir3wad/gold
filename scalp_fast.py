@@ -18,6 +18,10 @@ try:
     sys.path.insert(0, TVDIR); from risk_manager import RiskManager
 except Exception:
     RiskManager = None  # fallback if risk_manager not available
+try:
+    sys.path.insert(0, TVDIR); import telegram_notify
+except Exception:
+    telegram_notify = None  # fallback if telegram_notify not available
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -1007,6 +1011,13 @@ def main():
             print("   🚫 SIGNAL BLOCKED BY RISK MANAGER:")
             for reason in check["reasons"]:
                 print(f"      • {reason}")
+            # Send Telegram alert for risk breach
+            if telegram_notify:
+                breach_msg = "\n".join(f"• {reason}" for reason in check["reasons"])
+                telegram_notify.send_alert(
+                    "🚫 Risk Limit Breached",
+                    f"Signal blocked for {SYMBOL} ({side})\n\n{breach_msg}"
+                )
             return
     _fire(trade)
 
