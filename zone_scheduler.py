@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import signal
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -86,15 +87,46 @@ def refresh_zones_job():
     logging.info("Starting scheduled zone refresh cycle")
 
     try:
-        # TODO: Call refresh_all_zones.py here (will be implemented in subtask-2-3)
-        # For now, just log the action
         config = load_config()
         instruments = config.get("enabled_instruments", [])
 
+        if not instruments:
+            logging.warning("No enabled instruments in config, skipping refresh")
+            return
+
         logging.info(f"Refreshing zones for instruments: {', '.join(instruments)}")
 
-        # Placeholder for actual refresh logic
-        # In subtask-2-3, this will call: subprocess.run(["python", "refresh_all_zones.py", ...])
+        # Call refresh_all_zones.py for each enabled instrument
+        tvdir = os.path.expanduser("~/tradingview-mcp")
+        refresh_script = os.path.join(tvdir, "refresh_all_zones.py")
+
+        for symbol in instruments:
+            logging.info(f"Refreshing zones for {symbol}")
+            try:
+                result = subprocess.run(
+                    ["python3", refresh_script, "--symbol", symbol],
+                    cwd=tvdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+
+                if result.returncode == 0:
+                    # Log output if there were changes
+                    if result.stdout:
+                        for line in result.stdout.strip().split('\n'):
+                            if line:
+                                logging.debug(f"  {line}")
+                    logging.info(f"Successfully refreshed {symbol}")
+                else:
+                    logging.error(f"Failed to refresh {symbol} (exit {result.returncode})")
+                    if result.stderr:
+                        logging.error(f"  Error: {result.stderr.strip()}")
+
+            except subprocess.TimeoutExpired:
+                logging.error(f"Timeout refreshing {symbol} after 120s")
+            except Exception as e:
+                logging.error(f"Error refreshing {symbol}: {e}")
 
         logging.info("Zone refresh cycle completed successfully")
 
