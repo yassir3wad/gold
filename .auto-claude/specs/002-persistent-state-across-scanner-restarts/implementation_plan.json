@@ -407,8 +407,8 @@
             "command": "grep -n 'TRADE_STATE\\|CD_FILE\\|WATCH_CD_FILE' scalp_fast.py && echo 'FAIL: old patterns found' || echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Remove all references to: TRADE_STATE, CD_FILE, WATCH_CD_FILE, TG_STATE direct access. All state must go through StateManager."
+          "status": "completed",
+          "notes": "Completed: Removed TRADE_STATE constant definitions from scalp_fast.py (lines 251, 282, 298). Removed state_file parameter from StateManager initialization (line 303) - StateManager now uses its built-in state storage. scalp_scan.py and orchestrate.py were already using StateManager correctly with no old file-based patterns. Verification passed: grep confirms no TRADE_STATE, CD_FILE, or WATCH_CD_FILE patterns remain in any scanner files."
         },
         {
           "id": "subtask-6-2",
@@ -556,6 +556,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:43:38.913Z",
+  "updated_at": "2026-06-05T09:47:36.998Z",
   "last_updated": "2026-06-05T09:35:27.907104+00:00"
 }

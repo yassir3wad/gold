@@ -876,3 +876,4 @@ All state correctly tracked and preserved across restart.
 - Remove old file-based state fallbacks (subtask-6-1)
 - Add state schema documentation (subtask-6-2)
 - Add migration script for existing deployments (subtask-6-3)
+2026-06-05 09:48:59 UTC - subtask-6-1 completed: Removed old file-based state fallbacks (TRADE_STATE) from scalp_fast.py. StateManager now uses built-in state storage.
