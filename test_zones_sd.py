@@ -29,6 +29,10 @@ def test_zone_geometry():
     red = C(104, 106, 100, 101, 50)      # bearish: body = [close 101, open 104]
     lo2, hi2 = Z.supply_zone(red)
     check("supply: body open to high-wick", approx(lo2, 104) and approx(hi2, 106))
+    # RED swing-low candle -> zone to CLOSE (body bottom), not open
+    red_low = C(110, 111, 100, 105, 50)  # bearish: body bottom = close 105
+    lo3, hi3 = Z.demand_zone(red_low)
+    check("demand: red swing-low -> low to CLOSE (body bottom)", approx(lo3, 100) and approx(hi3, 105))
 
 
 def test_find_demand_zone():

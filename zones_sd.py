@@ -29,13 +29,13 @@ def volume_fib(bars, i, lookback=20, level=0.5):
 
 
 def demand_zone(c):
-    """Buy zone = low wick -> candle OPEN (until candle open)."""
-    return (c["low"], c["open"])
+    """Buy zone = low wick -> BODY BOTTOM: green -> open, red -> close (= min(open,close))."""
+    return (c["low"], min(c["open"], c["close"]))
 
 
 def supply_zone(c):
-    """Sell zone = candle OPEN -> high wick."""
-    return (c["open"], c["high"])
+    """Sell zone = BODY TOP -> high wick: green -> close, red -> open (= max(open,close))."""
+    return (max(c["open"], c["close"]), c["high"])
 
 
 def _atr(bars, i, n=14):
