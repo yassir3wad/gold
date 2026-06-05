@@ -362,6 +362,10 @@ def log_signal(row):
         w = _csv.DictWriter(open(path, "w", newline=""), fieldnames=SIG_COLS); w.writeheader()
         for r in rows: w.writerow({k: r.get(k, "") for k in SIG_COLS})
     except Exception: pass
+    try:   # dual-write: also UPSERT into the SQLite outcomes store (ACID/concurrent). CSV stays the
+        import outcome_db   # source of truth/fallback — a DB failure must NEVER break the scanner.
+        outcome_db.log_signal({**row, "symbol": SYMBOL})
+    except Exception: pass
 
 def floor_skip_key(side, entry, why):
     """Thesis identity for de-duping auto-skip logging: same side + same ~price + same pattern."""
