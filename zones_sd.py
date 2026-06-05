@@ -117,22 +117,44 @@ def zone_crossings(bars, zone):
     return crossings
 
 
-def _merge_to_extreme(zones, kind):
-    """Among PRICE-OVERLAPPING same-kind zones, keep the EXTREME (highest supply / lowest demand) so the zone
-    anchors to the origin swing (A), not a lower/inner continuation swing (B)."""
+def is_impulse_candle(bars, i, mult=1.5):
+    """A single strong candle whose BODY is large vs ATR — it originates a move on its own."""
+    atr = _atr(bars, i)
+    return atr > 0 and abs(bars[i]["close"] - bars[i]["open"]) > mult * atr
+
+
+def find_impulse_candle_zones(bars, mult=1.5):
+    """A strong bullish impulse candle IS a buy zone (its base low->open); a strong bearish one a sell zone
+    (open->high) — even when the candle isn't a swing pivot (the 'demand/supply candle' that launches a move)."""
+    out = []
+    for i, c in enumerate(bars):
+        if not is_impulse_candle(bars, i, mult):
+            continue
+        if c["close"] > c["open"]:
+            lo, hi = demand_zone(c); out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
+        elif c["close"] < c["open"]:
+            lo, hi = supply_zone(c); out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
+    return out
+
+
+def _merge_to_extreme(zones, kind, max_gap=4):
+    """Merge same-kind zones that PRICE-OVERLAP and are TIME-ADJACENT (<= max_gap bars), keeping the EXTREME
+    (highest supply / lowest demand) — so a cluster anchors to the origin swing (A), but a separate-day zone
+    is NOT swallowed."""
     out = []
     for z in sorted(zones, key=lambda z: z["i"]):
-        hit = next((o for o in out if z["lo"] <= o["hi"] and z["hi"] >= o["lo"]), None)
+        hit = next((o for o in out if z["lo"] <= o["hi"] and z["hi"] >= o["lo"] and abs(z["i"] - o["i"]) <= max_gap), None)
         if hit is None:
             out.append(z)
         elif (kind == "supply" and z["hi"] > hit["hi"]) or (kind == "demand" and z["lo"] < hit["lo"]):
-            out[out.index(hit)] = z   # replace with the more extreme one
+            out[out.index(hit)] = z
     return out
 
 
 def find_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    d = _merge_to_extreme(find_demand_zones(bars, left, right, lookback, level), "demand")
-    s = _merge_to_extreme(find_supply_zones(bars, left, right, lookback, level), "supply")
+    ic = find_impulse_candle_zones(bars)
+    d = _merge_to_extreme(find_demand_zones(bars, left, right, lookback, level) + [z for z in ic if z["kind"] == "demand"], "demand")
+    s = _merge_to_extreme(find_supply_zones(bars, left, right, lookback, level) + [z for z in ic if z["kind"] == "supply"], "supply")
     return d + s
 
 
