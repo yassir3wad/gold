@@ -59,9 +59,11 @@ RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be 
                                    # BEFORE it can reach the held/review state — regardless of direction. This is
                                    # the dominant chop-spam signature ("neg R:R, TP1 +6p vs SL -18p"). A genuine
                                    # setup (positive R:R with room) never trips it. Applies EVEN under ai_decide.
-HARD_CHOP_ER = 0.18                # secondary floor: FAR below the normal chop floor = truly dead tape.
-HARD_ROOM_P  = 10                  # secondary floor: a THIN-room setup (<HARD_ROOM_P×VS) that is ALSO a dead-chop /
-                                   # counter-trend / wrong-way-RSI fade (whipsaw-in-a-box) is skipped too.
+HARD_CHOP_ER = 0.20                # PRIMARY floor: ER below this = truly dead tape (no trend lives here, a rejection
+                                   # won't follow through). Auto-skipped regardless of room — the dominant gold-chop
+                                   # spam signature. Real trending setups run ER 0.4-1.0, so this only kills dead tape.
+HARD_ROOM_P  = 10                  # secondary floor: a THIN-room setup (<HARD_ROOM_P×VS) that is ALSO a
+                                   # counter-trend fade (whipsaw-in-a-box) is skipped too.
 ZONE_WICK_P = 15                   # zone-bounce: min rejection-wick (pips) for a candle to count as a zone defense
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
@@ -221,16 +223,19 @@ def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
     Returns (skip: bool, reasons: list[str]).
       PRIMARY  — negative reward:risk: TP1 < RR_FLOOR × stop = no usable room, un-tradeable in any direction
                  (the dominant 'neg R:R, TP1 +6p vs SL -18p' chop-spam that gets hand-rejected every tick).
-      SECONDARY — a THIN-room setup that is ALSO a dead-chop / counter-trend fade.
-    Conservative: a genuine setup (positive R:R with room) trips neither and still reaches review. Pure fn.
+      PRIMARY  — dead chop: ER < HARD_CHOP_ER = no trend, a rejection/bounce won't follow through (the gold-4465
+                 chop spam — same level, every tick, ER ~0.0-0.20). Skipped regardless of room/direction.
+      SECONDARY — a THIN-room setup that is ALSO a counter-trend fade.
+    Conservative: a genuine setup (positive R:R, real ER, room) trips none and still reaches review. Pure fn.
     NOTE: RSI is intentionally NOT used here — per directive it is informational only, never a gate."""
     reasons = []
     if rr1 is not None and rr1 < RR_FLOOR:
         reasons.append(f"neg R:R {rr1:.2f} (TP1 < {RR_FLOOR}×SL)")
-    counter   = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
-    if room is not None and room < HARD_ROOM_P * VS and (chop_er < HARD_CHOP_ER or counter):
-        reasons += ([f"dead chop ER{chop_er}"] if chop_er < HARD_CHOP_ER else []) + \
-                   ([f"counter-{regime}"] if counter else [])
+    if chop_er is not None and chop_er < HARD_CHOP_ER:
+        reasons.append(f"dead chop ER{chop_er} (<{HARD_CHOP_ER})")
+    counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
+    if room is not None and room < HARD_ROOM_P * VS and counter:
+        reasons.append(f"counter-{regime} no-room")
     return (bool(reasons), reasons)
 
 REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT")   # fade / mean-reversion setups
@@ -321,15 +326,16 @@ def init_symbol(sym):
     USE_TPO = bool(cfg.get("use_tpo", False))
     LOT_MIN = cfg.get("lot_min", LOT_MIN); LOT_MAX = cfg.get("lot_max", LOT_MAX); LOT_STEP = cfg.get("lot_step", LOT_STEP)
     TV_SYMBOL = cfg.get("tv", SYMBOL); SESSIONS_OK = cfg.get("sessions"); SYMBOL_FLAGS = cfg.get("flags", {}) or {}
-    if cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
-    s = SYMBOL.lower()
+    if os.environ.get("TV_CHART_OVERRIDE"): os.environ["TV_CHART"] = os.environ["TV_CHART_OVERRIDE"]   # backtest: pin to a replay tab (loop never sets this)
+    elif cfg.get("chart"): os.environ["TV_CHART"] = str(cfg["chart"])   # pin all tv() subprocess reads to this window
+    s = os.environ.get("STATE_SUFFIX") or SYMBOL.lower()   # backtest isolates volatile state to its own namespace (loop never sets this)
     CD_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_cd.json")
     WATCH_CD_FILE = os.path.expanduser(f"~/.tv_fast_{s}_watch.json")
     VP_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_vp.json")
     TG_STATE      = os.path.expanduser(f"~/.tv_fast_{s}_tg.json")
     TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
     PENDING_FILE  = os.path.expanduser(f"~/.tv_fast_{s}_pending.json")
-    ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{s}.json")
+    ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{SYMBOL.lower()}.json")   # zones stay keyed to the REAL symbol (read-only, shared) — never the backtest suffix
 
 def _log_path():
     """Per-pair-per-day log: logs/<symbol>/<YYYY-MM-DD>.csv (the auto-learn dataset, split by instrument & day)."""
