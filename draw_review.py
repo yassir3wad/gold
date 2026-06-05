@@ -77,8 +77,8 @@ def main():
             sr.append((x["price"], x["role"], x["flipped"], lab))
 
     zmid = lambda z: (z["lo"] + z["hi"]) / 2
-    # strongest first: key levels, then 'strong' zones, then nearest to price
-    zones.sort(key=lambda z: (0 if z["key_level"] else 1, 0 if z.get("strong") else 1, abs(zmid(z) - cur_price)))
+    # buy/sell zones don't care about volume/color — only KEY LEVEL (BOS) ranks them; then nearest to price
+    zones.sort(key=lambda z: (0 if z["key_level"] else 1, abs(zmid(z) - cur_price)))
     seen = []; nbuy = nsell = 0
     for z in zones:
         mid = zmid(z)
@@ -94,9 +94,8 @@ def main():
             continue
         flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
         kl = z["key_level"] and not flipped
-        hot = kl or z.get("strong")
-        flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else (" *" if z.get("strong") else ""))
-        ov = (GREEN_KL if hot else GREEN) if buy else (RED_KL if hot else RED)
+        flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
+        ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
         rect(CH, z["time"], z["lo"], z["t1"], z["hi"], f"{z['tf']} {role}{flag}", ov)
         seen.append(mid); drawn["demand" if buy else "supply"] += 1
         if kl: drawn["KL"] += 1
