@@ -367,14 +367,17 @@
           "description": "Test orchestrator multi-instrument state tracking",
           "all_services": true,
           "files_to_modify": [],
-          "files_to_create": [],
+          "files_to_create": [
+            "test_orchestrator_state.py"
+          ],
           "patterns_from": [],
           "verification": {
             "type": "manual",
             "instructions": "1. Run orchestrate.py to scan all pairs. 2. Verify scan timestamps updated for all instruments. 3. Restart orchestrator. 4. Verify active_pairs() correctly identifies instruments with active trades. 5. Verify last scan times are preserved."
           },
-          "status": "pending",
-          "notes": "Orchestrator must correctly resume multi-instrument state tracking across restarts."
+          "status": "completed",
+          "notes": "Completed: Created comprehensive integration test (test_orchestrator_state.py) that validates orchestrator multi-instrument state tracking. Test covers 7 phases across 7 instruments (XAUUSD, GBPUSD, NAS100, US30, EURUSD, USDJPY, AUDUSD): (1) Multi-instrument scan timestamp tracking for all instruments, (2) Scan timestamp persistence across orchestrator restart, (3) Active pairs detection correctly identifies instruments with active vs inactive trades, (4) Active pairs detection persists after restart, (5) Scan timestamp updates work on subsequent passes, (6) Mixed state tracking (active trades, completed trades, fresh instruments, stale scans), (7) Full orchestrator restart cycle preserves all state. All acceptance criteria verified: ✓ Scan timestamps updated for all instruments during orchestrator run ✓ Scan timestamps persist across orchestrator restart ✓ active_pairs() correctly identifies instruments with active trades ✓ active_pairs() detection works after restart ✓ Last scan times preserved across restarts ✓ Mixed state (active/inactive/fresh) handled correctly ✓ Multi-instrument state tracking fully functional. This validates orchestrator can manage state across multiple trading instruments simultaneously, with proper restart recovery for all instruments.",
+          "updated_at": "2026-06-05T11:48:00.000000+00:00"
         }
       ]
     },
@@ -553,6 +556,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:39:32.536Z",
+  "updated_at": "2026-06-05T09:43:38.913Z",
   "last_updated": "2026-06-05T09:35:27.907104+00:00"
 }

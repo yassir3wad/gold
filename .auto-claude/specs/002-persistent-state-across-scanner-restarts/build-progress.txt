@@ -826,35 +826,53 @@ Files Created:
 Next: subtask-5-4 - Test cooldown persistence across restart
 
 
-## Latest Update - 2026-06-05 11:42:00
+## Latest Update - 2026-06-05 11:48:00
 
-### ✅ Subtask 5-4: Test Cooldown Persistence Across Restart - COMPLETED
+### ✅ Subtask 5-5: Test Orchestrator Multi-Instrument State Tracking - COMPLETED
 
-Created comprehensive integration test (test_cooldown_persistence.py) that validates cooldown persistence across scanner restarts.
+Created comprehensive integration test (test_orchestrator_state.py) that validates orchestrator multi-instrument state tracking across 7 trading instruments.
 
-**Test Coverage (7 phases):**
-1. ✓ Signal fires and cooldown starts (timestamp saved to state)
-2. ✓ Scanner restart preserves cooldown state from disk
-3. ✓ Duplicate signals correctly blocked within cooldown window after restart
-4. ✓ Cooldown expires correctly after duration elapses
-5. ✓ New signals can fire after cooldown expiration
-6. ✓ New cooldown persists across another restart
-7. ✓ Multi-symbol cooldown isolation (XAUUSD cooldown doesn't affect GBPUSD)
+**Test Coverage (7 phases across 7 instruments):**
+1. ✓ Multi-instrument scan timestamp tracking - all instruments scanned and timestamps saved
+2. ✓ Scan timestamp persistence across orchestrator restart
+3. ✓ Active pairs detection - correctly identifies 3 active vs 4 inactive trades
+4. ✓ Active pairs detection persists after restart - all 3 active trades restored
+5. ✓ Scan timestamp updates work on subsequent passes
+6. ✓ Mixed state tracking - handles active trades, completed trades, fresh instruments, stale scans
+7. ✓ Full orchestrator restart cycle - all state preserved
+
+**Instruments Tested:**
+- XAUUSD, GBPUSD, NAS100, US30, EURUSD, USDJPY, AUDUSD (7 total)
 
 **Acceptance Criteria Verified:**
-- ✓ Cooldown set when signal fires (line 943 in scalp_fast.py)
-- ✓ Cooldown timestamp persists to disk in unified state file
-- ✓ Cooldown check after restart (line 601 in scalp_fast.py) correctly blocks duplicate signals
-- ✓ Duplicate Telegram alerts prevented after restart
-- ✓ Cooldown remaining time calculated correctly across restarts
-- ✓ Multiple restarts preserve cooldown state correctly
-- ✓ Per-symbol cooldown isolation works correctly
+- ✓ Scan timestamps updated for all instruments during orchestrator run
+- ✓ Scan timestamps persist across orchestrator restart
+- ✓ active_pairs() correctly identifies instruments with active trades
+- ✓ active_pairs() detection works after restart
+- ✓ Last scan times preserved across restarts
+- ✓ Mixed state (active/inactive/fresh) handled correctly
+- ✓ Multi-instrument state tracking fully functional
 
-**User Story Validated:**
-"I don't want to receive duplicate Telegram alerts after restarting the scanner" ✅
+**Real-World Scenario Tested:**
+- XAUUSD: active trade + recent scan
+- GBPUSD: no trade, recent scan
+- NAS100: active trade + stale scan (1h ago)
+- US30: fresh instrument (no trade, no scan)
+- EURUSD: completed trade + recent scan
+- USDJPY: no trade, stale scan (30m ago)
+- AUDUSD: active trade + recent scan
 
-This test validates the SECOND PRIMARY use case from the spec: duplicate alert prevention across restarts.
+All state correctly tracked and preserved across restart.
+
+**Phase 5 Complete!** All integration tests passed:
+✅ subtask-5-1: Fresh start with no existing state
+✅ subtask-5-2: State persistence across restart
+✅ subtask-5-3: Corrupted state file graceful degradation
+✅ subtask-5-4: Cooldown persistence across restart
+✅ subtask-5-5: Orchestrator multi-instrument state tracking
 
 ## Next Steps
-- Continue with phase 5 integration tests
-- Test orchestrator multi-instrument state tracking (subtask-5-5)
+- Phase 6: Cleanup and Documentation
+- Remove old file-based state fallbacks (subtask-6-1)
+- Add state schema documentation (subtask-6-2)
+- Add migration script for existing deployments (subtask-6-3)
