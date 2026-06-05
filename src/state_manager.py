@@ -83,19 +83,23 @@ class StateManager:
             logger.warning(f"Failed to load state file: {e}. Starting with fresh state.")
             return self._get_default_state()
 
-    def _validate_schema(self, state: Dict[str, Any]) -> bool:
+    def _validate_schema(self, state: Dict[str, Any], require_version: bool = True) -> bool:
         """
         Validate state schema structure.
 
         Args:
             state: State dictionary to validate
+            require_version: Whether to require the "version" key (default True)
 
         Returns:
             True if schema is valid, False otherwise
         """
         try:
             # Check required top-level keys
-            required_keys = {"version", "active_trades", "cooldowns", "watch_state", "scan_timestamps"}
+            required_keys = {"active_trades", "cooldowns", "watch_state", "scan_timestamps"}
+            if require_version:
+                required_keys.add("version")
+
             if not all(key in state for key in required_keys):
                 return False
 
@@ -404,6 +408,7 @@ class StateManager:
     def validate_schema(self, state: Dict[str, Any]) -> bool:
         """
         Public method to validate schema (used in tests).
+        Does not require the "version" key, only validates core state structure.
 
         Args:
             state: State dictionary to validate
@@ -411,4 +416,4 @@ class StateManager:
         Returns:
             True if schema is valid, False otherwise
         """
-        return self._validate_schema(state)
+        return self._validate_schema(state, require_version=False)
