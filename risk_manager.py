@@ -65,8 +65,33 @@ class RiskManager:
         Returns:
             float: Total P&L for today in USD (negative = loss)
         """
-        # TODO: Implement in subtask-2-2
-        return 0.0
+        if not os.path.exists(SIGNALS_LOG):
+            return 0.0
+
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        total_pips = 0.0
+
+        try:
+            with open(SIGNALS_LOG, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    time_str = row.get("time", "")
+                    # Extract date part (YYYY-MM-DD) from time column
+                    if time_str.startswith(today):
+                        pips_str = row.get("pips", "0")
+                        # Handle empty pips (rejected trades, open positions)
+                        if pips_str.strip():
+                            try:
+                                total_pips += float(pips_str)
+                            except ValueError:
+                                pass  # Skip non-numeric values
+        except Exception as e:
+            print(f"[WARNING] Error reading signals_log: {e}", file=sys.stderr)
+            return 0.0
+
+        # Convert pips to USD (1 pip = $0.10 for gold)
+        PIP_VALUE = 0.10
+        return total_pips * PIP_VALUE
 
     def get_open_positions(self):
         """
