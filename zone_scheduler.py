@@ -23,7 +23,11 @@ from datetime import datetime
 
 # --- Configuration ---
 DEFAULT_INTERVAL_HOURS = 4
-CONFIG_FILE = os.path.expanduser("~/tradingview-mcp/zone_scheduler_config.json")
+# Try current directory first, then fall back to home directory
+CONFIG_FILE = (
+    "zone_scheduler_config.json" if os.path.exists("zone_scheduler_config.json")
+    else os.path.expanduser("~/tradingview-mcp/zone_scheduler_config.json")
+)
 LOG_FILE = os.path.expanduser("~/tradingview-mcp/logs/zone_scheduler.log")
 
 # --- Logging Setup ---
@@ -201,14 +205,50 @@ class ZoneScheduler:
 
     def add_session_jobs(self):
         """Add session-based refresh jobs (London/NY opens).
-        Will be implemented in subtask-3-2."""
-        if not self.config.get("session_refresh_enabled", True):
-            logging.info("Session-based refresh is disabled in config")
+        Uses CronTrigger to schedule zone refreshes at configured session open times
+        with optional offset (e.g., 5 min after London open)."""
+
+        # Check if session refresh is enabled
+        refresh_on_open = self.config.get("refresh_on_session_open", [])
+        if not refresh_on_open:
+            logging.info("No session-based refresh triggers configured")
             return
 
-        # TODO: Implement session timing logic in subtask-3-1
-        # TODO: Add CronTrigger jobs in subtask-3-2
-        logging.info("Session-based refresh triggers will be added in phase-3")
+        session_times = self.config.get("session_times", {})
+        offset_minutes = self.config.get("session_offset_minutes", 5)
+
+        logging.info(f"Setting up session-based refresh triggers (offset: {offset_minutes} min)")
+
+        for session in refresh_on_open:
+            if session not in session_times:
+                logging.warning(f"Session '{session}' not found in session_times config, skipping")
+                continue
+
+            time_str = session_times[session]
+            try:
+                # Parse time format "HH:MM"
+                hour, minute = map(int, time_str.split(':'))
+
+                # Apply offset
+                total_minutes = hour * 60 + minute + offset_minutes
+                trigger_hour = (total_minutes // 60) % 24
+                trigger_minute = total_minutes % 60
+
+                # Create CronTrigger for this session
+                self.scheduler.add_job(
+                    refresh_zones_job,
+                    trigger=CronTrigger(hour=trigger_hour, minute=trigger_minute),
+                    id=f'session_refresh_{session}',
+                    name=f'{session.upper()} Session Refresh',
+                    replace_existing=True
+                )
+
+                logging.info(f"  ✓ {session} session: {trigger_hour:02d}:{trigger_minute:02d} UTC")
+
+            except ValueError as e:
+                logging.error(f"Invalid time format for session '{session}': {time_str} - {e}")
+            except Exception as e:
+                logging.error(f"Error scheduling session '{session}': {e}")
 
     def start(self):
         """Start the scheduler daemon."""
@@ -302,7 +342,36 @@ Configuration:
         help='Enable verbose debug logging'
     )
 
+    parser.add_argument(
+        '--test-session-schedule',
+        action='store_true',
+        help='Print session schedule configuration and exit (for testing)'
+    )
+
     args = parser.parse_args()
+
+    # Test mode: print session schedule and exit (before importing dependencies)
+    if args.test_session_schedule:
+        config = load_config()
+        refresh_on_open = config.get("refresh_on_session_open", [])
+        session_times = config.get("session_times", {})
+        offset_minutes = config.get("session_offset_minutes", 5)
+
+        print("Session-based refresh schedule:")
+        print(f"  Offset: {offset_minutes} minutes after session open")
+        print()
+
+        for session in refresh_on_open:
+            if session in session_times:
+                time_str = session_times[session]
+                hour, minute = map(int, time_str.split(':'))
+                total_minutes = hour * 60 + minute + offset_minutes
+                trigger_hour = (total_minutes // 60) % 24
+                trigger_minute = total_minutes % 60
+
+                print(f"  {session}: {time_str} UTC → triggers at {trigger_hour:02d}:{trigger_minute:02d} UTC")
+
+        sys.exit(0)
 
     # Check APScheduler dependency (after argparse so --help works)
     try:
