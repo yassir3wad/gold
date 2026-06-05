@@ -489,7 +489,9 @@ def main():
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
     if price is None or len(b) < 40:
-        print("ERR: no data"); return
+        print("ERR: no data")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
     n = len(b); last = b[-1]
     if not DRY: check_active_trade(price)   # alert TP1/TP2/SL on any live signalled trade
     # --- volatility gate ---
@@ -587,15 +589,20 @@ def main():
         htf = at_R or at_S
         extra = f" — but price at {htf[2]}, watch for a burst there" if htf else ""
         print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{vol_min:.0f}p). No fast scalp{extra}.")
+        state_manager.save_scan_timestamp(SYMBOL)
         return
 
     ff_bo, ff_lbl = (newsmod.is_blackout(SYMBOL) if newsmod else (False, ""))
     if FL["news_filter"] and (news or ff_bo):
-        print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'})."); return
+        print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'}).")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
 
     if state_manager.in_cooldown(SYMBOL) and not AI:
         cd_left = state_manager.get_cooldown_remaining(SYMBOL)
-        print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
+        print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster).")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
 
     setups = []
     buf = buf_p * PIP  # break buffer (ATR-scaled)
@@ -773,7 +780,9 @@ def main():
         if FL.get("trend_regime", True) and regime == "UP":   cands = [c for c in cands if c[0] != "SHORT"]
         if FL.get("trend_regime", True) and regime == "DOWN": cands = [c for c in cands if c[0] != "LONG"]
         if not cands and (at_R or at_S):
-            print(f">> heads-up suppressed: price at {(at_R or at_S)[2]} but it's counter to the {regime} trend (A+ confirmation can still fire)."); return
+            print(f">> heads-up suppressed: price at {(at_R or at_S)[2]} but it's counter to the {regime} trend (A+ confirmation can still fire).")
+            state_manager.save_scan_timestamp(SYMBOL)
+            return
         if cands:
             sidehint, htf = cands[0]
             print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a {sidehint.lower()} trigger here = A+. Waiting.")
@@ -783,7 +792,9 @@ def main():
             new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P and htf[2] != w.get("label")
             recent = (time.time() - w.get("t", 0)) < WATCH_CD_MIN*60
             if recent and not new_zone:
-                print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
+                print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone).")
+                state_manager.save_scan_timestamp(SYMBOL)
+                return
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
             wmsg = (f"{wa} 👀 {SYMBOL} — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
@@ -796,6 +807,7 @@ def main():
                 state_manager.set_watch_state(SYMBOL, {"t": time.time(), "price": price, "label": htf[2]})
         else:
             print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
+        state_manager.save_scan_timestamp(SYMBOL)
         return
 
     # take the first (priority order above); build the trade
@@ -814,7 +826,9 @@ def main():
             if last['close'] < at_S[0]: htf_note = f" | A break below HTF support [{at_S[2]}]"; grade = "A"
             else: htf_note = f" | SHORT into HTF support [{at_S[2]}]"; grade = "C-into-zone"
     if grade == "C-into-zone" and not AI:
-        print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality)."); return
+        print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality).")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
 
     is_rev = any(k in why for k in ("sweep", "VWAP", "retest"))
     # #4 confluence — multiple stacked levels at price strengthen the grade
@@ -831,13 +845,17 @@ def main():
         counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
         with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
         if counter and not grade.startswith("A+") and not AI:
-            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
+            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed.")
+            state_manager.save_scan_timestamp(SYMBOL)
+            return
         if counter: htf_note += f" | counter-{regime} (A+ only)"
         elif with_trend:
             htf_note += f" | with {regime} trend"
             if grade.startswith("B"): grade = "A"
     if FL["session_filter"] and not sess_ok and not grade.startswith("A+") and not AI:
-        print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
+        print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY).")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
@@ -848,7 +866,9 @@ def main():
     if FL.get("adaptive_tp", True) and wall is not None:
         room = abs(wall - entry)/PIP - tp_buf
         if room < room_min and not AI:
-            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{room_min:.0f}p R:R too poor)."); return
+            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{room_min:.0f}p R:R too poor).")
+            state_manager.save_scan_timestamp(SYMBOL)
+            return
         if room < room_min:   # AI mode: surface but flag the tight room
             print(f"   ⚠ CRAMPED: only {room:.0f}p clean room to next structure {wall} — poor R:R, judge carefully.")
         tp2_p = max(tp2_cap*0.2, min(tp2_cap, room)); tp1_p = min(tp1_cap, tp2_p*0.6)
@@ -891,13 +911,17 @@ def main():
              "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
              "chop_er": chop_er, "conf": conf, "room": room_p, "bias": bias}
     if DRY:
-        print("   [DRY RUN — no telegram/log/state]"); return
+        print("   [DRY RUN — no telegram/log/state]")
+        state_manager.save_scan_timestamp(SYMBOL)
+        return
     if REVIEW:   # AI-review gate: hold the trade, don't send. (approve: --approve  ·  reject: --reject)
         try: json.dump({**trade, "t": time.time()}, open(PENDING_FILE, "w"))
         except Exception: pass
         print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
+        state_manager.save_scan_timestamp(SYMBOL)
         return
     _fire(trade)
+    state_manager.save_scan_timestamp(SYMBOL)
 
 def _fire(t, note=""):
     """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown.
