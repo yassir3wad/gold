@@ -73,11 +73,11 @@ def is_impulse_kl(bars, i, kind, look=5, mult=1.5):
 
 
 def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """A buy zone at EVERY swing LOW (the swing-low candle, any color). PURELY STRUCTURAL — no volume/color
-    gate (fib-0.5 volume belongs to the SUPPORT level, not the buy zone). Quality tier = key level (BOS)."""
+    """A buy zone at a swing LOW that CAUSED the move (impulse in + impulse out), so it anchors to the origin
+    swing, not a minor continuation swing. No volume/color gate (fib-0.5 volume belongs to the SUPPORT level)."""
     out = []
     for p in P.pivots(bars, left, right):
-        if p["kind"] != "L":
+        if p["kind"] != "L" or not is_impulse_kl(bars, p["i"], "demand"):
             continue
         i = p["i"]; c = bars[i]
         lo, hi = demand_zone(c)
@@ -88,10 +88,11 @@ def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
 
 
 def find_supply_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """A sell zone at EVERY swing HIGH (any color). Purely structural — no volume/color gate."""
+    """A sell zone at a swing HIGH that CAUSED the move (impulse in + impulse out) — the origin, not a minor
+    lower-high continuation."""
     out = []
     for p in P.pivots(bars, left, right):
-        if p["kind"] != "H":
+        if p["kind"] != "H" or not is_impulse_kl(bars, p["i"], "supply"):
             continue
         i = p["i"]; c = bars[i]
         lo, hi = supply_zone(c)
