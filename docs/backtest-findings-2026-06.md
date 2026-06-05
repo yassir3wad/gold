@@ -2,12 +2,15 @@
 
 **Author:** Yassir Awad · **Date:** 2026-06-05
 **Goal:** make the gold-scalp engine profitable and the AI review accurate (more winning trades/day).
-**TL;DR:** We can't *filter* our way to profit with the current context features — proven rigorously.
-The one robust per-signal lever is **setup-family** (momentum-impulse and break-and-retest are
-consistent money-losers); the dominant P&L driver is **day-type**, which we can't yet predict early.
-The current hard-coded discipline is **net-harmful** as a filter. The ER (any time-frame) is a weak
-discriminator. Next levers are **suppressing the losing setup families** and **SL/TP/R:R placement**,
-*not* a smarter approval model.
+**TL;DR:** The decisive finding (§10): the **average signal's gross edge (≈0p/trade) is far below the
+gold spread (~3p)** — so high-frequency "trade-everything" scalping is *structurally* unprofitable; costs
+dominate. **Selectivity is therefore mandatory, not optional** — the only path to profit is taking the
+*few* setups whose per-trade edge clears the spread. Only **resistance-trendline breaks** do so robustly
+(+7.5p gross → +4.5p net, n=35); the high-volume families (CRT, zone-bounce, momentum) are cost-negative.
+This also explains why no filter beat trade-all in *gross* pips (wrong objective) and why selective manual
+trading wins (it takes the big ones). Secondary findings: can't filter to profit on win-rate features
+(calibrated model is anti-calibrated OOS); day-type dominates but isn't early-predictable; ER (any frame)
+is weak; SL geometry tilts toward tighter stops (7/9 days) but the gross gain is also < spread.
 
 ---
 
@@ -197,6 +200,52 @@ change**, only a flag flip.
 6. **Do NOT** ship the approval model or the morning day-gate to the live engine.
 
 ---
+
+## 10. THE DECISIVE FINDING — per-trade edge vs spread (cost-aware)
+
+Everything above measured **gross** pips. The moment you subtract the **gold spread (~3p/trade round-trip,
+~$0.30)**, the picture inverts and clarifies (`sltp_probe.py` + per-family cost analysis):
+
+- **Average signal: −0.2p/trade gross → −3.2p/trade after spread.** Trade-everything is deeply negative
+  once costs are real. The earlier "trade-all ≈ breakeven" was a *gross*, cost-free illusion.
+- **SL geometry:** tightening the stop to 0.75× structure is +1.2p/trade gross and beats current on 7/9
+  days (robust) — but +1.2p is still **below the ~3p spread**. Geometry tuning alone can't save a
+  high-frequency book; a **0.2-price-unit spread already flips it negative.**
+
+**Per-family edge vs a 3p spread — only a few clear costs:**
+
+| family | n | gross/trade | net/trade (−3p) | clears? |
+|---|---|---|---|---|
+| resistance-trendline | 35 | +7.5p | **+4.5p** | ✅ robust |
+| Asian-range | 6 | +6.2p | +3.2p | ✅ thin |
+| liquidity-sweep | 5 | +4.2p | +1.2p | ✅ thin |
+| support-trendline | 37 | +1.9p | −1.1p | ✗ marginal |
+| **CRT** | **235** | **+0.4p** | **−2.6p** | ✗ (highest volume!) |
+| zone-bounce | 77 | −0.4p | −3.4p | ✗ |
+| VWAP | 13 | −3.1p | −6.1p | ✗ |
+| momentum | 70 | −3.8p | −6.8p | ✗ |
+| break-and-retest | 10 | −24p | −27p | ✗ (suppressed) |
+
+**The unifying conclusion — selectivity is the strategy, because the edge is thin vs cost:**
+
+1. The per-trade edge is ~0–1p; the spread is ~3p. **You cannot win by trading often.** Profit requires
+   taking *few* trades whose individual edge is large enough to clear the spread.
+2. **The filter's true objective was never win-rate — it's per-trade edge size (pips after cost).** That's
+   why the calibrated model (optimizing win probability on thin-edge signals) failed, and why no filter
+   beat trade-all in gross pips.
+3. **The robust profitable core is resistance-trendline breaks** (+4.5p/trade net, n=35). The high-volume
+   families (CRT 235×, zone-bounce, momentum) are cost-negative *on average* — but **CRT is high-variance
+   and contains the big winners** (the live 2026-06-05 +111p was a CRT sweep+reclaim). So CRT should not be
+   suppressed wholesale; the job is to catch its big-edge instances, not trade all 235.
+4. This is why **selective manual/AI-reviewed trading wins while the firehose loses** — and it tells the
+   review exactly what to optimize for: *big clean moves that clear the spread*, concentrated in
+   trendline-breaks / sweeps / trend-day CRT, not marginal win-rate on the chop-bound majority.
+
+**Implications for the engine/review:**
+- Favor (or weight up) **resistance/support-trendline breaks, liquidity sweeps**; treat the high-volume
+  low-edge families as "need a *big* reason" rather than default-tradeable.
+- The AI review should select for **expected pips after cost**, not probability of a small win.
+- Reduce trade *count*; the math rewards fewer, larger-edge trades. (`break_retest` already off.)
 
 ## 8. Artifacts
 
