@@ -248,7 +248,6 @@ def alert_sound(n=3):
 
 TG_CONF = os.path.expanduser("~/tradingview-mcp/telegram_config.json")
 TG_STATE = os.path.expanduser("~/.tv_fast_tg.json")
-TRADE_STATE = os.path.expanduser("~/.tv_fast_trade.json")
 PENDING_FILE = os.path.expanduser("~/.tv_fast_pending.json")   # a confirmed trade held for AI review (--review)
 
 def _tg_text(text):
@@ -279,7 +278,7 @@ def init_symbol(sym):
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
     global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
     global LOT_MIN, LOT_MAX, LOT_STEP
-    global VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
+    global VP_FILE, TG_STATE, PENDING_FILE, ZONES_FILE
     global state_manager
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
@@ -295,12 +294,11 @@ def init_symbol(sym):
     s = SYMBOL.lower()
     VP_FILE       = os.path.expanduser(f"~/.tv_fast_{s}_vp.json")
     TG_STATE      = os.path.expanduser(f"~/.tv_fast_{s}_tg.json")
-    TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
     PENDING_FILE  = os.path.expanduser(f"~/.tv_fast_{s}_pending.json")
     ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{s}.json")
 
-    # Initialize StateManager with per-symbol state file
-    state_manager = StateManager(namespace=f"scanner_{s}", state_file=TRADE_STATE)
+    # Initialize StateManager with per-symbol namespace (uses StateManager's built-in state storage)
+    state_manager = StateManager(namespace=f"scanner_{s}")
 
 def _log_path():
     """Per-pair-per-day log: logs/<symbol>/<YYYY-MM-DD>.csv (the auto-learn dataset, split by instrument & day)."""
