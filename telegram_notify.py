@@ -19,6 +19,54 @@ def _load_config():
     except Exception:
         return None, None
 
+def format_zone_summary(changes_by_symbol):
+    """
+    Format zone refresh changes into a human-readable summary for Telegram.
+
+    Args:
+        changes_by_symbol: Dict mapping symbol names to change stats
+                          e.g., {'XAUUSD': {'added': 2, 'removed': 1, 'modified': 0, 'unchanged': 5}}
+
+    Returns:
+        Formatted string suitable for Telegram notification
+    """
+    if not changes_by_symbol:
+        return "No instruments refreshed"
+
+    lines = []
+    total_changes = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
+
+    for symbol in sorted(changes_by_symbol.keys()):
+        stats = changes_by_symbol[symbol]
+        added = stats.get("added", 0)
+        removed = stats.get("removed", 0)
+        modified = stats.get("modified", 0)
+        unchanged = stats.get("unchanged", 0)
+
+        for k in total_changes:
+            total_changes[k] += stats.get(k, 0)
+
+        if added + removed + modified == 0:
+            lines.append(f"{symbol}: no changes")
+        else:
+            change_parts = []
+            if added: change_parts.append(f"+{added}")
+            if removed: change_parts.append(f"-{removed}")
+            if modified: change_parts.append(f"~{modified}")
+            lines.append(f"{symbol}: {' '.join(change_parts)}")
+
+    if len(changes_by_symbol) > 1:
+        if total_changes["added"] + total_changes["removed"] + total_changes["modified"] > 0:
+            total_parts = []
+            if total_changes["added"]: total_parts.append(f"+{total_changes['added']}")
+            if total_changes["removed"]: total_parts.append(f"-{total_changes['removed']}")
+            if total_changes["modified"]: total_parts.append(f"~{total_changes['modified']}")
+            lines.append(f"\nTotal: {' '.join(total_parts)}")
+        else:
+            lines.append("\nTotal: no changes detected")
+
+    return "\n".join(lines)
+
 def send_message(text, dry_run=False):
     """
     Send a text message to Telegram.
