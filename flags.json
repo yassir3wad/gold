@@ -26,6 +26,14 @@
   "hard_floor": true,
   "risk_management_enabled": true,
   "risk_management": {
-    "max_daily_loss_usd": 500
+    "max_daily_loss_usd": 500,
+    "max_concurrent_per_instrument": 2,
+    "max_total_open_signals": 5,
+    "correlation_check": true,
+    "correlation_pairs": {
+      "EURUSD": ["GBPUSD"],
+      "GBPUSD": ["EURUSD"],
+      "XAUUSD": []
+    }
   }
 }
