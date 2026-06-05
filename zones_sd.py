@@ -181,6 +181,8 @@ def big_candle(bars, i, lookback=20, level=0.5):
     w = bars[max(0, i - lookback + 1):i + 1]
     bodies = [abs(b["close"] - b["open"]) for b in w]
     bmin, bmax = min(bodies), max(bodies)
+    if bmax <= bmin:
+        return False                    # no contrast -> not distinguishably 'big'
     body = abs(bars[i]["close"] - bars[i]["open"])
     big = body >= bmin + level * (bmax - bmin)
     return bool(big and volume_fib(bars, i, lookback, level))
