@@ -24,6 +24,7 @@
   "ai_decide": true,
   "zone_bounce": true,
   "hard_floor": true,
+  "risk_management_enabled": true,
   "risk_management": {
     "max_daily_loss_usd": 500
   }
