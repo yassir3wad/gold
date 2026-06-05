@@ -1,0 +1,49 @@
+[Unit]
+Description=TradingView Zone Scheduler - Automated HTF Zone Refresh Daemon
+Documentation=https://github.com/yourusername/tradingview-mcp
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/tradingview-mcp
+
+# Main process
+ExecStart=/usr/bin/python3 zone_scheduler.py --daemon
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONIOENCODING=utf-8"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zone-scheduler
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/YOUR_USERNAME/tradingview-mcp/logs
+ReadWritePaths=/home/YOUR_USERNAME/tradingview-mcp/zones_*.json
+
+# Resource limits
+MemoryLimit=512M
+CPUQuota=50%
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
