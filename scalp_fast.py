@@ -235,9 +235,17 @@ def compute_reference_levels():
     return {"pdh": pdh, "pdl": pdl, "asia_h": asia_h, "asia_l": asia_l}
 
 def load_zones():
-    """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
-    when stale (>ZONES_TTL); falls back to the hardcoded constants if no usable file exists.
+    """Return (HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L) from auto-derived zones.json + computed reference levels.
+    Rebuilds zones.json (refresh_zones.py) when stale (>ZONES_TTL); calls compute_reference_levels() for
+    fresh PDH/PDL/Asian values; falls back to the hardcoded constants if computation fails.
     Each scan is a fresh process, so this re-applies every run."""
+    # Compute reference levels dynamically
+    computed = compute_reference_levels()
+    pdh_val = computed.get("pdh") if computed.get("pdh") is not None else PDH
+    pdl_val = computed.get("pdl") if computed.get("pdl") is not None else PDL
+    asia_h_val = computed.get("asia_h") if computed.get("asia_h") is not None else ASIA_H
+    asia_l_val = computed.get("asia_l") if computed.get("asia_l") is not None else ASIA_L
+
     z = None
     try:
         z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
@@ -250,8 +258,8 @@ def load_zones():
         except Exception: pass
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:
         return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
-                z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
-    return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
+                pdh_val, pdl_val, asia_h_val, asia_l_val)
+    return list(HTF_R), list(HTF_S), pdh_val, pdl_val, asia_h_val, asia_l_val
 
 def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
     """Pre-hold HARD FLOOR predicate (applies EVEN under ai_decide — the only skip that does).
