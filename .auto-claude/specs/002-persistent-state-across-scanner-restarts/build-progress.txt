@@ -1,0 +1,235 @@
+=== AUTO-BUILD PROGRESS ===
+
+Project: Persistent State Across Scanner Restarts
+Workspace: /Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts
+Started: 2026-06-05 10:43 UTC
+
+Workflow Type: REFACTOR
+Rationale: Existing state management is fragmented across multiple JSON files (~/.tv_fast_*.json).
+          This refactor consolidates into a unified StateManager with schema validation and
+          graceful degradation, following Add New → Migrate → Cleanup pattern.
+
+=== INVESTIGATION FINDINGS ===
+
+Current State Management (Fragmented):
+  - ~/.tv_scalp_state.json          - Simple dedup key (scalp_scan.py)
+  - ~/.tv_fast_cd.json              - Signal cooldown timer
+  - ~/.tv_fast_watch.json           - Heads-up cooldown with price/label
+  - ~/.tv_fast_trade.json           - Active trade state (TP/SL/BE tracking)
+  - ~/.tv_fast_{symbol}_trade.json  - Per-symbol trade states
+  - ~/.tv_fast_vp.json              - Volume profile cache (TTL-based)
+  - ~/tradingview-mcp/zones.json    - HTF zones auto-refresh
+
+Existing Patterns Found:
+  - State persistence: json.dump/load per file with try/except fallback
+  - Per-symbol naming: ~/.tv_fast_{symbol}_{type}.json
+  - Trade lifecycle: set_active_trade() → check_active_trade() → log_signal()
+  - Cooldown pattern: Store {'t': timestamp}, check elapsed time
+  - No formal schema validation
+  - No consolidated state store
+  - Silent failure on corruption (returns None/empty)
+
+Key Files Referenced:
+  - scalp_fast.py:323-336 (set_active_trade)
+  - scalp_fast.py:338-385 (check_active_trade)
+  - scalp_fast.py:304-321 (log_signal)
+  - scalp_scan.py:205-212 (load_state/save_state)
+  - orchestrate.py:25-32 (active_pairs detection)
+  - scan_pairs.py (meta-scanner for instrument ranking)
+
+Instruments Configured:
+  XAUUSD, GBPUSD, NAS100, US30, EURUSD, USDJPY, AUDUSD
+
+=== SESSION 1 (PLANNER) ===
+
+✅ Created project_index.json
+   - Project type: single
+   - Services: scanner (Python), mcp_server (Node.js)
+   - State storage: filesystem JSON
+   - Scanner cycle: 60 seconds
+
+✅ Created context.json
+   - Files to modify: scalp_fast.py, scalp_scan.py, orchestrate.py
+   - Files to create: src/state_manager.py, docs/STATE_SCHEMA.md, scripts/migrate_state.py
+   - Existing patterns documented
+   - Risk: medium (live trading scanner)
+
+✅ Created implementation_plan.json
+   - Workflow: REFACTOR
+   - Phases: 6
+   - Total subtasks: 19
+   - Services: scanner (Python)
+
+Phase Summary:
+  Phase 1: Add Consolidated StateManager (4 subtasks)
+    - Create StateManager class with schema validation
+    - Add consolidated state schema
+    - Add per-symbol accessor methods
+    - Add migration utility for existing state files
+
+  Phase 2: Migrate scalp_fast.py to StateManager (4 subtasks)
+    - Replace set_active_trade() with StateManager
+    - Replace check_active_trade() with StateManager
+    - Replace cooldown management with StateManager
+    - Add scan timestamp tracking
+
+  Phase 3: Migrate scalp_scan.py to StateManager (2 subtasks)
+    - Replace load_state/save_state with StateManager
+    - Add scan timestamp tracking
+
+  Phase 4: Migrate orchestrate.py to StateManager (2 subtasks)
+    - Replace active_pairs() with StateManager
+    - Add scan timestamp reporting
+
+  Phase 5: Integration Testing (5 subtasks)
+    - Test fresh start with no existing state
+    - Test state persistence across restart
+    - Test corrupted state file graceful degradation
+    - Test cooldown persistence across restart
+    - Test orchestrator multi-instrument state tracking
+
+  Phase 6: Cleanup and Documentation (3 subtasks)
+    - Remove old file-based state fallbacks
+    - Add state schema documentation
+    - Add migration script for existing deployments
+
+✅ Created init.sh
+   - Environment check (Python 3, Node.js)
+   - Dependencies installation (npm install)
+   - State files check
+   - Logs directory setup
+   - Instruments config verification
+
+Parallelism Analysis:
+  - Max parallel phases: 3 (phases 2, 3, 4 can run in parallel)
+  - Parallel group: Migration phases (scalp_fast, scalp_scan, orchestrate)
+    Reason: All depend only on phase-1 and modify different files
+  - Recommended workers: 1 (sequential is safer for small Python files)
+
+Verification Strategy:
+  - Risk level: medium
+  - Test types: integration, manual
+  - Security scanning: not required
+  - Acceptance criteria (from spec.md):
+    ✓ Scanner state is persisted to disk every scan cycle (every 60 seconds)
+    ✓ On restart, scanner loads last state and resumes cooldowns/active signals/trade management
+    ✓ Duplicate alerts are suppressed for signals already sent before restart
+    ✓ State file is human-readable JSON with clear schema documentation
+    ✓ Graceful degradation: if state file is corrupted, scanner starts fresh with warning log
+
+=== STARTUP COMMAND ===
+
+To continue building this spec, run:
+
+  cd /Users/yassir3wad/tradingview-mcp/.auto-claude/worktrees/tasks/002-persistent-state-across-scanner-restarts
+  source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 002 --parallel 1
+
+Or from the parent project:
+
+  python auto-claude/run.py --spec 002 --parallel 1
+
+=== NEXT STEPS ===
+
+The CODER agent will:
+  1. Read implementation_plan.json
+  2. Start with phase-1-add-state-manager
+  3. Implement subtask-1-1: Create StateManager class
+  4. Work through all subtasks sequentially
+  5. Run verification after each subtask
+  6. Mark subtasks as completed
+  7. Commit changes with descriptive messages
+
+DO NOT:
+  - Start implementing code (this is PLANNING ONLY)
+  - Run init.sh yet
+  - Modify source files
+  - Update subtask statuses
+
+=== END SESSION 1 ===
+
+Planning complete. Ready for implementation by CODER agent.
+
+=== SESSION 2 (CODER) ===
+
+[2026-06-05T10:51:00.000Z] ✅ COMPLETED: subtask-1-1 - Create StateManager class with schema-validated JSON storage
+
+Implemented StateManager class in src/state_manager.py with:
+- Schema-validated JSON storage with version 1.0
+- Atomic writes using .tmp file + rename pattern
+- Per-symbol state management for active trades, cooldowns, watch state, and scan timestamps
+- Graceful degradation on corrupted state files (logs warning and starts fresh)
+- All required methods: save_trade_state, get_trade_state, set_active_trade, get_active_trade,
+  clear_active_trade, update_trade_state, get_all_active_trades, save_cooldown, check_cooldown,
+  save_watch_state, get_watch_state, save_scan_timestamp, get_scan_timestamp
+- Migration utility: import_legacy_state() for importing old state files
+- Comprehensive error handling with logging
+
+Verification passed: StateManager can be imported and instantiated successfully.
+All 10 comprehensive tests passed including persistence across instances.
+
+Commit: 0ca6c1f
+
+Files created:
+  - src/state_manager.py (414 lines)
+
+Next: subtask-1-2 - Add consolidated state schema definition and validation
+
+[2026-06-05T10:53:00.000Z] ✅ COMPLETED: subtask-1-2 - Add consolidated state schema definition and validation
+
+Enhanced StateManager schema validation with:
+- Updated _validate_schema() to accept optional require_version parameter
+- Made "version" key optional for external validation via public API
+- Added public validate_schema() method that validates core state structure without requiring version
+- Schema validation checks all required fields: active_trades, cooldowns, watch_state, scan_timestamps
+- Type checking ensures all fields are dictionaries
+- Internal state loading still requires version for backward compatibility
+
+Changes:
+  - Modified _validate_schema() signature to include require_version parameter (default True)
+  - Updated public validate_schema() to call _validate_schema(state, require_version=False)
+  - This allows external validation without version key while maintaining strict internal validation
+
+Verification passed: validate_schema() successfully validates schemas with core fields only.
+
+Commit: e8c87f2
+
+Files modified:
+  - src/state_manager.py (8 lines changed)
+
+Next: subtask-1-3 - Add per-symbol state accessor methods
+
+[2026-06-05T10:55:00.000Z] ✅ COMPLETED: subtask-1-3 - Add per-symbol state accessor methods
+
+Verified StateManager per-symbol accessor methods are working correctly:
+
+Trade Management Methods:
+  - set_active_trade(symbol, side, entry, sl, tp1, tp2, signal_id, be_trig) → Sets active trade
+  - get_active_trade(symbol) → Retrieves active trade for a symbol
+  - clear_active_trade(symbol) → Clears an active trade
+  - update_trade_state(symbol, updates) → Updates specific trade fields
+  - get_all_active_trades() → Gets all active trades across symbols
+
+Cooldown Management Methods:
+  - save_cooldown(symbol, timestamp) → Saves cooldown timestamp
+  - check_cooldown(symbol, cooldown_seconds) → Checks if in cooldown period
+
+Watch State Management Methods:
+  - save_watch_state(symbol, watch_data) → Saves watch state
+  - get_watch_state(symbol) → Retrieves watch state
+
+Scan Timestamp Methods:
+  - save_scan_timestamp(symbol, timestamp) → Saves scan timestamp
+  - get_scan_timestamp(symbol) → Retrieves scan timestamp
+
+All methods follow the pattern from reference files:
+  - orchestrate.py:17-18 - Per-symbol file path pattern
+  - scalp_fast.py:249 - State file path constants
+
+These methods were already implemented in subtask-1-1 as part of the comprehensive
+StateManager class. Verification test passed: created active trade for XAUUSD with
+side='LONG', retrieved it successfully, and confirmed all fields correct.
+
+Commit: a68c45a
+
+Next: subtask-1-4 - Add migration utility to import existing state files
+
