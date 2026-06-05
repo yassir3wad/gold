@@ -39,7 +39,8 @@ def supply_zone(c):
 
 
 def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """A buy zone at EVERY swing LOW (the swing-low candle, any color). green + high-volume -> 'strong'."""
+    """A buy zone at EVERY swing LOW (the swing-low candle, any color). PURELY STRUCTURAL — no volume/color
+    gate (fib-0.5 volume belongs to the SUPPORT level, not the buy zone). Quality tier = key level (BOS)."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "L":
@@ -48,13 +49,12 @@ def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
         lo, hi = demand_zone(c)
         if hi <= lo:
             hi = max(c["open"], c["close"])
-        strong = is_green(c) and volume_fib(bars, i, lookback, level)
-        out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": c.get("time"), "strong": strong})
+        out.append({"kind": "demand", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
     return out
 
 
 def find_supply_zones(bars, left=3, right=3, lookback=20, level=0.5):
-    """A sell zone at EVERY swing HIGH (any color). red + high-volume -> 'strong'."""
+    """A sell zone at EVERY swing HIGH (any color). Purely structural — no volume/color gate."""
     out = []
     for p in P.pivots(bars, left, right):
         if p["kind"] != "H":
@@ -63,8 +63,7 @@ def find_supply_zones(bars, left=3, right=3, lookback=20, level=0.5):
         lo, hi = supply_zone(c)
         if lo >= hi:
             lo = min(c["open"], c["close"])
-        strong = is_red(c) and volume_fib(bars, i, lookback, level)
-        out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": c.get("time"), "strong": strong})
+        out.append({"kind": "supply", "lo": lo, "hi": hi, "i": i, "time": c.get("time")})
     return out
 
 

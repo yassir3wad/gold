@@ -38,12 +38,11 @@ def test_find_demand_zone():
     rise = [C(106+i, 107+i, 105+i, 106+i, 10) for i in range(5)]          # rally away
     bars = base + [low_candle] + rise
     zones = Z.find_demand_zones(bars, left=2, right=2, lookback=12)
-    check("find-demand: detects a STRONG zone at the green high-vol swing low",
-          any(abs(z["lo"] - 103) < 1 and z["kind"] == "demand" and z["strong"] for z in zones))
-    # a RED swing-low candle still gets a buy zone, just not 'strong'
+    check("find-demand: detects a buy zone at the green swing low",
+          any(abs(z["lo"] - 103) < 1 and z["kind"] == "demand" for z in zones))
+    # a RED swing-low candle ALSO gets a buy zone (color/volume don't matter for zones)
     bars_red = base + [C(106, 106, 103, 104, 100)] + rise
-    rz = Z.find_demand_zones(bars_red, left=2, right=2, lookback=12)
-    check("find-demand: red swing-low IS a zone but NOT strong", rz and not rz[0]["strong"])
+    check("find-demand: red swing-low is ALSO a buy zone", bool(Z.find_demand_zones(bars_red, left=2, right=2, lookback=12)))
 
 
 def test_value_area():
