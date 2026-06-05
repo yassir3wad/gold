@@ -10,6 +10,7 @@ GATE = 40        # vol gate: last-10-bar range in pips
 HORIZON = 10     # 10-min rule: TP1 must hit within 10 bars
 CHOP_ER = 0.30   # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
 SESSION_UTC = set(range(7, 22))  # London+NY active hours (UTC); outside = quiet
+NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 
 ENABLE_FILTERS = False  # global flag controlled by --enable-filters
 
@@ -46,6 +47,12 @@ def in_session(ts):
     import datetime as _dt
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
 
+def in_news(ts):
+    """Check if timestamp falls within a news blackout window."""
+    import datetime as _dt
+    t = _dt.datetime.utcfromtimestamp(ts); m = t.hour*60 + t.minute
+    return any(h1*60+m1 <= m <= h2*60+m2 for h1,m1,h2,m2 in NEWS_BLACKOUT)
+
 def detect(b):
     """Mirror scalp_fast: return (side, entry, struct, why) or None for the window b (last bar = trigger)."""
     n=len(b); last=b[-1]
@@ -59,6 +66,10 @@ def detect(b):
         # Chop filter: skip if market is ranging (low efficiency ratio)
         is_chop, er = chop_15m(b)
         if is_chop:
+            return None
+
+        # News blackout filter: skip if in a manual blackout window
+        if in_news(last.get('time', 0)):
             return None
 
     rng10=(max(x['high'] for x in b[-10:])-min(x['low'] for x in b[-10:]))/PIP
