@@ -122,6 +122,10 @@ def test_sr_levels_and_flip():
     f = Z.sr_levels(flip, lookback=6)
     sup = next(x for x in f if x["origin"] == "support")
     check("SR: broken support flips to resistance", sup["flipped"] is True and sup["role"] == "resistance")
+    # a green big-volume candle with a LONG upper wick is NOT support (rejection against the level)
+    longwick = small + [C(100, 130, 99, 109, 100)]   # upper wick 130->109 = 21 of 31 range -> disqualify
+    check("SR: green with long upper wick is NOT support",
+          not any(x["origin"] == "support" for x in Z.sr_levels(longwick, lookback=5)))
 
 
 def main():

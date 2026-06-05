@@ -29,13 +29,35 @@ def volume_fib(bars, i, lookback=20, level=0.5):
 
 
 def demand_zone(c):
-    """Buy zone = low wick -> body bottom (min(open,close)), works for a red or green swing-low candle."""
-    return (c["low"], min(c["open"], c["close"]))
+    """Buy zone = low wick -> candle OPEN (until candle open)."""
+    return (c["low"], c["open"])
 
 
 def supply_zone(c):
-    """Sell zone = body top (max(open,close)) -> high wick."""
-    return (max(c["open"], c["close"]), c["high"])
+    """Sell zone = candle OPEN -> high wick."""
+    return (c["open"], c["high"])
+
+
+def _atr(bars, i, n=14):
+    w = bars[max(0, i - n):i] or bars[:1]
+    return sum(b["high"] - b["low"] for b in w) / len(w) if w else 0.0
+
+
+def is_impulse_kl(bars, i, kind, look=5, mult=1.5):
+    """Key-level structure: the swing has an OPPOSITE impulse wave INTO it and an impulse wave OUT of it
+    (impulse -> swing -> impulse). demand low: strong drop in, strong rally out. supply high: mirror."""
+    atr = _atr(bars, i)
+    if atr <= 0:
+        return False
+    if kind == "demand":
+        drop_in = max(b["high"] for b in bars[max(0, i - look):i + 1]) - bars[i]["low"]
+        out = bars[i + 1:i + 1 + look]
+        rally_out = (max(b["high"] for b in out) - bars[i]["low"]) if out else 0.0
+        return drop_in > mult * atr and rally_out > mult * atr
+    rise_in = bars[i]["high"] - min(b["low"] for b in bars[max(0, i - look):i + 1])
+    out = bars[i + 1:i + 1 + look]
+    drop_out = (bars[i]["high"] - min(b["low"] for b in out)) if out else 0.0
+    return rise_in > mult * atr and drop_out > mult * atr
 
 
 def find_demand_zones(bars, left=3, right=3, lookback=20, level=0.5):
@@ -147,7 +169,9 @@ def mark_key_levels(bars, left=3, right=3, lookback=20, level=0.5, max_touches=3
         z["broken"] = is_broken(bars, z)
         z["crossings"] = zone_crossings(bars, z)
         z["valid"] = z["crossings"] < 2            # traversed both ways (>=2) => consumed/invalid
-        z["score"] = kl_score_from(z["bos"], z["broken"], z["touches"], max_touches) if z["valid"] else 0.0
+        z["impulse"] = is_impulse_kl(bars, z["i"], z["kind"])   # opposite-impulse-in + impulse-out
+        kl_ok = z["bos"] and z["impulse"]                       # a KL needs BOTH the BOS and the impulse structure
+        z["score"] = kl_score_from(kl_ok, z["broken"], z["touches"], max_touches) if z["valid"] else 0.0
         z["key_level"] = z["score"] > 0
     return sorted(zones, key=lambda z: -z["score"])
 
@@ -162,6 +186,17 @@ def big_candle(bars, i, lookback=20, level=0.5):
     return bool(big and volume_fib(bars, i, lookback, level))
 
 
+def small_opposite_wick(c, frac=0.4):
+    """A support (green) candle must have a SMALL upper wick; a resistance (red) candle a small lower wick.
+    A long opposite-direction wick = rejection against the level -> disqualify."""
+    rng = c["high"] - c["low"]
+    if rng <= 0:
+        return True
+    if c["close"] > c["open"]:            # green -> opposite wick is the UPPER wick
+        return (c["high"] - c["close"]) <= frac * rng
+    return (c["close"] - c["low"]) <= frac * rng   # red -> opposite wick is the LOWER wick
+
+
 def sr_levels(bars, lookback=20, level=0.5):
     """Support/resistance LEVELS from big high-volume candles (distinct from order-block zones):
       - big GREEN candle -> support at its open (launch base)
@@ -170,7 +205,7 @@ def sr_levels(bars, lookback=20, level=0.5):
     Returns dicts {price, origin, role, flipped, i, time}."""
     out = []
     for i, c in enumerate(bars):
-        if not big_candle(bars, i, lookback, level):
+        if not big_candle(bars, i, lookback, level) or not small_opposite_wick(c):
             continue
         if c["close"] > c["open"]:
             origin, px = "support", c["open"]
