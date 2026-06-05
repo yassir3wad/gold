@@ -86,7 +86,7 @@
             "command": "echo '{\"active\": true, \"id\": 123, \"side\": \"LONG\", \"entry\": 2400}' > /tmp/test_trade.json && python3 -c \"from src.state_manager import StateManager; sm = StateManager('test'); sm.import_legacy_state('XAUUSD', '/tmp/test_trade.json', 'trade'); print('OK' if sm.get_active_trade('XAUUSD') else 'FAIL')\"",
             "expected": "OK"
           },
-          "status": "pending",
+          "status": "completed",
           "notes": "Method: import_legacy_state(symbol, file_path, state_type) where state_type in ['trade', 'cd', 'watch', 'vp']. Read existing ~/.tv_fast_{symbol}_{type}.json files and migrate to consolidated schema."
         }
       ]
@@ -538,5 +538,5 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T08:55:13.198Z"
+  "updated_at": "2026-06-05T08:57:21.515Z"
 }
