@@ -87,7 +87,16 @@ def load_config():
             config = json.load(f)
         logging.info(f"Loaded config from {CONFIG_FILE}")
         # Merge with defaults for any missing keys
-        return {**defaults, **config}
+        merged = {**defaults, **config}
+        # Honor the documented `notifications` object (BUG: code read a non-existent `notifications_enabled`,
+        # so the config toggles were dead). Map the object's switches to the booleans the code uses.
+        notif = merged.get("notifications", {})
+        if isinstance(notif, dict):
+            merged["notifications_enabled"] = notif.get("send_on_refresh", merged.get("notifications_enabled", True))
+            merged["stale_notifications_enabled"] = notif.get("send_on_stale_warning", True)
+        else:
+            merged["stale_notifications_enabled"] = merged.get("notifications_enabled", True)
+        return merged
     except Exception as e:
         logging.error(f"Error loading config {CONFIG_FILE}: {e}, using defaults")
         return defaults
@@ -229,7 +238,7 @@ def check_zone_health(send_alert=False):
     config = load_config()
     instruments = config.get("enabled_instruments", [])
     stale_threshold_hours = config.get("stale_threshold_hours", 6)
-    notifications_enabled = config.get("notifications_enabled", True)
+    notifications_enabled = config.get("stale_notifications_enabled", True)   # stale alerts gated by send_on_stale_warning
 
     if not instruments:
         logging.warning("No enabled instruments in config, skipping health check")
@@ -429,6 +438,9 @@ class ZoneScheduler:
 
     def start(self):
         """Start the scheduler daemon."""
+        if not self.config.get("enabled", True):   # honor the documented master switch (BUG: was never read)
+            logging.info("Zone scheduler is disabled in config ('enabled': false) — not starting.")
+            return
         logging.info("=" * 60)
         logging.info("Zone Scheduler starting...")
         logging.info(f"Interval: {self.interval_hours} hours")
