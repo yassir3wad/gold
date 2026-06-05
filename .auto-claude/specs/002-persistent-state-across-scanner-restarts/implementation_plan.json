@@ -87,7 +87,8 @@
             "expected": "OK"
           },
           "status": "completed",
-          "notes": "Method: import_legacy_state(symbol, file_path, state_type) where state_type in ['trade', 'cd', 'watch', 'vp']. Read existing ~/.tv_fast_{symbol}_{type}.json files and migrate to consolidated schema."
+          "notes": "Verified import_legacy_state method successfully imports legacy state files for trades, cooldowns, and watch state. Test passed: imported legacy trade file and retrieved active trade data correctly. Migration utility enables seamless transition from fragmented per-file state to consolidated StateManager.",
+          "updated_at": "2026-06-05T08:59:19.051380+00:00"
         }
       ]
     },
@@ -117,8 +118,8 @@
             "command": "python3 -c \"import scalp_fast; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Update lines 323-336. Import StateManager at top. Replace json.load/dump with sm.set_active_trade() and sm.get_active_trade(). Keep old TRADE_STATE file writes as backup during transition."
+          "status": "completed",
+          "notes": "Completed: Imported StateManager from src/state_manager. Initialized StateManager instance in init_symbol() with per-symbol state file. Replaced set_active_trade() to use state_manager.set_active_trade(SYMBOL, ...). Maintained existing logic for finalizing prior trades using state_manager.get_trade_state()."
         },
         {
           "id": "subtask-2-2",
@@ -136,8 +137,8 @@
             "command": "python3 -c \"import scalp_fast; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Update lines 338-385. Replace json.load from TRADE_STATE with sm.get_active_trade(). Replace json.dump with sm.update_trade_state()."
+          "status": "completed",
+          "notes": "Completed: Replaced json.load(open(TRADE_STATE)) with state_manager.get_trade_state(SYMBOL). Replaced json.dump with state_manager.save_trade_state(SYMBOL, t). All trade state operations now go through StateManager with proper error handling."
         },
         {
           "id": "subtask-2-3",
@@ -155,8 +156,8 @@
             "command": "python3 -c \"import scalp_fast; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Replace CD_FILE (line 913) and WATCH_CD_FILE (lines 774-790) operations with sm.save_cooldown() and sm.check_cooldown(). Preserve cooldown logic (COOLDOWN_MIN, WATCH_CD_MIN)."
+          "status": "completed",
+          "notes": "Completed: Removed CD_FILE and WATCH_CD_FILE manual JSON file operations. Replaced cooldown check with state_manager.in_cooldown(SYMBOL) and get_cooldown_remaining(SYMBOL). Replaced watch state management with state_manager.get_watch_state(SYMBOL) and set_watch_state(SYMBOL, data). Replaced cooldown setting with state_manager.set_cooldown(SYMBOL, COOLDOWN_MIN). All cooldown logic now uses StateManager with proper persistence."
         },
         {
           "id": "subtask-2-4",
@@ -538,5 +539,6 @@
   "planStatus": "in_progress",
   "xstateState": "planning",
   "executionPhase": "coding",
-  "updated_at": "2026-06-05T08:57:21.515Z"
+  "updated_at": "2026-06-05T09:05:31.188Z",
+  "last_updated": "2026-06-05T08:59:19.051399+00:00"
 }
