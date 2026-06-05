@@ -14,6 +14,10 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 try:
     sys.path.insert(0, TVDIR); import news as newsmod   # FF economic-calendar blackout (cache-only, no fetch in scanner)
 except Exception: newsmod = None
+
+# Import StateManager for persistent state management
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+from state_manager import StateManager
 PIP = 0.10
 MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
@@ -268,12 +272,17 @@ PIP_VALUE = 10.0     # $ P/L per 1 pip per 1.0 lot (gold & USD-quoted forex ≈ 
 USE_TPO = False      # read the Kioseff TPO indicator for VPOC/value-area (gold only); others use the computed profile
 LOT_MIN, LOT_MAX, LOT_STEP = 0.01, 100.0, 0.01   # broker volume constraints (per-instrument; sized lot is rounded to step + clamped)
 INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
+
+# StateManager instance for persistent state (initialized per-symbol in init_symbol)
+state_manager = None
+
 def init_symbol(sym):
     """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
     global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
     global LOT_MIN, LOT_MAX, LOT_STEP
     global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
+    global state_manager
     SYMBOL = (sym or "XAUUSD").upper()
     cfg = {}
     try:
@@ -293,6 +302,9 @@ def init_symbol(sym):
     TRADE_STATE   = os.path.expanduser(f"~/.tv_fast_{s}_trade.json")
     PENDING_FILE  = os.path.expanduser(f"~/.tv_fast_{s}_pending.json")
     ZONES_FILE    = os.path.expanduser(f"~/tradingview-mcp/zones_{s}.json")
+
+    # Initialize StateManager with per-symbol state file
+    state_manager = StateManager(namespace=f"scanner_{s}", state_file=TRADE_STATE)
 
 def _log_path():
     """Per-pair-per-day log: logs/<symbol>/<YYYY-MM-DD>.csv (the auto-learn dataset, split by instrument & day)."""
@@ -322,8 +334,8 @@ def log_signal(row):
 
 def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
     try:   # finalize any still-open prior trade that this new signal supersedes
-        old = json.load(open(TRADE_STATE))
-        if old.get("active") and old.get("id") and old.get("id") != sid:
+        old = state_manager.get_trade_state(SYMBOL)
+        if old and old.get("active") and old.get("id") and old.get("id") != sid:
             if old.get("tp1_hit"):   # already banked +50 — keep the win, don't downgrade to 'superseded'
                 ot1 = old["tp1"]; tp = round((old["entry"]-ot1)/PIP if old["side"]=="SHORT" else (ot1-old["entry"])/PIP)
                 log_signal({"id": old["id"], "result": "TP1", "exit": round(ot1, 1), "pips": tp})
@@ -331,9 +343,8 @@ def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
                 oe = old["entry"]; pips = round((oe-entry)/PIP if old["side"] == "SHORT" else (entry-oe)/PIP)
                 log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, 1), "pips": pips})
     except Exception: pass
-    try: json.dump({"active": True, "id": sid, "side": side, "entry": entry, "sl": sl,
-                    "tp1": tp1, "tp2": tp2, "tp1_hit": False, "be_trig": be_trig, "t0": time.time()}, open(TRADE_STATE, "w"))
-    except Exception: pass
+    # Use StateManager to save trade state
+    state_manager.set_active_trade(SYMBOL, side, entry, sl, tp1, tp2, sid, be_trig)
 
 def check_active_trade(price):
     """Alert on TP1/TP2/SL; finalize the signals_log outcome (incl. 12-min timeout).
