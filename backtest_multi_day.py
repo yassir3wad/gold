@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Multi-day walk-forward backtesting framework.
 Iterates over a date range, running single-day backtests for each day."""
-import argparse, datetime as dt, json, subprocess, os
+import argparse, datetime as dt, json, subprocess, os, random
 import scalp_fast as S
 
 # Constants
@@ -176,6 +176,74 @@ def backtest_period(start_date, end_date):
         "daily_results": all_results
     }
 
+def calculate_max_drawdown(trades):
+    """Calculate maximum drawdown from a sequence of trades.
+    Returns (max_dd_pips, max_dd_pct) where pct is relative to peak equity."""
+    if not trades: return 0, 0
+    equity=0; peak=0; max_dd=0
+    for t in trades:
+        equity+=t[7]  # pips from trade
+        if equity>peak: peak=equity
+        dd=peak-equity
+        if dd>max_dd: max_dd=dd
+    max_dd_pct=(max_dd/peak*100) if peak>0 else 0
+    return max_dd, max_dd_pct
+
+def calculate_sharpe_ratio(trades, risk_free_rate=0):
+    """Calculate Sharpe ratio from trade returns.
+    Returns annualized Sharpe ratio (assuming 252 trading days)."""
+    if len(trades)<2: return 0
+    returns=[t[7] for t in trades]  # pips per trade
+    mean_return=sum(returns)/len(returns)
+    variance=sum((r-mean_return)**2 for r in returns)/(len(returns)-1)
+    std_dev=variance**0.5
+    if std_dev==0: return 0
+    # Annualize: assume trades are independent, scale by sqrt(252)
+    sharpe=(mean_return-risk_free_rate)/std_dev
+    return sharpe*(252**0.5)
+
+def monte_carlo_simulation(all_trades, iterations):
+    """Run Monte Carlo simulation by randomizing trade order.
+    Returns dict with percentile results for each metric."""
+    if not all_trades: return None
+
+    results={'net_pips':[], 'win_rate':[], 'max_dd':[], 'max_dd_pct':[], 'sharpe':[]}
+
+    for _ in range(iterations):
+        # Shuffle trade order
+        trades=all_trades.copy()
+        random.shuffle(trades)
+
+        # Calculate metrics for this iteration
+        net_pips=sum(t[7] for t in trades)
+        wins=len([t for t in trades if t[6]=="TP1"])
+        losses=len([t for t in trades if t[6]=="SL"])
+        win_rate=(wins/(wins+losses)*100) if (wins or losses) else 0
+        max_dd, max_dd_pct=calculate_max_drawdown(trades)
+        sharpe=calculate_sharpe_ratio(trades)
+
+        results['net_pips'].append(net_pips)
+        results['win_rate'].append(win_rate)
+        results['max_dd'].append(max_dd)
+        results['max_dd_pct'].append(max_dd_pct)
+        results['sharpe'].append(sharpe)
+
+    # Calculate percentiles
+    def percentiles(data, p):
+        sorted_data=sorted(data)
+        n=len(sorted_data)
+        idx=int(n*p/100)
+        return sorted_data[min(idx, n-1)]
+
+    return {
+        'iterations': iterations,
+        'net_pips': {'p5': percentiles(results['net_pips'], 5), 'p50': percentiles(results['net_pips'], 50), 'p95': percentiles(results['net_pips'], 95)},
+        'win_rate': {'p5': percentiles(results['win_rate'], 5), 'p50': percentiles(results['win_rate'], 50), 'p95': percentiles(results['win_rate'], 95)},
+        'max_dd': {'p5': percentiles(results['max_dd'], 5), 'p50': percentiles(results['max_dd'], 50), 'p95': percentiles(results['max_dd'], 95)},
+        'max_dd_pct': {'p5': percentiles(results['max_dd_pct'], 5), 'p50': percentiles(results['max_dd_pct'], 50), 'p95': percentiles(results['max_dd_pct'], 95)},
+        'sharpe': {'p5': percentiles(results['sharpe'], 5), 'p50': percentiles(results['sharpe'], 50), 'p95': percentiles(results['sharpe'], 95)}
+    }
+
 def main():
     parser = argparse.ArgumentParser(description="Multi-day walk-forward backtesting")
     parser.add_argument("--start-date", required=True, type=parse_date, help="Start date (YYYY-MM-DD)")
@@ -183,6 +251,8 @@ def main():
     parser.add_argument("--walk-forward", action="store_true", help="Enable walk-forward optimization mode")
     parser.add_argument("--train-days", type=int, default=5, help="Training window size in days (default: 5)")
     parser.add_argument("--test-days", type=int, default=2, help="Testing window size in days (default: 2)")
+    parser.add_argument("--monte-carlo", action="store_true", help="Enable Monte Carlo simulation")
+    parser.add_argument("--iterations", type=int, default=1000, help="Number of Monte Carlo iterations (default: 1000)")
     parser.add_argument("--dry-run", action="store_true", help="Print dates without running backtests")
     args = parser.parse_args()
 
@@ -266,6 +336,27 @@ def main():
             for w in window_results:
                 print(f"  Window {w['window']}: {w['test']['net_pips']:+.0f} pips (WR: {w['test']['win_rate']:.0f}%)")
 
+            # Run Monte Carlo simulation on test periods if requested
+            if args.monte_carlo:
+                all_test_trades = []
+                for w in window_results:
+                    for r in w['test']['daily_results']:
+                        all_test_trades.extend(r['trades'])
+
+                if all_test_trades:
+                    print(f"\n{'='*60}")
+                    print(f"MONTE CARLO SIMULATION - TEST PERIODS ({args.iterations} iterations)")
+                    print('='*60)
+                    mc_results = monte_carlo_simulation(all_test_trades, args.iterations)
+                    print(f"Confidence intervals (5th, 50th, 95th percentiles):\n")
+                    print(f"Net P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
+                    print(f"Win rate:     {mc_results['win_rate']['p5']:7.1f}%     |  {mc_results['win_rate']['p50']:7.1f}%     |  {mc_results['win_rate']['p95']:7.1f}%")
+                    print(f"Max DD:       {mc_results['max_dd']['p5']:7.0f} pips  |  {mc_results['max_dd']['p50']:7.0f} pips  |  {mc_results['max_dd']['p95']:7.0f} pips")
+                    print(f"Max DD %:     {mc_results['max_dd_pct']['p5']:7.1f}%     |  {mc_results['max_dd_pct']['p50']:7.1f}%     |  {mc_results['max_dd_pct']['p95']:7.1f}%")
+                    print(f"Sharpe ratio: {mc_results['sharpe']['p5']:7.2f}      |  {mc_results['sharpe']['p50']:7.2f}      |  {mc_results['sharpe']['p95']:7.2f}")
+                else:
+                    print("\nNo test trades to run Monte Carlo simulation on.")
+
     # Normal sequential mode
     else:
         days = list(iter_days(args.start_date, args.end_date))
@@ -314,6 +405,23 @@ def main():
             print(f"Total timeouts: {total_timeouts}")
             print(f"Overall win rate (excl timeouts): {overall_wr:.0f}%")
             print(f"Overall net: {total_net:+.0f} pips (~${total_net:+.0f} @0.1 lot)")
+
+            # Run Monte Carlo simulation if requested
+            if args.monte_carlo:
+                all_trades = [t for r in all_results for t in r['trades']]
+                if all_trades:
+                    print(f"\n{'='*60}")
+                    print(f"MONTE CARLO SIMULATION ({args.iterations} iterations)")
+                    print('='*60)
+                    mc_results = monte_carlo_simulation(all_trades, args.iterations)
+                    print(f"Confidence intervals (5th, 50th, 95th percentiles):\n")
+                    print(f"Net P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
+                    print(f"Win rate:     {mc_results['win_rate']['p5']:7.1f}%     |  {mc_results['win_rate']['p50']:7.1f}%     |  {mc_results['win_rate']['p95']:7.1f}%")
+                    print(f"Max DD:       {mc_results['max_dd']['p5']:7.0f} pips  |  {mc_results['max_dd']['p50']:7.0f} pips  |  {mc_results['max_dd']['p95']:7.0f} pips")
+                    print(f"Max DD %:     {mc_results['max_dd_pct']['p5']:7.1f}%     |  {mc_results['max_dd_pct']['p50']:7.1f}%     |  {mc_results['max_dd_pct']['p95']:7.1f}%")
+                    print(f"Sharpe ratio: {mc_results['sharpe']['p5']:7.2f}      |  {mc_results['sharpe']['p50']:7.2f}      |  {mc_results['sharpe']['p95']:7.2f}")
+                else:
+                    print("\nNo trades to run Monte Carlo simulation on.")
 
 if __name__=="__main__":
     main()
