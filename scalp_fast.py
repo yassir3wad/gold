@@ -9,12 +9,13 @@ Reads the ACTIVE 1m chart. Detects, with a volatility gate (silent in dead tape)
 Outputs Entry / SL / TP1(+50) / TP2(+100).  1 pip = $0.10 (50 pips = $5 move).
 Optionally draws the active trendlines:  python3 scalp_fast.py --draw
 """
-import subprocess, json, os, sys, time, csv as _csv, datetime as _dt
+import subprocess, json, os, sys, time, csv as _csv, datetime as _dt, math
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 try:
     sys.path.insert(0, TVDIR); import news as newsmod   # FF economic-calendar blackout (cache-only, no fetch in scanner)
 except Exception: newsmod = None
 PIP = 0.10
+PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
 VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
 ATR_REF = 30           # gold's characteristic 1m ATR (pips) — the VS=1 anchor for ATR-normalized sizing.
@@ -118,10 +119,10 @@ def read_chart_levels(closes):
         # under-sampled from 180 bars — far safer than absolute-nearest in a tight cluster.
         order = sorted(emas)
         for rank, (_, L) in enumerate(sorted((ema(L), L) for L in (50, 100, 200))):
-            em[L] = round(order[rank], 2)
+            em[L] = round(order[rank], PXD)
     elif emas:                                            # fallback (extra/missing EMAs): absolute nearest
         for L in (50, 100, 200):
-            ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x - ref)), 2)
+            ref = ema(L); em[L] = round(min(emas, key=lambda x: abs(x - ref)), PXD)
     return vw, up, lo, em, rsi
 
 VP_FILE = os.path.expanduser("~/.tv_fast_vp.json")
@@ -153,7 +154,7 @@ def _tpo_levels():
     for s in tv("data", "labels", "--study-filter", "TPO").get("studies", []):
         for lb in s.get("labels", []):
             p = lb.get("price"); cnt = len(str(lb.get("text", "")).replace(" ", ""))
-            if p and cnt: rows.append((round(p, 2), cnt))
+            if p and cnt: rows.append((round(p, PXD), cnt))
     if not rows: return (None, None, None)
     rows.sort()
     idx = max(range(len(rows)), key=lambda i: rows[i][1])    # POC row
@@ -306,7 +307,7 @@ INSTRUMENTS_FILE = os.path.expanduser("~/tradingview-mcp/instruments.json")
 def init_symbol(sym):
     """Repoint every per-symbol global (PIP, ATR_REF, state files, zones, TV window) from instruments.json so the
     SAME code scans any instrument. Pins tv() to the symbol's window via TV_CHART. Default XAUUSD = unchanged."""
-    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
+    global SYMBOL, TV_SYMBOL, SESSIONS_OK, SYMBOL_FLAGS, PIP, PXD, ATR_REF, RISK_USD, PIP_VALUE, USE_TPO
     global LOT_MIN, LOT_MAX, LOT_STEP
     global CD_FILE, WATCH_CD_FILE, VP_FILE, TG_STATE, TRADE_STATE, PENDING_FILE, ZONES_FILE
     SYMBOL = (sym or "XAUUSD").upper()
@@ -315,6 +316,7 @@ def init_symbol(sym):
         allc = json.load(open(INSTRUMENTS_FILE)); cfg = {**allc.get("_default", {}), **allc.get(SYMBOL, {})}
     except Exception: pass
     PIP = cfg.get("pip", PIP); ATR_REF = cfg.get("atr_ref", ATR_REF)
+    PXD = max(0, int(round(-math.log10(PIP)))) + 1   # price decimals from PIP (gold 2, EURUSD 5, USDJPY 3, indices 1)
     RISK_USD = cfg.get("risk_usd", RISK_USD); PIP_VALUE = cfg.get("pip_value", PIP_VALUE)
     USE_TPO = bool(cfg.get("use_tpo", False))
     LOT_MIN = cfg.get("lot_min", LOT_MIN); LOT_MAX = cfg.get("lot_max", LOT_MAX); LOT_STEP = cfg.get("lot_step", LOT_STEP)
@@ -388,7 +390,7 @@ def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
                 log_signal({"id": old["id"], "result": "TP1", "exit": round(ot1, 1), "pips": tp})
             else:
                 oe = old["entry"]; pips = round((oe-entry)/PIP if old["side"] == "SHORT" else (entry-oe)/PIP)
-                log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, 1), "pips": pips})
+                log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, PXD), "pips": pips})
     except Exception: pass
     try: json.dump({"active": True, "id": sid, "side": side, "entry": entry, "sl": sl,
                     "tp1": tp1, "tp2": tp2, "tp1_hit": False, "be_trig": be_trig, "t0": time.time()}, open(TRADE_STATE, "w"))
@@ -570,8 +572,8 @@ def main():
     # --- trendlines through last 2 swing highs / lows ---
     res_tl = line_through(sh[-2], sh[-1]) if len(sh) >= 2 else None
     sup_tl = line_through(sl[-2], sl[-1]) if len(sl) >= 2 else None
-    res_at = round(proj(res_tl, n-1), 2) if res_tl else None
-    sup_at = round(proj(sup_tl, n-1), 2) if sup_tl else None
+    res_at = round(proj(res_tl, n-1), PXD) if res_tl else None
+    sup_at = round(proj(sup_tl, n-1), PXD) if sup_tl else None
     # --- consolidation range (last 15 bars) ---
     hi15 = max(x['high'] for x in b[-15:]); lo15 = min(x['low'] for x in b[-15:])
     range15 = (hi15 - lo15) / PIP
@@ -585,7 +587,7 @@ def main():
     e50, e100, e200 = em.get(50), em.get(100), em.get(200)   # 1m EMAs — execution-level S/R only
     vpoc, vah, val, regime = volume_profile()   # TPO POC/value-area + HTF (30m) trend regime, cached
     if not FL.get("volume_profile", True): vpoc = vah = val = None   # flag only suppresses the VP levels
-    r10 = round(price/10)*10; near_round = r10 if abs(r10-price) < 2 else None
+    _rstep = 100*PIP; r10 = round(price/_rstep)*_rstep; near_round = round(r10, PXD) if abs(r10-price) < 20*PIP else None   # pip-scaled round number ($10 gold, 0.01 EUR, 1.00 JPY, 100 idx)
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
     ts = last['time']; sess_ok = in_session(ts); news = in_news(ts)
@@ -747,11 +749,11 @@ def main():
         if (at_S and at_S[1] > at_S[0]                                  # a structural zone (not a clingy EMA/point)
                 and last['low'] <= at_S[1] and last['close'] >= at_S[0]  # wick into the band, close didn't lose the floor
                 and (last['close'] - last['low']) >= wick_p*PIP and last['close'] > last['open']):
-            setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - buf_p*PIP, 2)))
+            setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - buf_p*PIP, PXD)))
         if (at_R and at_R[1] > at_R[0]
                 and last['high'] >= at_R[0] and last['close'] <= at_R[1]  # wick into the band, close didn't break the top
                 and (last['high'] - last['close']) >= wick_p*PIP and last['close'] < last['open']):
-            setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + buf_p*PIP, 2)))
+            setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + buf_p*PIP, PXD)))
     # CRT (Candle Range Theory): the prior 15m block = the "range candle"; the last few 1m bars SWEEP its
     # high/low (liquidity grab) and the last candle CLOSES BACK INSIDE the range = manipulation + reversal.
     # Distinct from liquidity_sweep (which needs an HTF zone): CRT's edge is the swept range-extreme + the
@@ -764,11 +766,11 @@ def main():
         # bullish CRT: swept >=3p below the range low, last candle reclaimed back inside (bullish close), room up
         if (swlo <= rlo - 3*VS*PIP and last['close'] > rlo and last['close'] > last['open']
                 and (rhi - last['close']) >= room_min*PIP):
-            setups.append(("LONG", "CRT sweep+reclaim", last['close'], round(swlo - buf_p*PIP, 2)))
+            setups.append(("LONG", "CRT sweep+reclaim", last['close'], round(swlo - buf_p*PIP, PXD)))
         # bearish CRT: swept >=3p above the range high, last candle reclaimed back inside (bearish close), room down
         if (swhi >= rhi + 3*VS*PIP and last['close'] < rhi and last['close'] < last['open']
                 and (last['close'] - rlo) >= room_min*PIP):
-            setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + buf_p*PIP, 2)))
+            setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + buf_p*PIP, PXD)))
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce/CRT) exempt
     if FL["volume_filter"] and not vol_ok and not AI:
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT"))]
@@ -853,7 +855,7 @@ def main():
 
     # take the first (priority order above); build the trade
     side, why, entry, struct = setups[0]
-    entry = round(entry, 2)
+    entry = round(entry, PXD)
     # grade by alignment with the higher-TF map
     htf_note = ""; grade = "B (open space)"
     if side == "LONG":
@@ -894,10 +896,20 @@ def main():
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
+    # Zone-rejection stops sit BEYOND the rejection zone's far edge (+buffer) with a WIDER cap, so ordinary
+    # movement *inside* the zone can't tag a VS-tight stop placed within it. (06-05 fix: the gold -21p loss
+    # stopped at 4467 because the VS-capped stop sat inside the 4465-4477 resistance band instead of above it.)
+    z_buf = 3 * VS                                          # buffer beyond the zone far edge (pips)
     if side == "LONG":
-        sl_lvl = round(max(min(struct, entry - sl_lo_p*PIP), entry - sl_hi_p*PIP), 2); wall = nextR
+        zr = bool(at_S) and at_S[1] > at_S[0] and at_S[0] <= entry      # bouncing a real support band underfoot
+        z_struct = min(struct, at_S[0] - z_buf*PIP) if zr else struct   # anchor below the band's LOW
+        sl_hi_eff = (50*VS) if zr else sl_hi_p                          # wider ceiling so the stop clears the zone
+        sl_lvl = round(max(min(z_struct, entry - sl_lo_p*PIP), entry - sl_hi_eff*PIP), PXD); wall = nextR
     else:
-        sl_lvl = round(min(max(struct, entry + sl_lo_p*PIP), entry + sl_hi_p*PIP), 2); wall = nextS
+        zr = bool(at_R) and at_R[1] > at_R[0] and at_R[1] >= entry      # rejecting a real resistance band overhead
+        z_struct = max(struct, at_R[1] + z_buf*PIP) if zr else struct   # anchor above the band's HIGH
+        sl_hi_eff = (50*VS) if zr else sl_hi_p
+        sl_lvl = round(min(max(z_struct, entry + sl_lo_p*PIP), entry + sl_hi_eff*PIP), PXD); wall = nextS
     if FL.get("adaptive_tp", True) and wall is not None:
         room = abs(wall - entry)/PIP - tp_buf
         if room < room_min and not AI:
@@ -908,9 +920,9 @@ def main():
     else:
         tp2_p, tp1_p = tp2_cap, tp1_cap
     if side == "LONG":
-        tp1 = round(entry + tp1_p*PIP, 2); tp2 = round(entry + tp2_p*PIP, 2)
+        tp1 = round(entry + tp1_p*PIP, PXD); tp2 = round(entry + tp2_p*PIP, PXD)
     else:
-        tp1 = round(entry - tp1_p*PIP, 2); tp2 = round(entry - tp2_p*PIP, 2)
+        tp1 = round(entry - tp1_p*PIP, PXD); tp2 = round(entry - tp2_p*PIP, PXD)
     risk = abs(entry - sl_lvl) / PIP
     # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), rounded to broker step + clamped
     _raw = RISK_USD / (PIP_VALUE * risk) if (risk > 0 and PIP_VALUE > 0) else LOT_MIN
