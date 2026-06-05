@@ -209,8 +209,38 @@ class RiskManager:
         Returns:
             dict: {"allowed": bool, "reasons": [list of breach reasons]}
         """
-        # TODO: Implement in subtask-2-5
-        return {"allowed": True, "reasons": []}
+        reasons = []
+
+        # 1. Check daily loss limit
+        daily_pnl = self.get_daily_loss()
+        max_loss = self.config.get("max_daily_loss_usd", 500)
+        if daily_pnl < 0 and abs(daily_pnl) >= max_loss:
+            reasons.append(f"Daily loss limit reached: ${abs(daily_pnl):.2f} / ${max_loss:.2f}")
+
+        # 2. Check position limits
+        positions = self.get_open_positions()
+
+        # Check per-instrument limit
+        per_instrument = positions.get("per_instrument", {})
+        current_count = per_instrument.get(symbol, 0)
+        max_per_instrument = self.config.get("max_concurrent_per_instrument", 2)
+        if current_count >= max_per_instrument:
+            reasons.append(f"{symbol} position limit reached: {current_count} / {max_per_instrument}")
+
+        # Check total position limit
+        total_count = positions.get("total", 0)
+        max_total = self.config.get("max_total_open_signals", 5)
+        if total_count >= max_total:
+            reasons.append(f"Total position limit reached: {total_count} / {max_total}")
+
+        # 3. Check correlation constraints
+        correlation_check = self.check_correlation(symbol, direction)
+        if correlation_check.get("blocked", False):
+            reasons.append(correlation_check.get("reason", "Correlation conflict"))
+
+        # Return result
+        allowed = len(reasons) == 0
+        return {"allowed": allowed, "reasons": reasons}
 
 
 if __name__ == "__main__":
