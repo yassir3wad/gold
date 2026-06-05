@@ -103,7 +103,7 @@ NOTES:
     - One trade at a time (no pyramiding)
     - HTF levels (HTF_R, HTF_S) must be set in scalp_fast.py for grading
 """
-import argparse, datetime as dt, json, subprocess, os, random
+import argparse, datetime as dt, json, subprocess, os, random, time
 import scalp_fast as S
 
 # Constants
@@ -221,6 +221,31 @@ def iter_days(start, end):
         yield current
         current += dt.timedelta(days=1)
 
+def _hm(ts):
+    """Format a unix ts as HH:MM in LOCAL time (or --:-- if missing)."""
+    return dt.datetime.fromtimestamp(ts).strftime("%H:%M") if ts else "--:--"
+
+def ema_regime(closes):
+    """1m EMA-stack regime: 'UP' if EMA50>100>200, 'DOWN' if 50<100<200, else 'flat'. (~200+ closes.)"""
+    if len(closes) < 50: return "flat"
+    def ema(p):
+        k = 2/(p+1); e = closes[0]
+        for c in closes[1:]: e = c*k + e*(1-k)
+        return e
+    e50, e100, e200 = ema(50), ema(100), ema(200)
+    if e50 > e100 > e200: return "UP"
+    if e50 < e100 < e200: return "DOWN"
+    return "flat"
+
+def htf_room(side, entry, htf_r, htf_s, pip=PIP):
+    """Pips to the nearest HTF wall in the trade's direction (LONG -> next resistance above; SHORT ->
+    next support below). None = open space (no wall ahead)."""
+    if side == "LONG":
+        ahead = [v for lo, hi, _ in htf_r for v in (lo, hi) if v > entry]
+        return round((min(ahead) - entry)/pip) if ahead else None
+    ahead = [v for lo, hi, _ in htf_s for v in (lo, hi) if v < entry]
+    return round((entry - max(ahead))/pip) if ahead else None
+
 def bars_on_date(bars, day):
     """Pure: keep only bars whose UTC calendar date == `day` (a datetime.date). Testable."""
     out = []
@@ -231,20 +256,26 @@ def bars_on_date(bars, day):
             out.append(x)
     return out
 
-def fetch_session_bars(day, tv_fn=tv, n=500):
+def fetch_session_bars(day, tv_fn=tv, n=500, retries=6, wait=2.0):
     """Fetch the REAL historical 1m bars for `day` via the TradingView replay engine, then filter to that
     date. Positions the replay cursor at the *next* day so `ohlcv` returns the bars up to (and including)
     `day`. The 500-bar CLI cap = the most recent ~8h of that day (the London-NY active window).
 
-    NOTE: replay MUTATES the chart — run only when the live loop is paused or pinned to a dedicated tab,
-    otherwise the scanner will read replay data. `tv_fn` is injectable so the logic is unit-testable."""
+    Replay loads ASYNCHRONOUSLY — an immediate `ohlcv` returns realtime bars (which then get filtered out
+    to 0), so we POLL up to `retries` times until bars actually on `day` appear. `tv_fn`/`wait` are
+    injectable for unit tests. NOTE: replay MUTATES the chart — run only with the live loop paused or
+    pinned to a dedicated tab, or the scanner will read replay data."""
     cursor = day + dt.timedelta(days=1)
     try:
         tv_fn("replay", "start", "--date", cursor.strftime("%Y-%m-%d"))
-        bars = tv_fn("ohlcv", "-n", str(n)).get("bars", [])
+        for _ in range(retries):
+            time.sleep(wait)   # give replay time to load before reading
+            on_day = bars_on_date(tv_fn("ohlcv", "-n", str(n)).get("bars", []), day)
+            if on_day:
+                return on_day
+        return []
     finally:
         tv_fn("replay", "stop")   # always return to realtime, even on error
-    return bars_on_date(bars, day)
 
 def simulate_trade(side, entry, sl, tp1, future_bars, horizon=HORIZON):
     """Pure: walk forward up to `horizon` bars; return (outcome, exit_price, bars_used). SL wins a
@@ -276,9 +307,18 @@ def backtest_day(day, tv_fn=tv):
         grade="B"
         if S.near_htf(entry,S.HTF_R): grade="A+" if side=="SHORT" else "A"
         elif S.near_htf(entry,S.HTF_S): grade="A+" if side=="LONG" else "A"
+        # --- per-signal CONTEXT for the AI review (the funnel hands these facts to the reviewer) ---
+        closes_i = [x['close'] for x in b[:i+1]]
+        rsi_at = S.rsi_series(closes_i)[i]
+        _isch, er = chop_15m(b[:i+1])
+        sess = in_session(b[i]['time'])
+        regime = ema_regime(closes_i)
+        room = htf_room(side, entry, S.HTF_R, S.HTF_S)
         outcome, exitp, used = simulate_trade(side, entry, sl, tp1, b[i+1:])
         pips=(entry-exitp)/PIP if side=="SHORT" else (exitp-entry)/PIP
-        trades.append((side,grade,why,round(entry,1),round(sl,1),round(tp1,1),outcome,round(pips,0)))
+        entry_t = b[i].get('time'); exit_t = b[min(i+used, len(b)-1)].get('time')   # entry bar / resolved bar (UTC unix)
+        trades.append((side,grade,why,round(entry,1),round(sl,1),round(tp1,1),outcome,round(pips,0),entry_t,exit_t,
+                       round(rsi_at,1) if rsi_at is not None else None, er, bool(sess), regime, room))
         i += used + 1   # one trade at a time: resume after it resolves (used=0 -> just advance)
 
     wins=[t for t in trades if t[6]=="TP1"]
@@ -433,11 +473,13 @@ def export_trades_csv(filename, all_results):
     import csv
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['date', 'side', 'grade', 'pattern', 'entry', 'sl', 'tp1', 'outcome', 'pips'])
+        writer.writerow(['date', 'entry_time', 'exit_time', 'side', 'grade', 'pattern', 'entry', 'sl', 'tp1', 'outcome', 'pips'])
         for result in all_results:
             date = result['date']
             for trade in result['trades']:
-                writer.writerow([date, trade[0], trade[1], trade[2], trade[3], trade[4], trade[5], trade[6], trade[7]])
+                et = dt.datetime.utcfromtimestamp(trade[8]).strftime('%Y-%m-%d %H:%M') if len(trade) > 8 and trade[8] else ''
+                xt = dt.datetime.utcfromtimestamp(trade[9]).strftime('%Y-%m-%d %H:%M') if len(trade) > 9 and trade[9] else ''
+                writer.writerow([date, et, xt, trade[0], trade[1], trade[2], trade[3], trade[4], trade[5], trade[6], trade[7]])
 
 def export_summary_report(filename, period_stats, all_results):
     """Export summary report to text file."""
@@ -639,9 +681,13 @@ def main():
 
                 # Print trades
                 if result['trades']:
-                    print("\n# side  grade  pattern            entry    SL     TP1     result   pips")
+                    print("\n# entry-exit(local) side pattern        entry   SL     TP1    RSI  ER   sess regime room  | result pips")
                     for t in result['trades']:
-                        print(f"{t[0]:5} {t[1]:3} {t[2]:16} {t[3]:7} {t[4]:6} {t[5]:7}  {t[6]:7} {t[7]:+.0f}")
+                        tm = f"{_hm(t[8])}-{_hm(t[9])}"
+                        rsi = t[10] if len(t) > 10 else None; er = t[11] if len(t) > 11 else None
+                        sess = 'ON' if (len(t) > 12 and t[12]) else 'off'; reg = t[13] if len(t) > 13 else '?'
+                        room = (f"{t[14]}p" if (len(t) > 14 and t[14] is not None) else "open")
+                        print(f"{tm:13} {t[0]:5} {t[2]:14} {t[3]:7} {t[4]:6} {t[5]:7} {str(rsi):4} {str(er):4} {sess:4} {reg:5} {room:6} | {t[6]:7} {t[7]:+.0f}")
 
             # Print overall summary
             print(f"\n{'='*60}")
