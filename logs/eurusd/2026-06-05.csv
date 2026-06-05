@@ -1,0 +1,2 @@
+id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
+1780646418,2026-06-05 10:00,SHORT,A+,break-and-retest,1.16,1.16,1.16,3,2,"1.17983 (D+round, x2)",rejected,,"A+ label doesn't hold on chart read: regime FLAT (not with-trend), and it's shorting DOWN into stacked support (x56 confluence @1.16269 + nextS 1.16194, only 19p room) — the 'rejection at HTF resistance 1.17983' rationale is a mismatch artifact (that level is 180p away). range15=3p tight = micro-range, so ER0.8 is noise-efficiency. Thin R:R into a floor. Not a clean A+ — skip."

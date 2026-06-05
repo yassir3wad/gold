@@ -154,13 +154,20 @@ You do **not** get: "setup forming" heads-ups, rejected trades, or anything mech
 | Approve / reject a held trade | `bash ~/tradingview-mcp/approve.sh <SYM> "reason"` · `reject.sh <SYM> "reason"` |
 | Screenshot a pair | `bash ~/tradingview-mcp/shot.sh <SYM>` |
 | News brief / result | `python3 ~/tradingview-mcp/news.py brief` · `news.py result` |
+| **Performance review** (feedback loop) | `python3 analyze_logs.py [--symbol <SYM>] [--days N] [--md]` — see §8 |
+| **Counterfactual reject check** (did we dodge losers or pass winners?) | `python3 counterfactual.py [--symbol <SYM>] [--bars N]` |
+| **End-of-day digest** (W/L · net · floor skips → Telegram) | `python3 digest.py` (`--print` = no send) |
+| **Morning pre-flight** (CDP · zones · news ready?) | `python3 preflight.py` |
+| **Run the test suite** (before any code change) | `python3 test_trading.py` |
 | Rebuild + draw zones | `python3 refresh_zones.py --symbol <SYM>` · `draw_zones.py --symbol <SYM>` |
 | Pin a pair (always review) | `echo '["XAUUSD"]' > ~/.tv_fast_pinned.json` (empty list = unpin) |
 | Change $ risk / lot specs | edit `instruments.json` (`risk_usd`, `pip_value`, `lot_min/max/step`) |
 | Re-map a window's chart-id | `node src/cli/index.js tab list` → set `chart` per symbol in `instruments.json` |
 
 **Config** lives in `instruments.json` (per symbol: `pip`, `atr_ref`, `pip_value`, `risk_usd`, `lot_min/max/step`,
-`chart`, `sessions`, `use_tpo`, optional `flags`). **Logs**: `logs/<sym>/<YYYY-MM-DD>.csv` (the auto-learn dataset).
+`chart`, `sessions`, `use_tpo`, optional `flags`). **Logs**: `logs/<sym>/<YYYY-MM-DD>.csv` (the auto-learn dataset —
+now also records `rejected` and `auto-skip` rows; review with `analyze_logs.py`, §8). **Feature flags**: `flags.json`
+(e.g. `ai_decide` ON, `hard_floor` ON, `rsi_reset_gate` OFF — see §8).
 
 ---
 
@@ -182,3 +189,52 @@ The meta-scanner already weights this — it surfaces the in-session, trending p
 - **Volume is tick-volume on FX** (activity proxy, not real volume); reversals are exempt from the volume filter anyway.
 - **No auto-execution** — every trade is AI-reviewed and only sent as an alert; you place it. (MT5 auto-exec is parked.)
 - **Pending / next**: news *catalyst* mode (trade the post-release reaction), durable cloud scheduling, MACD HTF-bias on indices (optional).
+
+---
+
+## 8. Performance review & safety rails
+
+Tools to **measure the edge** and **cut the noise**, so tuning is data-driven instead of guesswork. (Added 2026-06-05.)
+
+### `analyze_logs.py` — the feedback loop · *why: know what actually works*
+Mines `logs/<sym>/*.csv` (+ legacy `signals_log.csv`) into **win-rate / profit-factor / expectancy** broken down by
+**setup type, grade, side, and hour**, plus a **rejection-reason** and **auto-skip-reason** breakdown. This is how you
+spot — with numbers, not vibes — that a setup is a net loser, that one side is bleeding, that the auto-grade isn't
+predicting outcomes, or exactly what the hard floor is absorbing. Read-only; never touches live state, charts, or Telegram.
+- `python3 analyze_logs.py` — full report, all pairs
+- `python3 analyze_logs.py --symbol XAUUSD --days 1` — one pair, rolling 24h
+- `python3 analyze_logs.py --md` — also write a dated snapshot to `logs/_analysis/` (diff it over time)
+- **Win = net pips > 0** (the `pips` column is the source of truth); TP-hit rate is shown separately.
+
+### Pre-hold HARD FLOOR — flag `hard_floor` (ON) · *why: stop burning review cycles on un-tradeable junk*
+Before a setup can be **HELD for review**, the scanner auto-skips it when the **actual reward:risk is negative**
+(TP1 < 0.8× the stop = no usable room) — the cramped / no-room chop-spam that otherwise gets hand-rejected every tick.
+It applies **even in `ai_decide` mode** (the only gate that does — by design, since AI mode bypasses every other filter).
+Each skip is logged as `result=auto-skip` (R:R in `exit`, reason in `pips`), de-duped ~10 min per thesis, so
+`analyze_logs.py` shows exactly what it absorbed. You'll see `>> AUTO-SKIP (pre-hold floor): …` in the scan readout
+where those rejects used to pile up.
+
+### RSI-reset gate — flag `rsi_reset_gate` (**OFF** until validated) · *why: don't fade into a wrong-way extreme*
+Optional gate that auto-skips a **reversal** taken at a wrong-way RSI extreme — a SHORT into deep oversold (≤25 =
+selling the bottom) or a LONG into overbought (≥75 = buying the top) — telling you to wait for the reset. Reset-RSI
+bounces (e.g. a long at RSI ~40) are left untouched. **Default OFF**: enable in `flags.json` only after `analyze_logs`
+confirms the 25/75 thresholds wouldn't have clipped real winners.
+
+### `counterfactual.py` — did our rejections cost us? · *why: audit the discipline with outcomes*
+For every **rejected** signal (which logged its entry/SL/TP1), it replays the following bars and checks whether
+**TP1 or SL would have hit first** — aggregating into *winners we passed on* vs *losers we dodged*, with a per-reason
+breakdown and a net-EV verdict. This is how you confirm the discipline (and the hard floor) is **net +EV** rather
+than quietly over-rejecting. Read-only (OHLCV only); covers recent rejects whose bars are still in the buffer (older
+ones are honestly reported as "no data"). Run it daily — coverage sharpens as the loop logs recent rejects.
+
+### Observability — `digest.py` / `preflight.py` · *why: see the day at a glance, start clean*
+- **`python3 digest.py`** — end-of-day Telegram summary: trades, W/L, net pips, PF, best/worst setup, and **how many
+  setups the floor auto-skipped** (so you see what it saved you from). `--print` builds it without sending.
+- **`python3 preflight.py`** — one-glance readiness before the session: TradingView/CDP connected, HTF zones fresh
+  per pair, news calendar loaded. Prints `READY` or `CHECK` + the exact fix command for anything stale.
+
+### Tests — `test_trading.py` · *why: change the live engine safely*
+115 checks over the hard floor, the RSI-reset gate, the auto-skip de-dup/logging, the core setup detectors
+(`pivots`, `chop_15m`, `rsi_series`, `_calc_vp`, …), the counterfactual simulator, the digest, the pre-flight
+helpers, and every `analyze_logs` helper. The engine is live (fresh process each tick), so **run `python3 test_trading.py` after ANY code change**
+before the loop picks it up. Add a failing test first when fixing a bug or adding a rule.

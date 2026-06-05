@@ -53,6 +53,14 @@ RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
+RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
+                                   # is structurally un-tradeable (no room / negative R:R) and is auto-skipped
+                                   # BEFORE it can reach the held/review state — regardless of direction. This is
+                                   # the dominant chop-spam signature ("neg R:R, TP1 +6p vs SL -18p"). A genuine
+                                   # setup (positive R:R with room) never trips it. Applies EVEN under ai_decide.
+HARD_CHOP_ER = 0.18                # secondary floor: FAR below the normal chop floor = truly dead tape.
+HARD_ROOM_P  = 10                  # secondary floor: a THIN-room setup (<HARD_ROOM_P×VS) that is ALSO a dead-chop /
+                                   # counter-trend / wrong-way-RSI fade (whipsaw-in-a-box) is skipped too.
 ZONE_WICK_P = 15                   # zone-bounce: min rejection-wick (pips) for a candle to count as a zone defense
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
@@ -207,6 +215,33 @@ def load_zones():
                 z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
     return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
 
+def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
+    """Pre-hold HARD FLOOR predicate (applies EVEN under ai_decide — the only skip that does).
+    Returns (skip: bool, reasons: list[str]).
+      PRIMARY  — negative reward:risk: TP1 < RR_FLOOR × stop = no usable room, un-tradeable in any direction
+                 (the dominant 'neg R:R, TP1 +6p vs SL -18p' chop-spam that gets hand-rejected every tick).
+      SECONDARY — a THIN-room setup that is ALSO a dead-chop / counter-trend / wrong-way-RSI fade.
+    Conservative: a genuine setup (positive R:R with room) trips neither and still reaches review. Pure fn."""
+    reasons = []
+    if rr1 is not None and rr1 < RR_FLOOR:
+        reasons.append(f"neg R:R {rr1:.2f} (TP1 < {RR_FLOOR}×SL)")
+    counter   = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
+    rsi_wrong = rsi is not None and ((side == "LONG" and rsi > 70) or (side == "SHORT" and rsi < 30))  # buying top / selling bottom
+    if room is not None and room < HARD_ROOM_P * VS and (chop_er < HARD_CHOP_ER or counter or rsi_wrong):
+        reasons += ([f"dead chop ER{chop_er}"] if chop_er < HARD_CHOP_ER else []) + \
+                   ([f"counter-{regime}"] if counter else []) + \
+                   ([f"RSI{rsi:.0f} wrong-way"] if (rsi_wrong and rsi is not None) else [])
+    return (bool(reasons), reasons)
+
+REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT")   # fade / mean-reversion setups
+def reversal_rsi_extreme(side, why, rsi, lo=25, hi=75):
+    """#3 gate (pure): True if a REVERSAL setup is being taken at a WRONG-WAY RSI extreme — a SHORT into
+    deep oversold (selling the bottom, rsi<=lo) or a LONG into overbought (buying the top, rsi>=hi).
+    Reset-RSI bounces (e.g. a long at rsi 40) are NOT flagged; continuation setups aren't gated here."""
+    if rsi is None: return False
+    if not any(k in why for k in REVERSAL_KINDS): return False
+    return (side == "LONG" and rsi >= hi) or (side == "SHORT" and rsi <= lo)
+
 def in_session(ts):
     return _dt.datetime.utcfromtimestamp(ts).hour in SESSION_UTC
 
@@ -222,7 +257,8 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,
                  "confluence": True, "volume_profile": True, "zone_reclaim": False,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
-                 "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False}
+                 "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
+                 "hard_floor": True, "rsi_reset_gate": False}   # rsi_reset_gate OFF until data validates thresholds
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -319,6 +355,30 @@ def log_signal(row):
         w = _csv.DictWriter(open(path, "w", newline=""), fieldnames=SIG_COLS); w.writeheader()
         for r in rows: w.writerow({k: r.get(k, "") for k in SIG_COLS})
     except Exception: pass
+
+def floor_skip_key(side, entry, why):
+    """Thesis identity for de-duping auto-skip logging: same side + same ~price + same pattern."""
+    return f"{side}|{round(entry)}|{why}"
+
+def is_dup_skip(prev, key, now, window=600):
+    """Pure dedup predicate: True if `key` matches the previously-logged skip within `window` seconds."""
+    return bool(prev) and prev.get("key") == key and (now - prev.get("t", 0)) < window
+
+def log_floor_skip(side, why, entry, grade, rng10, body_p, htf, rr1, flags):
+    """Record a pre-hold AUTO-SKIP (deduped by thesis ~10 min) so analyze_logs can MEASURE what the hard
+    floor absorbs. result='auto-skip'; the actual R:R goes in `exit`, the reason flags in `pips` (same
+    convention as a 'rejected' row). Deduped so the same recurring chop-thesis doesn't flood the log."""
+    f = os.path.expanduser(f"~/.tv_fast_{SYMBOL.lower()}_skip.json")
+    key = floor_skip_key(side, entry, why)
+    try:
+        if is_dup_skip(json.load(open(f)), key, time.time()): return   # same thesis within 10 min
+    except Exception: pass
+    try: json.dump({"key": key, "t": time.time()}, open(f, "w"))
+    except Exception: pass
+    log_signal({"id": int(time.time()), "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
+                "side": side, "grade": grade, "pattern": why, "entry": entry, "sl": "", "tp1": "",
+                "rng10": round(rng10), "body_p": round(body_p), "htf": htf,
+                "result": "auto-skip", "exit": round(rr1, 2) if rr1 is not None else "", "pips": "; ".join(flags)})
 
 def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
     try:   # finalize any still-open prior trade that this new signal supersedes
@@ -857,6 +917,33 @@ def main():
     _raw = RISK_USD / (PIP_VALUE * risk) if (risk > 0 and PIP_VALUE > 0) else LOT_MIN
     lot = round(round(_raw / LOT_STEP) * LOT_STEP, 4)
     lot = max(LOT_MIN, min(LOT_MAX, lot))
+    # --- pre-hold HARD FLOOR: drop structurally un-tradeable signals (negative R:R / no room — the chop-spam
+    # that gets hand-rejected every tick) BEFORE they reach the held/review state. Uses the ACTUAL R:R (TP1
+    # vs stop), so it's direction-agnostic. The ONLY skip that ignores AI — deliberate (AI bypasses every other
+    # gate). Conservative: a genuine positive-R:R setup never trips it. ---
+    if FL.get("hard_floor", True):
+        _wall = nextR if side == "LONG" else nextS
+        _room = round(abs(_wall - entry)/PIP) if _wall is not None else None
+        _rr1  = (tp1_p / risk) if risk > 0 else None
+        _skip, _flags = hard_floor_skip(side, regime, rsi, _rr1, _room, chop_er, VS)
+        if _skip:
+            print(f"\n>> AUTO-SKIP (pre-hold floor): {side} {grade} [{why}] — {', '.join(_flags)}. "
+                  f"Not surfaced for review (un-tradeable).")
+            if not DRY:
+                _htf = at_S if side == "LONG" else at_R
+                log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, _flags)
+            return
+    # #3 RSI-reset gate (OFF by default): skip a reversal taken at a wrong-way RSI extreme (selling the
+    # bottom / buying the top) even with room — wait for the reset. Logged as auto-skip so it's measurable.
+    if FL.get("rsi_reset_gate", False) and reversal_rsi_extreme(side, why, rsi):
+        _rr1 = (tp1_p / risk) if risk > 0 else None
+        _dir = "sell into oversold" if side == "SHORT" else "buy into overbought"
+        _reason = f"RSI{rsi:.0f} reversal extreme ({_dir}) — wait for reset"
+        print(f"\n>> AUTO-SKIP (rsi-reset gate): {side} {grade} [{why}] — {_reason}.")
+        if not DRY:
+            _htf = at_S if side == "LONG" else at_R
+            log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, [_reason])
+        return
     print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
     print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${RISK_USD:.0f}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")

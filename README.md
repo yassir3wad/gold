@@ -75,10 +75,16 @@ Test the scanner by hand (no alerts/state): `python3 scalp_fast.py --dry`
 |------|---------|
 | `scalp_fast.py` | Live 1m momentum scanner (the brain) |
 | `scalp_scan.py` | Alternative 15m zone-rejection scanner |
-| `flags.json` | Feature flags |
-| `signals_log.csv` | Every signal + features + outcome (auto-learn dataset) |
+| `flags.json` | Feature flags (incl. `hard_floor` ON, `rsi_reset_gate` OFF) |
+| `signals_log.csv` / `logs/<sym>/*.csv` | Every signal + features + outcome, incl. `rejected`/`auto-skip` rows (auto-learn dataset) |
+| `analyze_logs.py` | **Performance feedback loop** — win-rate / PF / expectancy by setup·grade·side·hour + reject/auto-skip breakdown ([OPERATIONS.md §8](OPERATIONS.md)) |
+| `counterfactual.py` | Reject audit — replays rejected signals to see if we dodged losers or passed winners |
+| `digest.py` | End-of-day Telegram digest (W/L · net pips · floor auto-skips) |
+| `preflight.py` | Morning readiness check (CDP · zones · news) |
+| `test_trading.py` | Test suite (115 checks) — run before any code change |
 | `journal_trade.py` / `trades/` | Per-trade chart + notes journal |
 | `STRATEGIES.md` | Full algorithm reference |
+| `OPERATIONS.md` | Live-trading runbook (loops, discipline, perf review & safety rails) |
 | `tg_monitor.sh` | start/stop/status the autonomous monitor |
 | `src/` | tradingview-mcp engine (MIT — see LICENSE) |
 
