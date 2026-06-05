@@ -89,12 +89,13 @@ def main():
         mid = zmid(z)
         if any(abs(mid - q) < 15 for q in seen):
             continue
+        # BOXES are buy/sell ZONES (not support/resistance — that's the line layer). Role by position.
         if z["hi"] < cur_price:
-            buy, role = True, "support"
+            buy, role = True, "buy zone"
         elif z["lo"] > cur_price:
-            buy, role = False, "resistance"
+            buy, role = False, "sell zone"
         else:
-            buy, role = (z["kind"] == "demand"), z["kind"]
+            buy = z["kind"] == "demand"; role = "buy zone" if buy else "sell zone"
         if (buy and nbuy >= 5) or (not buy and nsell >= 5):
             continue
         flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
