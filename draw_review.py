@@ -80,16 +80,22 @@ def main():
             sr.append((x["price"], x["role"], x["flipped"], lab))
 
     # --- support / resistance LEVELS (big high-volume candle; role flips on break) ---
-    def draw_sr(role, color):
+    # keep only the nearest few that are ACTIVE: support below price, resistance above price.
+    def draw_sr(role, color, below):
+        cand = sorted({(p, fl, l) for p, r, fl, l in sr if r == role and ((p < cur_price) == below)},
+                      key=lambda x: abs(x[0] - cur_price))
         seen = []
-        for p, fl, l in sorted([(p, fl, l) for p, r, fl, l in sr if r == role]):
-            if any(abs(p - q) < 6 for q in seen):
+        for p, fl, l in cand:
+            if any(abs(p - q) < 15 for q in seen):
                 continue
             seen.append(p)
             hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color)
             drawn[role] += 1
-    draw_sr("support", SUP)
-    draw_sr("resistance", RES)
+            if len(seen) >= 4:
+                break
+    if cur_price:
+        draw_sr("support", SUP, True)
+        draw_sr("resistance", RES, False)
 
     b30 = bars_tf(CH, "30", 400)
     if b30:
