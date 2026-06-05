@@ -33,6 +33,10 @@ def test_zone_geometry():
     red_low = C(110, 111, 100, 105, 50)  # bearish: body bottom = close 105
     lo3, hi3 = Z.demand_zone(red_low)
     check("demand: red swing-low -> low to CLOSE (body bottom)", approx(lo3, 100) and approx(hi3, 105))
+    # small indecision candle -> whole candle is the zone (top to bottom)
+    doji = C(100, 110, 90, 101, 50)      # body 1 of 20 range -> indecision
+    lo4, hi4 = Z.demand_zone(doji)
+    check("demand: indecision candle -> whole candle (low..high)", approx(lo4, 90) and approx(hi4, 110))
 
 
 def test_find_demand_zone():

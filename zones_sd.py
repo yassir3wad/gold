@@ -28,13 +28,25 @@ def volume_fib(bars, i, lookback=20, level=0.5):
     return bars[i].get("volume", 0) >= thr
 
 
+def is_indecision(c, frac=0.33):
+    """Small-body indecision candle (doji/spinning top): body < frac of the full range."""
+    rng = c["high"] - c["low"]
+    if rng <= 0:
+        return True
+    return abs(c["close"] - c["open"]) < frac * rng
+
+
 def demand_zone(c):
-    """Buy zone = low wick -> BODY BOTTOM: green -> open, red -> close (= min(open,close))."""
+    """Buy zone = low wick -> BODY BOTTOM (green->open, red->close). Indecision candle -> the WHOLE candle."""
+    if is_indecision(c):
+        return (c["low"], c["high"])
     return (c["low"], min(c["open"], c["close"]))
 
 
 def supply_zone(c):
-    """Sell zone = BODY TOP -> high wick: green -> close, red -> open (= max(open,close))."""
+    """Sell zone = BODY TOP -> high wick. Indecision candle -> the WHOLE candle."""
+    if is_indecision(c):
+        return (c["low"], c["high"])
     return (max(c["open"], c["close"]), c["high"])
 
 
