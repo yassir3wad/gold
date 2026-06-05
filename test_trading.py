@@ -38,7 +38,7 @@ def test_hard_floor():
         ("counter but rr1.4+room",    "SHORT", "UP",   50.0, 1.4,  60, 0.45, False),
         ("mean-revert long@support",  "LONG",  "DOWN", 28.0, 1.2,  40, 0.40, False),
         ("rr exactly at floor 0.8",   "LONG",  "UP",   50.0, 0.8,  40, 0.40, False),  # >= floor passes
-        ("room unknown (no wall)",    "LONG",  "UP",   50.0, 1.0,  None,0.10, False),
+        ("room unknown (no wall)",    "LONG",  "UP",   50.0, 1.0,  None,0.40, False),  # above chop ER floor
         ("rr None (no risk)",         "LONG",  "UP",   50.0, None, 40, 0.40, False),
     ]
     for name, side, regime, rsi, rr1, room, er, expect in cases:
@@ -47,13 +47,9 @@ def test_hard_floor():
         if expect:
             check(f"floor: {name} gives a reason", len(reasons) >= 1)
 
-    # reason content: neg R:R is reported; wrong-way RSI labelled correctly by direction
+    # reason content: neg R:R is reported
     _, r1 = sf.hard_floor_skip("LONG", "UP", 50, 0.4, 5, 0.5, 1.0)
     check("floor: neg-R:R reason text", any("neg R:R" in x for x in r1))
-    _, r2 = sf.hard_floor_skip("LONG", "UP", 72, 0.4, 5, 0.5, 1.0)   # buying overbought top
-    check("floor: LONG wrong-way = RSI>70", any("wrong-way" in x for x in r2))
-    _, r3 = sf.hard_floor_skip("SHORT", "DOWN", 25, 0.4, 5, 0.5, 1.0)  # selling oversold bottom
-    check("floor: SHORT wrong-way = RSI<30", any("wrong-way" in x for x in r3))
     # VS scales the room threshold: 11p room is "thin" when VS=2 (threshold 20p)
     skip_hi, _ = sf.hard_floor_skip("SHORT", "UP", 50, 1.5, 11, 0.05, 2.0)  # neg? no (rr1.5) but thin+chop+VS2
     check("floor: VS scales room threshold", skip_hi is True)

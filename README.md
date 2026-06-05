@@ -22,6 +22,44 @@ See **[STRATEGIES.md](STRATEGIES.md)** for the full algorithm reference.
 
 ---
 
+## Architecture
+
+The system follows a clean canonical structure:
+
+```
+┌─────────────────────────────────────────┐
+│         orchestrate.py                  │  ← Entry point / orchestrator
+│  (coordinates scanner + alerts + state) │
+└──────────────┬──────────────────────────┘
+               │
+               ├─► scalp_fast.py          ← CANONICAL scanner (1m momentum)
+               │   • 8 core strategies
+               │   • HTF grading engine
+               │   • All filters & gates
+               │
+               ├─► telegram_alert.py      ← Alert dispatcher
+               ├─► state_manager.py       ← Cooldown / dedup
+               └─► signals_log.csv        ← Trade journal
+```
+
+### Core Components
+
+| File | Role |
+|------|------|
+| **`orchestrate.py`** | Orchestrator — invokes scanner, manages state, dispatches alerts |
+| **`scalp_fast.py`** | **Canonical scanner** — all live logic lives here (strategies, grading, filters) |
+| `telegram_alert.py` | Alert engine (heads-up → entry → exit notifications) |
+| `state_manager.py` | Cooldown tracking & signal deduplication |
+
+### Scanner Versions
+
+- **Current:** `scalp_fast.py` is the **single source of truth** for all live scanning logic
+- **Legacy:** Previous scanner iterations are preserved in the **`archive/scanner-versions`** branch for reference and rollback if needed
+
+> **Rule:** All new features and bug fixes go into `scalp_fast.py` only. Never fork or create alternate scanners — maintain one canonical implementation.
+
+---
+
 ## Setup
 
 ### 1. Install
