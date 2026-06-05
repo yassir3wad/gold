@@ -69,8 +69,37 @@ def test_prior_day_vas_cached():
     check("prior-VA: closed days cached by date", len(cache) >= 2)
 
 
+def test_key_level_bos_and_score():
+    # rise to a swing high (112), decline to a GREEN high-volume swing low, then rally that BREAKS 112 -> BOS
+    bars = [C(100,105,99,104,10), C(104,112,103,108,10), C(108,109,102,103,10),
+            C(103,104,96,97,10),  C(97,101,94,100,100),  C(100,107,99,106,10), C(106,116,105,115,10)]
+    z = Z.find_demand_zones(bars, left=1, right=1, lookback=7)
+    check("KL: a demand zone exists at the green swing low", any(zz["i"] == 4 for zz in z))
+    dz = next(zz for zz in z if zz["i"] == 4)
+    check("KL: rally broke prior swing high -> BOS", Z.caused_bos(bars, 4, "demand") is True)
+    s = Z.key_level_score(bars, dz)
+    check("KL: fresh BOS-confirmed zone scores top (1.0)", approx(s, 1.0))
+    # no-BOS variant: same low but the rally never reclaims 112 -> not a key level
+    nb = bars[:5] + [C(100,106,99,105,10), C(105,108,104,107,10)]   # tops out at 108 < 112
+    check("KL: no BOS -> score 0", approx(Z.key_level_score(nb, Z.find_demand_zones(nb, 1, 1, 7)[0]), 0.0))
+    # broken variant: after the rally, a later candle CLOSES below the demand zone -> invalid
+    bk = bars + [C(100,101,90,91,10)]   # i7 closes 91 < zone low 94 (i4 stays the swing low)
+    check("KL: closed-through zone -> broken -> score 0", approx(Z.key_level_score(bk, dz), 0.0))
+
+
+def test_key_level_decay():
+    # fresh -> 1.0, decays per retest, dead at >=3 touches
+    check("KL: score decays with touches", Z.kl_score_from(bos=True, broken=False, touches=0) == 1.0
+          and Z.kl_score_from(bos=True, broken=False, touches=1) < 1.0
+          and Z.kl_score_from(bos=True, broken=False, touches=3) == 0.0)
+    check("KL: mark_key_levels tags zones with score+key_level flag",
+          all({"score", "key_level", "bos", "touches"} <= set(zz)
+              for zz in Z.mark_key_levels([C(100,105,99,104,10)]*3, left=1, right=1)))
+
+
 def main():
-    for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached):
+    for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
+               test_key_level_bos_and_score, test_key_level_decay):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

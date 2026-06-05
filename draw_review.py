@@ -42,26 +42,33 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
     ap.add_argument("--chart", default="eFMec2F9")
-    ap.add_argument("--display-tf", default="15")
+    ap.add_argument("--display-tf", default="60")
     a = ap.parse_args(); CH = a.chart
-    GREEN = json.dumps({"backgroundColor": "rgba(0,200,80,0.12)", "color": "rgba(0,200,80,0.6)"})
-    RED   = json.dumps({"backgroundColor": "rgba(230,60,60,0.12)", "color": "rgba(230,60,60,0.6)"})
+    # KL = bright/solid, normal zone = faint. demand=green, supply=red.
+    GREEN_KL = json.dumps({"backgroundColor": "rgba(0,210,90,0.28)", "color": "rgba(0,230,100,0.95)"})
+    GREEN    = json.dumps({"backgroundColor": "rgba(0,200,80,0.08)", "color": "rgba(0,200,80,0.45)"})
+    RED_KL   = json.dumps({"backgroundColor": "rgba(240,60,60,0.28)", "color": "rgba(255,70,70,0.95)"})
+    RED      = json.dumps({"backgroundColor": "rgba(230,60,60,0.08)", "color": "rgba(230,60,60,0.45)"})
     BLUE  = json.dumps({"linecolor": "rgba(70,130,220,0.8)", "linestyle": 2})
     GRAY  = json.dumps({"linecolor": "rgba(150,150,150,0.7)", "linestyle": 2})
 
     tv(CH, "symbol", "XAUUSD")
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     tv(CH, "draw", "clear")
-    drawn = {"demand": 0, "supply": 0, "va": 0}
+    drawn = {"demand": 0, "supply": 0, "KL": 0, "va": 0}
 
     for tf, n, lab in [("D", 40, "D"), ("240", 60, "4H"), ("60", 140, "1H")]:
         b = bars_tf(CH, tf, n)
         if not b:
             continue
         t1 = b[-1]["time"]
-        for z in Z.find_zones(b, left=2, right=2, lookback=20):
-            rect(CH, z["time"], z["lo"], t1, z["hi"], f"{lab} {z['kind']}", GREEN if z["kind"] == "demand" else RED)
+        for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
+            kl = z["key_level"]
+            tag = f"{lab} {z['kind']}" + (f" KL {z['score']}" if kl else "")
+            ov = (GREEN_KL if kl else GREEN) if z["kind"] == "demand" else (RED_KL if kl else RED)
+            rect(CH, z["time"], z["lo"], t1, z["hi"], tag, ov)
             drawn[z["kind"]] += 1
+            if kl: drawn["KL"] += 1
 
     b30 = bars_tf(CH, "30", 400)
     if b30:

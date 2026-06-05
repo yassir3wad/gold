@@ -66,6 +66,70 @@ def find_zones(bars, left=3, right=3, lookback=20, level=0.5):
     return find_demand_zones(bars, left, right, lookback, level) + find_supply_zones(bars, left, right, lookback, level)
 
 
+def caused_bos(bars, i, kind, lookback=20):
+    """Did the move AWAY from the origin candle break structure? demand: the rally took out the recent
+    structure HIGH before the zone; supply: the drop took out the recent structure LOW. This is the
+    'price reached it, didn't break, pulled back -> BOS' confirmation = the key-level signature."""
+    after = bars[i + 1:]
+    if not after:
+        return False
+    prior = bars[max(0, i - lookback):i]
+    if not prior:
+        return False
+    if kind == "demand":
+        return max(b["high"] for b in after) > max(b["high"] for b in prior)
+    return min(b["low"] for b in after) < min(b["low"] for b in prior)
+
+
+def touches(bars, zone):
+    """How many times price RE-ENTERED the zone after it formed (retests consume its strength)."""
+    lo, hi, i = zone["lo"], zone["hi"], zone["i"]
+    cnt = 0; inside = True   # the origin candle itself is 'inside'
+    for b in bars[i + 1:]:
+        in_zone = b["low"] <= hi and b["high"] >= lo
+        if in_zone and not inside:
+            cnt += 1
+        inside = in_zone
+    return cnt
+
+
+def is_broken(bars, zone):
+    """A clean break = a candle CLOSES through the zone in the invalidating direction -> dead."""
+    lo, hi, i = zone["lo"], zone["hi"], zone["i"]
+    for b in bars[i + 1:]:
+        if zone["kind"] == "demand" and b["close"] < lo:
+            return True
+        if zone["kind"] == "supply" and b["close"] > hi:
+            return True
+    return False
+
+
+def kl_score_from(bos, broken, touches, max_touches=3):
+    """Pure score: KEY LEVEL = BOS-confirmed, not broken, not exhausted. Fresh=1.0, decays 0.25 per retest,
+    dead (0) once broken / not-a-KL / >= max_touches reactions."""
+    if broken or not bos or touches >= max_touches:
+        return 0.0
+    return round(1.0 - 0.25 * touches, 2)
+
+
+def key_level_score(bars, zone, max_touches=3):
+    return kl_score_from(caused_bos(bars, zone["i"], zone["kind"]), is_broken(bars, zone),
+                         touches(bars, zone), max_touches)
+
+
+def mark_key_levels(bars, left=3, right=3, lookback=20, level=0.5, max_touches=3):
+    """Find S/D zones and tag each with bos / touches / broken / score / key_level. Key levels (score>0)
+    are the TOP-probability tier; sorted strongest first."""
+    zones = find_zones(bars, left, right, lookback, level)
+    for z in zones:
+        z["bos"] = caused_bos(bars, z["i"], z["kind"])
+        z["touches"] = touches(bars, z)
+        z["broken"] = is_broken(bars, z)
+        z["score"] = kl_score_from(z["bos"], z["broken"], z["touches"], max_touches)
+        z["key_level"] = z["score"] > 0
+    return sorted(zones, key=lambda z: -z["score"])
+
+
 def value_area(bars, bin_size=1.0, va_pct=0.70):
     """Volume-by-price profile -> (POC, VAH, VAL). Volume assigned to each bar's typical price bin;
     value area grows from POC outward (greedier side first) until va_pct of volume is enclosed."""
