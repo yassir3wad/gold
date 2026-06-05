@@ -1,0 +1,542 @@
+{
+  "feature": "Persistent State Across Scanner Restarts",
+  "workflow_type": "refactor",
+  "workflow_rationale": "Existing state management is fragmented across multiple files. This refactor consolidates it into a unified StateManager with schema validation and graceful degradation, following the Add New → Migrate → Cleanup pattern to maintain system stability throughout.",
+  "phases": [
+    {
+      "id": "phase-1-add-state-manager",
+      "name": "Add Consolidated StateManager",
+      "type": "implementation",
+      "description": "Create a new StateManager class that consolidates all scanner state (active trades, cooldowns, watch state, last scan timestamps) into a unified, schema-validated JSON store. The new system runs alongside the existing fragmented files.",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create StateManager class with schema-validated JSON storage",
+          "service": "scanner",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/state_manager.py"
+          ],
+          "patterns_from": [
+            "scalp_fast.py:323-336",
+            "scalp_scan.py:205-212"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.state_manager import StateManager; sm = StateManager('test'); print('OK' if sm else 'FAIL')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Implement: StateManager class with methods: save_trade_state(), get_trade_state(), save_cooldown(), check_cooldown(), save_watch_state(), get_watch_state(), save_scan_timestamp(), get_scan_timestamp(). Use atomic writes (write to .tmp then rename). Include schema validation with graceful degradation."
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Add consolidated state schema definition and validation",
+          "service": "scanner",
+          "files_to_modify": [
+            "src/state_manager.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "scalp_fast.py:334-335"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.state_manager import StateManager; sm = StateManager('test'); sm.validate_schema({'active_trades': {}, 'cooldowns': {}, 'watch_state': {}, 'scan_timestamps': {}}); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Schema: {version, active_trades: {symbol: {active, id, side, entry, sl, tp1, tp2, tp1_hit, be_trig, t0, mfe, be_moved}}, cooldowns: {symbol: timestamp}, watch_state: {symbol: {t, price, label}}, scan_timestamps: {symbol: timestamp}}. Validate on load, log warning and use defaults on corruption."
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add per-symbol state accessor methods",
+          "service": "scanner",
+          "files_to_modify": [
+            "src/state_manager.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "orchestrate.py:17-18",
+            "scalp_fast.py:249"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"from src.state_manager import StateManager; sm = StateManager('test'); sm.set_active_trade('XAUUSD', 'LONG', 2400.0, 2395.0, 2410.0, 2420.0, 12345); t = sm.get_active_trade('XAUUSD'); print('OK' if t and t['side'] == 'LONG' else 'FAIL')\"",
+            "expected": "OK"
+          },
+          "status": "completed",
+          "notes": "Methods: set_active_trade(symbol, side, entry, sl, tp1, tp2, signal_id, be_trig), get_active_trade(symbol), clear_active_trade(symbol), update_trade_state(symbol, updates), get_all_active_trades()"
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Add migration utility to import existing state files",
+          "service": "scanner",
+          "files_to_modify": [
+            "src/state_manager.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "scalp_fast.py:342-343"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "echo '{\"active\": true, \"id\": 123, \"side\": \"LONG\", \"entry\": 2400}' > /tmp/test_trade.json && python3 -c \"from src.state_manager import StateManager; sm = StateManager('test'); sm.import_legacy_state('XAUUSD', '/tmp/test_trade.json', 'trade'); print('OK' if sm.get_active_trade('XAUUSD') else 'FAIL')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Method: import_legacy_state(symbol, file_path, state_type) where state_type in ['trade', 'cd', 'watch', 'vp']. Read existing ~/.tv_fast_{symbol}_{type}.json files and migrate to consolidated schema."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-migrate-scalp-fast",
+      "name": "Migrate scalp_fast.py to StateManager",
+      "type": "implementation",
+      "description": "Update scalp_fast.py to use StateManager for all state operations while keeping old file-based methods as fallback during transition.",
+      "depends_on": [
+        "phase-1-add-state-manager"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Replace set_active_trade() to use StateManager",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_fast.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"import scalp_fast; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Update lines 323-336. Import StateManager at top. Replace json.load/dump with sm.set_active_trade() and sm.get_active_trade(). Keep old TRADE_STATE file writes as backup during transition."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Replace check_active_trade() to use StateManager",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_fast.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"import scalp_fast; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Update lines 338-385. Replace json.load from TRADE_STATE with sm.get_active_trade(). Replace json.dump with sm.update_trade_state()."
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Replace cooldown management with StateManager",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_fast.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"import scalp_fast; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Replace CD_FILE (line 913) and WATCH_CD_FILE (lines 774-790) operations with sm.save_cooldown() and sm.check_cooldown(). Preserve cooldown logic (COOLDOWN_MIN, WATCH_CD_MIN)."
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Add scan timestamp tracking to main()",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_fast.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 scalp_fast.py --symbol XAUUSD && python3 -c \"from src.state_manager import StateManager; sm = StateManager('scanner'); ts = sm.get_scan_timestamp('XAUUSD'); print('OK' if ts else 'FAIL')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "At the start of main() (after init_symbol), call sm.save_scan_timestamp(SYMBOL). This tracks last successful scan per instrument for orchestrator visibility."
+        }
+      ]
+    },
+    {
+      "id": "phase-3-migrate-scalp-scan",
+      "name": "Migrate scalp_scan.py to StateManager",
+      "type": "implementation",
+      "description": "Update scalp_scan.py to use StateManager for signal deduplication state.",
+      "depends_on": [
+        "phase-1-add-state-manager"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Replace load_state/save_state with StateManager",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_scan.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 scalp_scan.py 80 && echo 'OK'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Update lines 205-212. Import StateManager. Replace load_state() with sm.get_signal_key() and save_state(k) with sm.save_signal_key(k). Use instrument='XAUUSD' (hardcoded in this scanner)."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add scan timestamp tracking",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_scan.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "scalp_fast.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 scalp_scan.py 80 && python3 -c \"from src.state_manager import StateManager; sm = StateManager('scanner'); print('OK' if sm.get_scan_timestamp('XAUUSD') else 'FAIL')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Add sm.save_scan_timestamp('XAUUSD') at the start of main() after successful data fetch."
+        }
+      ]
+    },
+    {
+      "id": "phase-4-migrate-orchestrator",
+      "name": "Migrate orchestrate.py to StateManager",
+      "type": "implementation",
+      "description": "Update orchestrate.py to use StateManager for active trade detection.",
+      "depends_on": [
+        "phase-1-add-state-manager"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Replace active_pairs() to use StateManager",
+          "service": "scanner",
+          "files_to_modify": [
+            "orchestrate.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 -c \"import orchestrate; pairs = orchestrate.active_pairs(); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Update lines 25-32. Import StateManager. Replace json.load from _state(sym, 'trade') with sm.get_active_trade(sym). Return symbols where trade state exists and active=True."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Add scan timestamp reporting to orchestrator",
+          "service": "scanner",
+          "files_to_modify": [
+            "orchestrate.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 orchestrate.py && echo 'OK'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "In main() print loop, add last scan time for each symbol: ts = sm.get_scan_timestamp(sym); if ts: print age in seconds. Helps debug 'why wasn't this symbol scanned?'"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-integration-test",
+      "name": "Integration Testing",
+      "type": "integration",
+      "description": "Test the complete scanner lifecycle with StateManager: fresh start, signal generation, trade tracking, restart, state restoration.",
+      "depends_on": [
+        "phase-2-migrate-scalp-fast",
+        "phase-3-migrate-scalp-scan",
+        "phase-4-migrate-orchestrator"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Test fresh start with no existing state",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "1. Delete ~/.tv_scanner_state.json if exists. 2. Run python3 scalp_fast.py --symbol XAUUSD. 3. Verify clean startup with no errors. 4. Check state file created at ~/.tv_scanner_state.json with valid schema."
+          },
+          "status": "pending",
+          "notes": "Verify graceful cold start - scanner should initialize with empty state and create new state file."
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Test state persistence across restart",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "1. Run scalp_fast.py until a trade signal fires. 2. Verify trade state saved. 3. Kill the scanner (Ctrl+C). 4. Restart scalp_fast.py. 5. Verify active trade is restored and TP/SL management continues. 6. Check no duplicate Telegram alerts sent."
+          },
+          "status": "pending",
+          "notes": "This is the PRIMARY use case from the spec - active trade context must survive restart."
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Test corrupted state file graceful degradation",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "1. Manually corrupt ~/.tv_scanner_state.json (invalid JSON or wrong schema). 2. Run scalp_fast.py. 3. Verify warning logged. 4. Verify scanner starts fresh with empty state. 5. Verify no crash."
+          },
+          "status": "pending",
+          "notes": "Acceptance criteria: 'Graceful degradation: if state file is corrupted, scanner starts fresh with a warning log'"
+        },
+        {
+          "id": "subtask-5-4",
+          "description": "Test cooldown persistence across restart",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "1. Trigger a signal to start cooldown. 2. Immediately kill and restart scanner. 3. Verify cooldown is still active (no duplicate signal within cooldown window). 4. Wait for cooldown to expire. 5. Verify new signal can fire."
+          },
+          "status": "pending",
+          "notes": "User story: 'I don't want to receive duplicate Telegram alerts after restarting the scanner'"
+        },
+        {
+          "id": "subtask-5-5",
+          "description": "Test orchestrator multi-instrument state tracking",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "1. Run orchestrate.py to scan all pairs. 2. Verify scan timestamps updated for all instruments. 3. Restart orchestrator. 4. Verify active_pairs() correctly identifies instruments with active trades. 5. Verify last scan times are preserved."
+          },
+          "status": "pending",
+          "notes": "Orchestrator must correctly resume multi-instrument state tracking across restarts."
+        }
+      ]
+    },
+    {
+      "id": "phase-6-cleanup",
+      "name": "Cleanup and Documentation",
+      "type": "cleanup",
+      "description": "Remove fallback to old fragmented state files, add state schema documentation, verify all old state access patterns are migrated.",
+      "depends_on": [
+        "phase-5-integration-test"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Remove old file-based state fallbacks",
+          "service": "scanner",
+          "files_to_modify": [
+            "scalp_fast.py",
+            "scalp_scan.py",
+            "orchestrate.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "grep -n 'TRADE_STATE\\|CD_FILE\\|WATCH_CD_FILE' scalp_fast.py && echo 'FAIL: old patterns found' || echo 'OK'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Remove all references to: TRADE_STATE, CD_FILE, WATCH_CD_FILE, TG_STATE direct access. All state must go through StateManager."
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Add state schema documentation",
+          "service": "scanner",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/STATE_SCHEMA.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review STATE_SCHEMA.md for completeness: schema version, all field definitions, example state file, corruption handling, migration notes."
+          },
+          "status": "pending",
+          "notes": "Acceptance criteria: 'State file is human-readable JSON with clear schema documentation'. Document: schema structure, field types, default values, TTLs, corruption recovery."
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Add migration script for existing deployments",
+          "service": "scanner",
+          "files_to_modify": [],
+          "files_to_create": [
+            "scripts/migrate_state.py"
+          ],
+          "patterns_from": [
+            "src/state_manager.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python3 scripts/migrate_state.py --dry-run && echo 'OK'",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Script to scan for all ~/.tv_fast_* files and import them into consolidated StateManager. Supports --dry-run and --backup flags."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 19,
+    "services_involved": [
+      "scanner"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 3,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-migrate-scalp-fast",
+            "phase-3-migrate-scalp-scan",
+            "phase-4-migrate-orchestrator"
+          ],
+          "reason": "All three migration phases depend only on phase-1 and modify different files"
+        }
+      ],
+      "recommended_workers": 1,
+      "speedup_estimate": "Phases 2-4 can run in parallel but are small Python files - sequential is safer"
+    },
+    "startup_command": "python auto-claude/run.py --spec 002 --parallel 1"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "integration",
+      "manual"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Scanner state is persisted to disk every scan cycle (every 60 seconds)",
+      "On restart, scanner loads last state and resumes cooldowns, active signals, and trade management",
+      "Duplicate alerts are suppressed for signals that were already sent before the restart",
+      "State file is human-readable JSON with clear schema documentation",
+      "Graceful degradation: if state file is corrupted, scanner starts fresh with a warning log"
+    ],
+    "verification_steps": [
+      {
+        "name": "Integration Test Suite",
+        "command": "pytest tests/test_state_manager.py",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Manual Restart Test",
+        "command": "manual",
+        "expected_outcome": "Active trade persists across scanner restart",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Corruption Handling Test",
+        "command": "manual",
+        "expected_outcome": "Scanner starts fresh with warning on corrupted state file",
+        "type": "manual",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk: modifying live trading scanner state. Integration tests + manual validation required to ensure no duplicate alerts or missed TP/SL updates."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false,
+      "commands": [],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "pytest tests/test_state_manager.py"
+      ],
+      "services_to_test": [
+        "scanner"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "manual_verification": {
+      "required": true,
+      "steps": [
+        "Fresh start with no existing state",
+        "State persistence across restart with active trade",
+        "Corrupted state file graceful degradation",
+        "Cooldown persistence across restart",
+        "Multi-instrument orchestrator state tracking"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "xstateState": "planning",
+  "executionPhase": "coding",
+  "updated_at": "2026-06-05T08:55:13.198Z"
+}
