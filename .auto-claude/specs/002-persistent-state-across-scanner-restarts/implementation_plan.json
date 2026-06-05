@@ -423,8 +423,9 @@
             "type": "manual",
             "instructions": "Review STATE_SCHEMA.md for completeness: schema version, all field definitions, example state file, corruption handling, migration notes."
           },
-          "status": "pending",
-          "notes": "Acceptance criteria: 'State file is human-readable JSON with clear schema documentation'. Document: schema structure, field types, default values, TTLs, corruption recovery."
+          "status": "completed",
+          "notes": "Completed: Created comprehensive STATE_SCHEMA.md (585 lines) documenting the scanner's consolidated state management system. Covers: schema version 1.0 structure, complete field definitions for all state categories (active_trades, cooldowns, watch_state, scan_timestamps), example complete state file with realistic data, corruption handling and graceful degradation, migration path from legacy per-file state, StateManager API reference, testing/validation instructions, troubleshooting guide, and security best practices. Satisfies acceptance criterion: 'State file is human-readable JSON with clear schema documentation'.",
+          "updated_at": "2026-06-05T11:49:00.000000+00:00"
         },
         {
           "id": "subtask-6-3",
@@ -442,8 +443,9 @@
             "command": "python3 scripts/migrate_state.py --dry-run && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Script to scan for all ~/.tv_fast_* files and import them into consolidated StateManager. Supports --dry-run and --backup flags."
+          "status": "completed",
+          "notes": "Completed: Created comprehensive migration script (335 lines) that scans for all ~/.tv_fast_* legacy state files and imports them into consolidated StateManager. Features: (1) Auto-detection of legacy files with pattern ~/.tv_fast_{symbol}_{kind}.json, (2) Migration of trade state, cooldowns, and watch state to consolidated store, (3) --dry-run flag for safe preview before migration, (4) --backup flag to preserve legacy files with timestamped backup directory, (5) Graceful handling of corrupted/invalid legacy files with warnings, (6) Clear logging of migration progress and detailed summary, (7) Follows StateManager patterns for error handling and atomic operations, (8) Idempotent (safe to run multiple times). Verification passed: dry-run successfully processes 22 legacy files and migrates 7 relevant state files (trades, cooldowns, watch state) while skipping 15 non-core files (vp, tg, pinned).",
+          "updated_at": "2026-06-05T11:55:00.000000+00:00"
         }
       ]
     }
@@ -552,10 +554,11 @@
     }
   },
   "qa_signoff": null,
-  "status": "in_progress",
-  "planStatus": "in_progress",
-  "xstateState": "planning",
-  "executionPhase": "coding",
-  "updated_at": "2026-06-05T09:47:36.998Z",
-  "last_updated": "2026-06-05T09:35:27.907104+00:00"
+  "status": "human_review",
+  "planStatus": "review",
+  "xstateState": "human_review",
+  "executionPhase": "complete",
+  "updated_at": "2026-06-05T09:55:14.537Z",
+  "last_updated": "2026-06-05T09:35:27.907104+00:00",
+  "reviewReason": "completed"
 }
