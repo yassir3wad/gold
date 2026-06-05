@@ -7,8 +7,9 @@
 #   bash refresh_zones_now.sh --notify     # send Telegram notification after refresh
 #   bash refresh_zones_now.sh --help       # show this help message
 
-# Change to tradingview-mcp directory
-cd ~/tradingview-mcp || exit 1
+# Change to tradingview-mcp directory (or stay in current dir if already there)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
 
 # Show help if requested
 if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
