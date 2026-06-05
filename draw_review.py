@@ -63,32 +63,44 @@ def main():
     cur_price = None
     sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
-    # --- buy/sell ZONES (demand/supply order-block boxes) — 4h + 1h only (daily ignored) ---
+    # --- buy/sell ZONES (4h + 1h) — collect all VALID, then prioritize + dedupe + cap ---
+    zones = []
     for tf, n, lab in [("240", 80, "4H"), ("60", 160, "1H")]:
         b = bars_tf(CH, tf, n)
         if not b:
             continue
         t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
-            if not z["valid"]:                    # traversed both ways -> consumed/invalid, don't draw
-                continue
-            # CURRENT role by position vs price: below = support(buy/green), above = resistance(sell/red).
-            if z["hi"] < cur_price:
-                buy, role = True, "support"
-            elif z["lo"] > cur_price:
-                buy, role = False, "resistance"
-            else:
-                buy, role = (z["kind"] == "demand"), z["kind"]   # straddling price -> keep origin
-            flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
-            kl = z["key_level"] and not flipped
-            flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
-            tag = f"{lab} {role}{flag}"
-            ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
-            rect(CH, z["time"], z["lo"], t1, z["hi"], tag, ov)
-            drawn["demand" if buy else "supply"] += 1
-            if kl: drawn["KL"] += 1
+            if z["valid"]:
+                zones.append({**z, "t1": t1, "tf": lab})
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
+
+    zmid = lambda z: (z["lo"] + z["hi"]) / 2
+    # strongest first: key levels, then 'strong' zones, then nearest to price
+    zones.sort(key=lambda z: (0 if z["key_level"] else 1, 0 if z.get("strong") else 1, abs(zmid(z) - cur_price)))
+    seen = []; nbuy = nsell = 0
+    for z in zones:
+        mid = zmid(z)
+        if any(abs(mid - q) < 15 for q in seen):
+            continue
+        if z["hi"] < cur_price:
+            buy, role = True, "support"
+        elif z["lo"] > cur_price:
+            buy, role = False, "resistance"
+        else:
+            buy, role = (z["kind"] == "demand"), z["kind"]
+        if (buy and nbuy >= 5) or (not buy and nsell >= 5):
+            continue
+        flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
+        kl = z["key_level"] and not flipped
+        hot = kl or z.get("strong")
+        flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else (" *" if z.get("strong") else ""))
+        ov = (GREEN_KL if hot else GREEN) if buy else (RED_KL if hot else RED)
+        rect(CH, z["time"], z["lo"], z["t1"], z["hi"], f"{z['tf']} {role}{flag}", ov)
+        seen.append(mid); drawn["demand" if buy else "supply"] += 1
+        if kl: drawn["KL"] += 1
+        nbuy += buy; nsell += (not buy)
 
     # --- support / resistance LEVELS (big high-volume candle; role flips on break) ---
     # keep only the nearest few that are ACTIVE: support below price, resistance above price.
