@@ -63,8 +63,8 @@ def main():
     cur_price = None
     sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
-    # --- buy/sell ZONES (demand/supply order-block boxes) ---
-    for tf, n, lab in [("D", 40, "D"), ("240", 80, "4H"), ("60", 160, "1H")]:
+    # --- buy/sell ZONES (demand/supply order-block boxes) — 4h + 1h only (daily ignored) ---
+    for tf, n, lab in [("240", 80, "4H"), ("60", 160, "1H")]:
         b = bars_tf(CH, tf, n)
         if not b:
             continue
