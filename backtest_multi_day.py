@@ -221,11 +221,51 @@ def iter_days(start, end):
         yield current
         current += dt.timedelta(days=1)
 
-def backtest_day(day):
-    """Run backtest for a single day. Returns dict with results."""
-    b=tv("ohlcv","-n","290").get("bars",[])
-    if not b:
-        return {"date": day, "bars": 0, "signals": 0, "wins": 0, "losses": 0, "timeouts": 0, "net_pips": 0, "trades": []}
+def bars_on_date(bars, day):
+    """Pure: keep only bars whose UTC calendar date == `day` (a datetime.date). Testable."""
+    out = []
+    for x in bars:
+        t = x.get("time")
+        if t is None: continue
+        if dt.datetime.utcfromtimestamp(t).date() == day:
+            out.append(x)
+    return out
+
+def fetch_session_bars(day, tv_fn=tv, n=500):
+    """Fetch the REAL historical 1m bars for `day` via the TradingView replay engine, then filter to that
+    date. Positions the replay cursor at the *next* day so `ohlcv` returns the bars up to (and including)
+    `day`. The 500-bar CLI cap = the most recent ~8h of that day (the London-NY active window).
+
+    NOTE: replay MUTATES the chart — run only when the live loop is paused or pinned to a dedicated tab,
+    otherwise the scanner will read replay data. `tv_fn` is injectable so the logic is unit-testable."""
+    cursor = day + dt.timedelta(days=1)
+    try:
+        tv_fn("replay", "start", "--date", cursor.strftime("%Y-%m-%d"))
+        bars = tv_fn("ohlcv", "-n", str(n)).get("bars", [])
+    finally:
+        tv_fn("replay", "stop")   # always return to realtime, even on error
+    return bars_on_date(bars, day)
+
+def simulate_trade(side, entry, sl, tp1, future_bars, horizon=HORIZON):
+    """Pure: walk forward up to `horizon` bars; return (outcome, exit_price, bars_used). SL wins a
+    same-bar tie (conservative). Timeout -> exit at the last in-horizon close. Testable."""
+    window = future_bars[:horizon]
+    for k, bar in enumerate(window):
+        if side == "SHORT":
+            if bar["high"] >= sl:  return "SL", sl, k + 1
+            if bar["low"] <= tp1:  return "TP1", tp1, k + 1
+        else:
+            if bar["low"] <= sl:   return "SL", sl, k + 1
+            if bar["high"] >= tp1: return "TP1", tp1, k + 1
+    if window:
+        return "timeout", window[-1]["close"], len(window)
+    return "timeout", entry, 0
+
+def backtest_day(day, tv_fn=tv):
+    """Backtest a single calendar day using REAL replay-fetched 1m bars (was: the same recent bars every day)."""
+    b = fetch_session_bars(day, tv_fn)
+    if len(b) < 30:
+        return {"date": day, "bars": len(b), "signals": 0, "wins": 0, "losses": 0, "timeouts": 0, "net_pips": 0, "trades": []}
 
     trades=[]; i=25
     while i < len(b)-1:
@@ -236,28 +276,14 @@ def backtest_day(day):
         grade="B"
         if S.near_htf(entry,S.HTF_R): grade="A+" if side=="SHORT" else "A"
         elif S.near_htf(entry,S.HTF_S): grade="A+" if side=="LONG" else "A"
-        # simulate forward up to HORIZON bars
-        outcome="timeout"; exitp=None; res_bar=None
-        for j in range(i+1, min(i+1+HORIZON, len(b))):
-            bar=b[j]
-            if side=="SHORT":
-                if bar['high']>=sl: outcome,exitp,res_bar="SL",sl,j; break
-                if bar['low']<=tp1: outcome,exitp,res_bar="TP1",tp1,j; break
-            else:
-                if bar['low']<=sl: outcome,exitp,res_bar="SL",sl,j; break
-                if bar['high']>=tp1: outcome,exitp,res_bar="TP1",tp1,j; break
-        if outcome=="timeout":
-            res_bar=min(i+HORIZON,len(b)-1); exitp=b[res_bar]['close']
+        outcome, exitp, used = simulate_trade(side, entry, sl, tp1, b[i+1:])
         pips=(entry-exitp)/PIP if side=="SHORT" else (exitp-entry)/PIP
         trades.append((side,grade,why,round(entry,1),round(sl,1),round(tp1,1),outcome,round(pips,0)))
-        i=res_bar+1   # one trade at a time: resume after it resolves
+        i += used + 1   # one trade at a time: resume after it resolves (used=0 -> just advance)
 
-    # compute stats
     wins=[t for t in trades if t[6]=="TP1"]
     losses=[t for t in trades if t[6]=="SL"]
     tos=[t for t in trades if t[6]=="timeout"]
-    net=sum(t[7] for t in trades)
-
     return {
         "date": day,
         "bars": len(b),
@@ -265,7 +291,7 @@ def backtest_day(day):
         "wins": len(wins),
         "losses": len(losses),
         "timeouts": len(tos),
-        "net_pips": net,
+        "net_pips": sum(t[7] for t in trades),
         "trades": trades
     }
 
@@ -343,17 +369,16 @@ def calculate_profit_factor(trades):
     return gross_profit/gross_loss
 
 def calculate_sharpe_ratio(trades, risk_free_rate=0):
-    """Calculate Sharpe ratio from trade returns.
-    Returns annualized Sharpe ratio (assuming 252 trading days)."""
+    """Per-trade Sharpe = mean(return) / std(return) over trades. NOT annualized — these are intraday
+    scalps of irregular frequency, so a sqrt(252) 'annualization' would be meaningless/inflated. Higher
+    = steadier per-trade edge."""
     if len(trades)<2: return 0
     returns=[t[7] for t in trades]  # pips per trade
     mean_return=sum(returns)/len(returns)
     variance=sum((r-mean_return)**2 for r in returns)/(len(returns)-1)
     std_dev=variance**0.5
     if std_dev==0: return 0
-    # Annualize: assume trades are independent, scale by sqrt(252)
-    sharpe=(mean_return-risk_free_rate)/std_dev
-    return sharpe*(252**0.5)
+    return (mean_return-risk_free_rate)/std_dev
 
 def monte_carlo_simulation(all_trades, iterations):
     """Run Monte Carlo simulation by randomizing trade order.
@@ -361,11 +386,13 @@ def monte_carlo_simulation(all_trades, iterations):
     if not all_trades: return None
 
     results={'net_pips':[], 'win_rate':[], 'profit_factor':[], 'max_dd':[], 'max_dd_pct':[], 'sharpe':[]}
+    n=len(all_trades)
 
     for _ in range(iterations):
-        # Shuffle trade order
-        trades=all_trades.copy()
-        random.shuffle(trades)
+        # Bootstrap: resample WITH REPLACEMENT. A plain order-shuffle leaves net P&L / win rate / PF /
+        # Sharpe unchanged (they're order-invariant) — only resampling varies them, which is what actually
+        # tests robustness and curve-fit risk. (Max-drawdown also varies with the resampled sequence.)
+        trades=[random.choice(all_trades) for _ in range(n)]
 
         # Calculate metrics for this iteration
         net_pips=sum(t[7] for t in trades)

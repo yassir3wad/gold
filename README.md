@@ -71,7 +71,11 @@ Test the scanner by hand (no alerts/state): `python3 scalp_fast.py --dry`
 
 ## Backtesting
 
-The system includes a comprehensive multi-day backtesting framework to validate strategy performance over historical data.
+A multi-day backtesting framework that replays **real historical 1m bars** (via the TradingView **replay engine**) to validate the momentum-scalp setups over past sessions.
+
+> **Data source & limits:** bars are fetched per day via `replay start --date <D+1>` + `ohlcv` (capped at 500 bars ≈ the most recent ~8h of each day — the London–NY active window; full 24h isn't reachable in one fetch). It backtests the **momentum subset** of `scalp_fast` (trendline/range/double/impulse) with fixed 30–35/50–100 SL/TP — not the full 12-setup engine or its live gates, so treat it as a directional sanity check, not a faithful replica.
+>
+> ⚠️ **Replay mutates the chart.** Run backtests only when the **live loop is paused** (or pinned to a dedicated tab), or the scanner will read replay data.
 
 ### Quick Start
 
@@ -83,7 +87,7 @@ python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15
 python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-31 \
     --walk-forward --train-days 5 --test-days 2
 
-# Monte Carlo simulation (test robustness by randomizing trade order)
+# Monte Carlo simulation (test robustness by bootstrap-resampling trades)
 python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \
     --monte-carlo --iterations 1000
 
@@ -96,7 +100,7 @@ python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 \
 
 - **Sequential backtesting**: Test strategy over any date range using live TradingView 1m bar data
 - **Walk-forward optimization**: Sliding train/test windows to simulate real-world forward testing
-- **Monte Carlo simulation**: Randomize trade order 1000+ times to assess robustness and curve-fitting risk
+- **Monte Carlo simulation**: Bootstrap-resample trades (with replacement) 1000+ times to assess robustness and curve-fitting risk
 - **Advanced metrics**: Profit factor, max drawdown, Sharpe ratio, confidence intervals
 - **Export**: CSV trade log + text summary report for external analysis
 
@@ -120,7 +124,7 @@ Test:  2025-01-06 to 2025-01-07 (2 days)
 
 ### Monte Carlo Simulation
 
-Randomizes trade order to test if results are order-dependent (a sign of curve-fitting). Reports 5th, 50th, and 95th percentile ranges:
+Bootstrap-resamples the trades (with replacement) to build a distribution of outcomes — a plain order-shuffle can't, since net P&L / win rate / PF / Sharpe are order-invariant. Reports 5th, 50th, and 95th percentile ranges:
 
 ```
 MONTE CARLO SIMULATION (1000 iterations)
@@ -152,7 +156,7 @@ Use `--enable-filters` to apply the same filters as `scalp_fast.py`:
 | **Net pips** | Cumulative P&L |
 | **Profit factor** | Gross profit / Gross loss |
 | **Max drawdown** | Largest peak-to-valley equity decline (pips & %) |
-| **Sharpe ratio** | Risk-adjusted returns (annualized) |
+| **Sharpe ratio** | Per-trade risk-adjusted return (mean/std of trade pips; NOT annualized) |
 
 ### Requirements
 
