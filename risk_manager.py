@@ -149,7 +149,47 @@ class RiskManager:
         Returns:
             dict: {"blocked": bool, "reason": str}
         """
-        # TODO: Implement in subtask-2-4
+        import glob
+
+        # Skip if correlation checking is disabled
+        if not self.config.get("correlation_check", False):
+            return {"blocked": False, "reason": ""}
+
+        # Get correlated pairs for this symbol
+        correlation_pairs = self.config.get("correlation_pairs", {})
+        correlated_symbols = correlation_pairs.get(symbol, [])
+
+        # If no correlated pairs defined, allow trade
+        if not correlated_symbols:
+            return {"blocked": False, "reason": ""}
+
+        # Check for open positions in correlated pairs
+        home = os.path.expanduser("~")
+
+        for correlated_symbol in correlated_symbols:
+            # Look for trade state file for this correlated symbol
+            pattern = os.path.join(home, f".tv_fast_{correlated_symbol}_trade.json")
+            files = glob.glob(pattern)
+
+            for filepath in files:
+                try:
+                    with open(filepath, 'r') as f:
+                        trade_state = json.load(f)
+
+                    # Check if trade is active and in same direction
+                    if trade_state.get("active", False):
+                        trade_direction = trade_state.get("direction", "").upper()
+
+                        if trade_direction == direction.upper():
+                            return {
+                                "blocked": True,
+                                "reason": f"Correlated position already open: {correlated_symbol} {trade_direction}"
+                            }
+                except Exception as e:
+                    # Skip files that can't be read
+                    print(f"[WARNING] Could not read trade state {filepath}: {e}", file=sys.stderr)
+                    continue
+
         return {"blocked": False, "reason": ""}
 
     def risk_check(self, symbol, direction):
