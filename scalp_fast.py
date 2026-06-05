@@ -350,9 +350,11 @@ def check_active_trade(price):
     """Alert on TP1/TP2/SL; finalize the signals_log outcome (incl. 12-min timeout).
     Once TP1 is banked the stop moves to breakeven and the logged result can only be TP1/TP2 —
     a later reversal can never overwrite a partial win with an 'SL' loss."""
-    try: t = json.load(open(TRADE_STATE))
-    except Exception: return
-    if not t.get("active"): return
+    # Use StateManager to get trade state
+    t = state_manager.get_trade_state(SYMBOL)
+    if not t or not t.get("active"):
+        return
+
     side, e, sl, tp1, tp2 = t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"]
     sid = t.get("id"); tp1_hit = t.get("tp1_hit"); PP = lambda x: round((e - x)/PIP if side == "SHORT" else (x - e)/PIP)
     # Breakeven protection (pre-TP1): track max favorable excursion; once it runs +BE_TRIGGER_P, pull the stop to
@@ -392,8 +394,9 @@ def check_active_trade(price):
         t["active"] = False
         res, exit_px = ("TP1", tp1) if tp1_hit else ("timeout", price)   # tp1 already banked -> keep the win
         if sid: log_signal({"id": sid, "result": res, "exit": round(exit_px, 1), "pips": PP(exit_px)})
-    try: json.dump(t, open(TRADE_STATE, "w"))
-    except Exception: pass
+
+    # Use StateManager to save updated trade state
+    state_manager.save_trade_state(SYMBOL, t)
 
 def notify_telegram(caption, dedup_key):
     """Send the signal + chart photo to Telegram. De-dups so the same signal doesn't spam each bar."""
