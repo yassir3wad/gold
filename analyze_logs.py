@@ -46,8 +46,34 @@ def _norm_grade(g):
     return g.split(" (")[0].strip()   # "B (open space)" -> "B"; "A+" / "C-into-zone" unchanged
 
 
+OUTCOMES_DB = os.path.join(TVDIR, "outcomes.db")
+
+
+def _load_rows_db(symbol=None, days=None):
+    """Read rows from the SQLite outcomes DB, shaped identically to the CSV loader: each dict tagged
+    with `sym` (from the DB `symbol` column), deduped by id (the DB already enforces a unique id)."""
+    import outcome_db
+    cutoff = _dt.datetime.now() - _dt.timedelta(days=days) if days else None
+    out = []
+    for r in outcome_db.rows(symbol=symbol, db=OUTCOMES_DB):
+        r = dict(r)
+        r["sym"] = (r.get("symbol") or "").upper() or (symbol.upper() if symbol else "XAUUSD")
+        if cutoff:
+            t = _parse_time(r.get("time"))
+            if t and t < cutoff: continue
+        out.append(r)
+    return out
+
+
 def load_rows(symbol=None, days=None):
-    """Return list of dict rows tagged with `sym`, deduped by id. Newest source wins on conflict."""
+    """Return list of dict rows tagged with `sym`, deduped by id. Newest source wins on conflict.
+    Reads from the SQLite outcomes DB when it exists (the dual-written store); otherwise falls back
+    to the CSV files (legacy behavior). Same row-dict shape either way."""
+    if os.path.exists(OUTCOMES_DB):
+        try:
+            return _load_rows_db(symbol, days)
+        except Exception:
+            pass   # any DB read issue → fall back to CSV (never lose the analysis)
     cutoff = None
     if days:
         cutoff = _dt.datetime.now() - _dt.timedelta(days=days)
