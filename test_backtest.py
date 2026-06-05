@@ -33,19 +33,32 @@ def test_fetch_session_bars():
     def fake_tv(*a):
         calls.append(a)
         return {"bars": canned} if a[0] == "ohlcv" else {}
-    out = bt.fetch_session_bars(day, tv_fn=fake_tv, n=500)
+    out = bt.fetch_session_bars(day, tv_fn=fake_tv, n=500, wait=0)
     cmds = [c[0] for c in calls]
     check("fetch: starts replay", ("replay", "start", "--date", "2025-06-11") in calls)   # cursor = day+1
     check("fetch: reads ohlcv", "ohlcv" in cmds)
     check("fetch: stops replay (cleanup)", ("replay", "stop") in calls)
     check("fetch: filtered to the date", len(out) == 1 and out[0]["time"] == _utc(2025, 6, 10, 12))
 
+    # replay loads async: first ohlcv returns realtime (wrong-date) bars, then the target-date bars appear.
+    # fetch_session_bars must POLL past the empty/wrong reads (this was the real 'Bars: 0' bug).
+    seq = [[{"time": _utc(2025, 6, 11, 9), "high": 1, "low": 0}],   # realtime read -> filtered out
+           [{"time": _utc(2025, 6, 11, 9), "high": 1, "low": 0}],   # still loading
+           canned]                                                   # replay engaged -> 06-10 bar present
+    box = {"i": 0}
+    def loading_tv(*a):
+        if a[0] != "ohlcv": return {}
+        bars = seq[min(box["i"], len(seq) - 1)]; box["i"] += 1; return {"bars": bars}
+    out2 = bt.fetch_session_bars(day, tv_fn=loading_tv, n=500, wait=0, retries=6)
+    check("fetch: polls past async replay load", len(out2) == 1 and out2[0]["time"] == _utc(2025, 6, 10, 12))
+    check("fetch: gives up after retries -> []", bt.fetch_session_bars(day, tv_fn=fake_tv if False else (lambda *a: {"bars": []} if a[0]=="ohlcv" else {}), n=500, wait=0, retries=3) == [])
+
     def boom_tv(*a):
         calls.append(a)
         if a[0] == "ohlcv": raise RuntimeError("network")
         return {}
     calls.clear()
-    try: bt.fetch_session_bars(day, tv_fn=boom_tv)
+    try: bt.fetch_session_bars(day, tv_fn=boom_tv, wait=0)
     except Exception: pass
     check("fetch: replay stop runs even on error", ("replay", "stop") in calls)
 
@@ -98,9 +111,23 @@ def test_walk_forward_windows():
     check("WF: no window when range too small", bt.generate_walk_forward_windows(dt.date(2025, 1, 1), dt.date(2025, 1, 3), 5, 2) == [])
 
 
+def test_ema_regime():
+    check("regime: rising -> UP", bt.ema_regime([float(i) for i in range(250)]) == "UP")
+    check("regime: falling -> DOWN", bt.ema_regime([float(250 - i) for i in range(250)]) == "DOWN")
+    check("regime: too few -> flat", bt.ema_regime([1.0, 2.0]) == "flat")
+
+
+def test_htf_room():
+    R = [(4480, 4485, "R")]; Sz = [(4455, 4460, "S")]
+    check("room: LONG to next R above", bt.htf_room("LONG", 4470, R, Sz) == 100)   # (4480-4470)/0.10
+    check("room: SHORT to next S below", bt.htf_room("SHORT", 4470, R, Sz) == 100)  # (4470-4460)/0.10
+    check("room: LONG open (no wall above)", bt.htf_room("LONG", 4490, R, Sz) is None)
+
+
 def main():
     for fn in (test_bars_on_date, test_fetch_session_bars, test_simulate_trade, test_profit_factor,
-               test_max_drawdown, test_sharpe_not_annualized, test_monte_carlo_bootstrap, test_walk_forward_windows):
+               test_max_drawdown, test_sharpe_not_annualized, test_monte_carlo_bootstrap, test_walk_forward_windows,
+               test_ema_regime, test_htf_room):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
