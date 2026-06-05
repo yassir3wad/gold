@@ -70,11 +70,15 @@ def main():
             continue
         t1 = b[-1]["time"]; cur_price = b[-1]["close"]
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
+            role = z["kind"]
+            if z["broken"]:                       # price CLOSED through -> polarity flip (supply<->demand)
+                role = "demand" if role == "supply" else "supply"
             kl = z["key_level"]
-            tag = f"{lab} {z['kind']}" + (f" KL {z['score']}" if kl else "")
-            ov = (GREEN_KL if kl else GREEN) if z["kind"] == "demand" else (RED_KL if kl else RED)
+            flag = " (flip)" if z["broken"] else (f" KL {z['score']}" if kl else "")
+            tag = f"{lab} {role}{flag}"
+            ov = (GREEN_KL if kl else GREEN) if role == "demand" else (RED_KL if kl else RED)
             rect(CH, z["time"], z["lo"], t1, z["hi"], tag, ov)
-            drawn[z["kind"]] += 1
+            drawn[role] += 1
             if kl: drawn["KL"] += 1
         for x in Z.sr_levels(b, lookback=20):
             sr.append((x["price"], x["role"], x["flipped"], lab))
