@@ -126,7 +126,13 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | `backtest_day.py` / `backtest_tp.py` | Replay over recent 1m / TP-target sweep |
 | `telegram_config.json` | Bot token + chat_id (send-only) |
 | `tg_monitor.sh` | start/stop/status the autonomous launchd monitor |
+| `tpo.py` / `va_store.py` | Read prior-day VAH/POC/VAL + single-print zones off the Kioseff **TPO indicator**; immutable sqlite cache (`value_areas.db`) |
+| `va_state.py` | Rules 6/7: classify a prior VA level vs current-session bars → **Level State** (Untested/Rejected/Accepted/Flipped) |
+| `harvest_daily.py` | Self-dating, idempotent daily VA harvest of the most-recent closed session; **pauses the scanner** around its replay |
+| `reharvest_week.py` | One-off: force re-harvest a date range (used to backfill SP zones) |
+| `docs/value-area-framework.md` / `docs/gold-va-strategy.md` | Rules 1–7 framework + the VWAP-bias execution spec the AI applies |
 | `~/Library/LaunchAgents/com.yassir.goldscalper.plist` | Runs the scanner every 60s on the Mac |
+| `~/Library/LaunchAgents/com.yassir.vaharvest.plist` | Runs `harvest_daily.py` after the 22:00 UTC session close (00:20–03:20 local, idempotent retries) |
 
 ---
 
