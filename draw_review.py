@@ -40,7 +40,7 @@ def hline(chart, price, label, ov, t):
     # horizontal_line REQUIRES a finite --time anchor (else "point.time NaN" → silent fail). The line is
     # still full-width; the time only anchors its handle/label. `t` = a recent (cursor) bar time.
     tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{price}", "--time", str(int(t)),
-       "--text", f"{label} [{TAG}]", "--overrides", ov)
+       "--text", (f"{label} [{TAG}]" if label else f"[{TAG}]"), "--overrides", ov)
 
 
 def main():
@@ -148,26 +148,18 @@ def main():
         draw_sr("support", SUP, True)
         draw_sr("resistance", RES, False)
 
-    b30 = bars_tf(CH, "30", 400)   # value areas computed from 30m bars (PEPPERSTONE has real volume)
-    va_t = anchor_t or (int(b30[-1]["time"]) if b30 else None)   # time anchor required by horizontal_line (line is full-width)
-
-    def draw_va(price, lab, ov):
-        if price is None or not va_t:
-            return
-        hline(CH, price, lab, ov, va_t)   # full-width horizontal line
-        tv(CH, "draw", "shape", "--type", "text", "--price", f"{price}", "--time", str(int(va_t)), "--text", f"{lab} [{TAG}]")
-        drawn["va"] += 1
-
-    # --- prior-day value areas (date-stamped): POC yellow / VAH blue / VAL purple, labeled e.g. VAH-05-29 ---
-    # TPO indicator values can't be reliably dated (it exposes only bar-indices) — our prior_day_vas matches it
-    # and carries the date, so we use it for the labels.
-    if b30 and va_t and "va" in LAYERS:
-        for v in Z.prior_day_vas(b30, ref_ts=b30[-1]["time"], n=3):
-            md = v["date"][5:]   # MM-DD
-            draw_va(v["poc"], f"POC-{md}", POC_C)
-            draw_va(v["vah"], f"VAH-{md}", VAH_C)
-            draw_va(v["val"], f"VAL-{md}", VAL_C)
-            log["va"].append({"date": v["date"], "poc": v["poc"], "vah": v["vah"], "val": v["val"]})
+    b30 = bars_tf(CH, "30", 400)   # 30m for the TPO indicator read
+    va_t = anchor_t or (int(b30[-1]["time"]) if b30 else None)   # time anchor required by horizontal_line
+    # --- value areas: READ from the TPO indicator (POC=yellow / VAH=blue / VAL=purple, no labels) ---
+    # Live this is correct; in replay the indicator's lines are stale (don't track the cursor) — known caveat.
+    if va_t and "va" in LAYERS:
+        for s in TPO.read_tpo_lines(CH):
+            for price, ov in [(s.get("poc"), POC_C), (s.get("vah"), VAH_C), (s.get("val"), VAL_C)]:
+                if price is None:
+                    continue
+                hline(CH, price, "", ov, va_t)   # no descriptive label, per request
+                drawn["va"] += 1
+            log["va"].append(s)
 
     # --- SMC confluence layer (LuxAlgo) — read into the LOG as data only (not drawn); keep Auto Trendlines on ---
     if "smc" in LAYERS:

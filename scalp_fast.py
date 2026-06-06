@@ -17,6 +17,9 @@ except Exception: newsmod = None
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import smc as smcmod   # SMC + Auto-Trendlines confluence
 except Exception: smcmod = None
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import tpo as tpomod   # prior-day VAH/VAL/POC from the TPO indicator
+except Exception: tpomod = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -183,15 +186,21 @@ def volume_profile():
     try:
         c = json.load(open(VP_FILE))
         if time.time() - c.get("t", 0) < VP_TTL:
-            return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat")
+            return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat"), c.get("prior_vas", [])
     except Exception: pass
     tid = next((s["id"] for s in tv("state").get("studies", [])
                 if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None) if USE_TPO else None
-    poc = vah = val = None; regime = "flat"
+    poc = vah = val = None; regime = "flat"; prior_vas = []
     try:
         tv("timeframe", VP_TF)
         if tid: tv("indicator", "toggle", tid, "--visible", "true"); time.sleep(4)   # show TPO to render on 30m
         if tid: poc, vah, val = _tpo_levels()
+        if tid and tpomod:   # prior-day VAH/VAL/POC from the TPO indicator's per-session VA/POC lines (reuse this visible window)
+            try:
+                _al = (tv("data", "lines", "-f", "TPO", "--verbose").get("studies", []) or [{}])[0].get("all_lines", [])
+                _sess = [s for s in tpomod.tpo_sessions(_al) if s.get("vah") is not None]
+                prior_vas = _sess[:-1][-3:] if len(_sess) > 1 else []   # drop the current session (highest x); keep last 3 prior
+            except Exception: pass
         bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", [])
         if poc is None: poc, vah, val = _calc_vp(bars)                    # fallback: computed profile
         if bars:                                                          # HTF regime from 30m EMA stack
@@ -202,9 +211,9 @@ def volume_profile():
     finally:
         if tid: tv("indicator", "toggle", tid, "--hidden")   # ALWAYS hide (even on error) — TPO stays off the chart
         tv("timeframe", str(BASE_TF))   # restore the execution TF (1m live, 5m backtest) — not hardcoded 1m
-    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime}, open(VP_FILE, "w"))
+    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime, "prior_vas": prior_vas}, open(VP_FILE, "w"))
     except Exception: pass
-    return poc, vah, val, regime
+    return poc, vah, val, regime, prior_vas
 
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
@@ -624,8 +633,8 @@ def main():
     # --- chart indicators: session VWAP (+bands), EMA 50/100/200, RSI — read not computed (self-heal) ---
     vw, vw_up, vw_lo, em, rsi = read_chart_levels([x['close'] for x in b])
     e50, e100, e200 = em.get(50), em.get(100), em.get(200)   # 1m EMAs — execution-level S/R only
-    vpoc, vah, val, regime = volume_profile()   # TPO POC/value-area + HTF (30m) trend regime, cached
-    if not FL.get("volume_profile", True): vpoc = vah = val = None   # flag only suppresses the VP levels
+    vpoc, vah, val, regime, prior_vas = volume_profile()   # TPO POC/value-area + prior-day VAs + HTF regime, cached
+    if not FL.get("volume_profile", True): vpoc = vah = val = None; prior_vas = []   # flag only suppresses the VP levels
     _rstep = 100*PIP; r10 = round(price/_rstep)*_rstep; near_round = round(r10, PXD) if abs(r10-price) < 20*PIP else None   # pip-scaled round number ($10 gold, 0.01 EUR, 1.00 JPY, 100 idx)
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
     vol_ok = (vol > avgvol) if avgvol else True
@@ -639,7 +648,9 @@ def main():
         if vw_lo: ext.append((vw_lo, "VWAP lower band"))   # tag of lower band favors longs
         if FL.get("ema_levels", True):                     # EMA 50/100/200 as dynamic S/R (read off chart)
             ext += [(e50, "EMA50"), (e100, "EMA100"), (e200, "EMA200")]
-        ext += [(vpoc, "VPOC"), (vah, "value-area high"), (val, "value-area low")]   # volume-profile levels
+        ext += [(vpoc, "VPOC"), (vah, "value-area high"), (val, "value-area low")]   # current-day volume-profile levels
+        for _pv in (prior_vas or []):   # prior-day value areas (from TPO indicator) — see docs/value-area-framework.md
+            ext += [(_pv.get("poc"), "prevPOC"), (_pv.get("vah"), "prevVAH"), (_pv.get("val"), "prevVAL")]
         if not asian_now:   # only treat the Asian range as S/R AFTER the session completes
             ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
         for lvl, lab in ext:
@@ -661,6 +672,8 @@ def main():
     print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  15m-ER={chop_er}{' CHOP' if is_chop else ''}  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
+    if prior_vas:   # prior-day value areas for the AI to apply the framework (docs/value-area-framework.md)
+        print("prevVA: " + " | ".join(f"VAH{p.get('vah')}/POC{p.get('poc')}/VAL{p.get('val')}" for p in prior_vas))
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
