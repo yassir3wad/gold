@@ -77,35 +77,66 @@ def _next_day(date):
     return (dt.datetime.strptime(date, "%Y-%m-%d").date() + dt.timedelta(days=1)).isoformat()
 
 
-def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
-    """Read ONE day's POC/VAH/VAL off the TPO indicator by replaying to that day's CLOSE and reading the
-    indicator's printed VAH/VAL/POC TEXT labels (the current/just-completed session's value area). We tag
-    it with `date` — known from the cursor WE set — so there's no unreliable bar-index dating. Returns
-    {poc, vah, val} (any may be None if the indicator hadn't finished rendering). For va_store fallback.
+SESSION_CLOSE_HOUR = 22   # the gold daily TPO session rolls over at ~22:00 UTC (verified)
+READ_FROM_HOUR = 15       # start scanning late bars here (the day's last bar before the 22:00 close varies)
 
-    Method (validated): cursor = start of next day => current session = `date`, just closed; its VAH/VAL/POC
-    labels are stable. Retries a few times because the realtime TPO needs time to compute the full profile.
+
+def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
+    """Read ONE day's POC/VAH/VAL off the TPO indicator. The daily session ROLLS OVER at ~22:00 UTC, so a
+    day's finalized value area is only on screen in the window JUST BEFORE 22:00 (≈21:00–21:59): there the
+    session is complete (POC present) AND still the current session whose VAH/VAL/POC TEXT labels are drawn.
+    After 22:00 the labels switch to the next (empty) session. So we replay to `date` and step the cursor
+    into that 21:xx window, then read the labels. The date is known from the cursor WE set — no bar-index
+    dating. Returns {poc, vah, val} (None if the indicator hadn't rendered). For va_store fallback.
     """
     tv = tv or _default_tv
     chart = chart or os.environ.get("TV_CHART", "")
     tv(chart, "timeframe", "30")
-    tv(chart, "replay", "start", "--date", _next_day(date))
-    time.sleep(render_wait)
-    tid = next((s["id"] for s in (tv(chart, "state") or {}).get("studies", []) if "TPO" in (s.get("name") or "")), None)
-    if tid:
-        tv(chart, "indicator", "toggle", tid, "--visible", "true")
-    m = {}
-    for attempt in range(4):
-        time.sleep(render_wait if attempt == 0 else 4.0)
+    target = dt.datetime.strptime(date, "%Y-%m-%d").date()
+
+    def cursor_dt():
+        cu = (tv(chart, "replay", "status") or {}).get("current_date")
+        return dt.datetime.utcfromtimestamp(cu) if cu else None
+
+    def rolled(t):   # past the day's ~22:00 session close (or into the next day)
+        return t is None or t.date() > target or (t.date() == target and t.hour >= SESSION_CLOSE_HOUR)
+
+    def read_va():
         labs = ((tv(chart, "data", "labels", "-f", TPO_FILTER, "-n", "600").get("studies", []) or [{}])[0]).get("labels", [])
         m = {}
         for l in labs:
             t = str(l.get("text", "")).strip()
             if t in ("VAH", "VAL", "POC") and t not in m:
                 m[t] = l.get("price")
-        if all(k in m for k in ("VAH", "VAL", "POC")):   # full value area rendered
+        return m if all(k in m for k in ("VAH", "VAL", "POC")) else None
+
+    tv(chart, "replay", "start", "--date", date)
+    time.sleep(3)
+    # step up to the day's late "close window" (>= ~19:00) — the exact last bar before the 22:00 rollover
+    # varies per day (gaps), so we don't target a fixed hour.
+    for _ in range(70):
+        t = cursor_dt()
+        if t and (t.date() > target or (t.date() == target and t.hour >= READ_FROM_HOUR)):
             break
+        tv(chart, "replay", "step")
+    tid = next((s["id"] for s in (tv(chart, "state") or {}).get("studies", []) if "TPO" in (s.get("name") or "")), None)
+    if tid:
+        tv(chart, "indicator", "toggle", tid, "--visible", "true")
+    # Scan every bar of the calendar day and KEEP THE LAST COMPLETE (POC-present) read = the day's finalized
+    # value area. A weekday rolls over at ~22:00 (its post-22:00 reads are incomplete, so `best` stays at the
+    # pre-22:00 close); a Friday's session runs to the weekend, so its last complete read is at ~23:59. Stop
+    # when the cursor crosses into the next calendar day.
+    best = {}
+    for i in range(30):
+        t = cursor_dt()
+        if t and t.date() > target:
+            break
+        time.sleep(render_wait if i == 0 else 3.0)
+        m = read_va()
+        if m:
+            best = m
+        tv(chart, "replay", "step")
     if tid:
         tv(chart, "indicator", "toggle", tid, "--hidden")
-    return {"poc": m.get("POC"), "vah": m.get("VAH"), "val": m.get("VAL")}
+    return {"poc": best.get("POC"), "vah": best.get("VAH"), "val": best.get("VAL")}
 

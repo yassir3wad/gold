@@ -38,6 +38,35 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 
 ---
 
+## 3a. Previous Value Area framework — AI judgment (Rules 1–7)
+
+When a signal sits **at/near a prior-day VAH / POC / VAL**, the AI review applies the value-area framework
+(full rules: `docs/value-area-framework.md`). The engine prints the inputs the rules need, so the AI judges
+rather than recomputes:
+- `prevVA[open-vs-value]: …` — the **regime** (Rule 3–5): `discovery-UP` (price above the most-recent prevVAH),
+  `discovery-DOWN` (below prevVAL), or `balanced` (inside prev value).
+- `prevVA <MM-DD>: VAH x (above/below Np) | POC … | VAL …` — each prior level's side + pip distance
+  (Rules 1/2/7).
+- `regime=UP/DOWN/flat` (30m EMA stack) — the trend for Rules 1/2.
+
+**Judgment directives:**
+1. **With-trend (Rules 1/2):** in an **up** trend, take longs only at a **VAL/POC below** price or a **VAH acting
+   as support**; in a **down** trend, shorts only at a **VAH/POC above** price or a **VAL acting as resistance**.
+   Require a rejection/confirmation (rejection candle, BOS in the trade direction).
+2. **Open-vs-value (Rules 3–5):** `discovery-UP` → favour longs on a **VAH pullback + rejection** (target POC →
+   single prints → weekly VAH); `discovery-DOWN` → shorts at **VAL**; `balanced` → **fade extremes toward POC**,
+   don't chase the center.
+3. **Validity (Rule 6):** treat a prior VA as **invalid** (don't trade its first touch) if price has put **2+ closes
+   beyond it** or is **developing new value beyond it** — judge from recent bars.
+4. **Selection (Rule 7):** prefer the **nearest active** prevVAH above / prevVAL below; skip levels tested **>3×**,
+   that lost their POC, or were traded clean through by a later session.
+
+**Data we lack:** delta and footprint absorption aren't available — substitute **closes-beyond + rejection wicks**
+as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeballed from recent bars for now
+(coding per-level state tracking is a planned upgrade).
+
+---
+
 ## 3. Filters & gates (quality control)
 
 | Filter | Flag | What it does |
@@ -51,7 +80,7 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 | **RSI exhaustion** | `rsi_filter` | Reads the chart RSI; blocks continuation **longs at RSI>78** / **shorts at RSI<22** (`RSI_OB`/`RSI_OS`) — don't chase a blow-off. Also: RSI **divergence** at a level upgrades a reversal to A+. |
 | **Trend regime** | `trend_regime` | Bias from the **30m EMA stack** (50>100>200=UP) — read during the cached 30m visit, so it's immune to 1m pullbacks (1m is execution-only). **Counter-trend trades require A+**; with-trend pullbacks boosted; **heads-ups only pre-alert in the trend direction**. |
 | **Adaptive TP/SL** | `adaptive_tp` | TP caps **8p short of the next horizontal structure** (`TP_BUFFER_P`); trade is **skipped if <25p clean room** (`MIN_ROOM_P`) — no more aiming +50 into a wall. EMAs/VWAP don't count as walls (price flows through them). |
-| **Volume/TPO profile** | `volume_profile` | Reads your **Kioseff TPO** POC + value-area (VAH/VAL) — it only renders on a high TF, so the scanner briefly flips to 30m, **shows** the TPO, reads its letter-rows, **hides** it, and restores 1m (cached 20m; `try/finally` guarantees the chart never stays on 30m). Falls back to a computed 30m volume profile if unread. Levels added as confluence. |
+| **Volume/TPO profile** | `volume_profile` | **Current-day** POC + value-area (VAH/VAL): reads your **Kioseff TPO** on a brief 30m show/hide (cached; falls back to a computed 30m profile). **Prior-day** VAH/POC/VAL come from the **`va_store` DB** (`prior_day_vas()`) — a reliable, immutable cache harvested off the indicator (the live scrape returns orphaned-primitive residue, so we don't use it). Both added as confluence levels (`prevVAH`/`prevPOC`/`prevVAL`); the prior-day ones also drive the Value-Area framework below. |
 | **Confluence** | `confluence` | When **≥2 levels stack** at price (e.g. VWAP+EMA+zone), the grade is strengthened (A→A+, B→A). Lone touches earn less. |
 | **Cooldown** | (const) | After any signal, **no new signal for 5 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |

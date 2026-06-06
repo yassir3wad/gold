@@ -20,6 +20,9 @@ except Exception: smcmod = None
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import tpo as tpomod   # prior-day VAH/VAL/POC from the TPO indicator
 except Exception: tpomod = None
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import va_store as vastore   # reliable prior-day value-area cache (DB)
+except Exception: vastore = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -186,21 +189,15 @@ def volume_profile():
     try:
         c = json.load(open(VP_FILE))
         if time.time() - c.get("t", 0) < VP_TTL:
-            return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat"), c.get("prior_vas", [])
+            return c.get("vpoc"), c.get("vah"), c.get("val"), c.get("regime", "flat")
     except Exception: pass
     tid = next((s["id"] for s in tv("state").get("studies", [])
                 if "TPO" in s.get("name", "") or "Profile" in s.get("name", "")), None) if USE_TPO else None
-    poc = vah = val = None; regime = "flat"; prior_vas = []
+    poc = vah = val = None; regime = "flat"
     try:
         tv("timeframe", VP_TF)
         if tid: tv("indicator", "toggle", tid, "--visible", "true"); time.sleep(4)   # show TPO to render on 30m
         if tid: poc, vah, val = _tpo_levels()
-        if tid and tpomod:   # prior-day VAH/VAL/POC from the TPO indicator's per-session VA/POC lines (reuse this visible window)
-            try:
-                _al = (tv("data", "lines", "-f", "TPO", "--verbose").get("studies", []) or [{}])[0].get("all_lines", [])
-                _sess = [s for s in tpomod.tpo_sessions(_al) if s.get("vah") is not None]
-                prior_vas = _sess[:-1][-3:] if len(_sess) > 1 else []   # drop the current session (highest x); keep last 3 prior
-            except Exception: pass
         bars = tv("ohlcv", "-n", str(VP_BARS)).get("bars", [])
         if poc is None: poc, vah, val = _calc_vp(bars)                    # fallback: computed profile
         if bars:                                                          # HTF regime from 30m EMA stack
@@ -211,9 +208,29 @@ def volume_profile():
     finally:
         if tid: tv("indicator", "toggle", tid, "--hidden")   # ALWAYS hide (even on error) — TPO stays off the chart
         tv("timeframe", str(BASE_TF))   # restore the execution TF (1m live, 5m backtest) — not hardcoded 1m
-    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime, "prior_vas": prior_vas}, open(VP_FILE, "w"))
+    try: json.dump({"t": time.time(), "vpoc": poc, "vah": vah, "val": val, "regime": regime}, open(VP_FILE, "w"))
     except Exception: pass
-    return poc, vah, val, regime, prior_vas
+    return poc, vah, val, regime
+
+
+def prior_day_vas(symbol, ref_ts, n=3):
+    """Prior-day VAH/POC/VAL from the va_store DB (the reliable, immutable cache) — NOT the live indicator
+    scrape (which returns orphaned-primitive residue). Walks back from the reference date and collects the
+    last `n` CLOSED days that are cached, skipping gaps (weekends/holidays). Pure DB read, no chart I/O, so
+    it's also date-faithful in the backtest (the cursor's date drives `ref_ts`). See docs/value-area-framework.md."""
+    if not vastore:
+        return []
+    ref = _dt.datetime.utcfromtimestamp(ref_ts).date()
+    out = []
+    d = ref
+    for _ in range(14):                 # look back up to 2 weeks to find n cached closed days
+        if len(out) >= n:
+            break
+        d = d - _dt.timedelta(days=1)
+        r = vastore.get(symbol, d.isoformat())
+        if r:
+            out.append(r)
+    return out
 
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
@@ -633,7 +650,8 @@ def main():
     # --- chart indicators: session VWAP (+bands), EMA 50/100/200, RSI — read not computed (self-heal) ---
     vw, vw_up, vw_lo, em, rsi = read_chart_levels([x['close'] for x in b])
     e50, e100, e200 = em.get(50), em.get(100), em.get(200)   # 1m EMAs — execution-level S/R only
-    vpoc, vah, val, regime, prior_vas = volume_profile()   # TPO POC/value-area + prior-day VAs + HTF regime, cached
+    vpoc, vah, val, regime = volume_profile()              # current-day TPO POC/value-area + HTF regime, cached
+    prior_vas = prior_day_vas(SYMBOL, last['time'])        # prior-day VAH/POC/VAL from the va_store DB (reliable, date-faithful)
     if not FL.get("volume_profile", True): vpoc = vah = val = None; prior_vas = []   # flag only suppresses the VP levels
     _rstep = 100*PIP; r10 = round(price/_rstep)*_rstep; near_round = round(r10, PXD) if abs(r10-price) < 20*PIP else None   # pip-scaled round number ($10 gold, 0.01 EUR, 1.00 JPY, 100 idx)
     vol = last.get('volume', 0); avgvol = sum(x.get('volume', 0) for x in b[-20:])/20
@@ -649,8 +667,18 @@ def main():
         if FL.get("ema_levels", True):                     # EMA 50/100/200 as dynamic S/R (read off chart)
             ext += [(e50, "EMA50"), (e100, "EMA100"), (e200, "EMA200")]
         ext += [(vpoc, "VPOC"), (vah, "value-area high"), (val, "value-area low")]   # current-day volume-profile levels
-        for _pv in (prior_vas or []):   # prior-day value areas (from TPO indicator) — see docs/value-area-framework.md
-            ext += [(_pv.get("poc"), "prevPOC"), (_pv.get("vah"), "prevVAH"), (_pv.get("val"), "prevVAL")]
+        for _pv in (prior_vas or []):   # prior-day value areas (from va_store DB) — see docs/value-area-framework.md
+            _vah, _poc, _val = _pv.get("vah"), _pv.get("poc"), _pv.get("val")
+            if None in (_vah, _poc, _val):
+                ext += [(p, l) for p, l in ((_poc, "prevPOC"), (_vah, "prevVAH"), (_val, "prevVAL")) if p is not None]
+                continue
+            # when a boundary HUGS the POC (within ~1/3 of the VA width) it's effectively the same level —
+            # merge so confluence counts it ONCE (a tight POC+VAH shouldn't read as two stacked levels).
+            _mtol = max(dyn_tolp, 0.33 * (_vah - _val))
+            _up, _lo = (_vah - _poc) <= _mtol, (_poc - _val) <= _mtol
+            ext.append((_poc, "prevPOC" + ("/VAH" if _up else "") + ("/VAL" if _lo else "")))
+            if not _up: ext.append((_vah, "prevVAH"))
+            if not _lo: ext.append((_val, "prevVAL"))
         if not asian_now:   # only treat the Asian range as S/R AFTER the session completes
             ext += [(ASIA_H,"Asian high"), (ASIA_L,"Asian low")]
         for lvl, lab in ext:
@@ -672,8 +700,22 @@ def main():
     print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  15m-ER={chop_er}{' CHOP' if is_chop else ''}  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
-    if prior_vas:   # prior-day value areas for the AI to apply the framework (docs/value-area-framework.md)
-        print("prevVA: " + " | ".join(f"VAH{p.get('vah')}/POC{p.get('poc')}/VAL{p.get('val')}" for p in prior_vas))
+    if prior_vas:   # prior-day value areas + the inputs the AI needs to apply the framework (docs/value-area-framework.md)
+        nv = prior_vas[0]   # most recent prior day = the primary reference (priority Rule)
+        nvah, nval, npoc = nv.get("vah"), nv.get("val"), nv.get("poc")
+        # Rules 3-5: where is price vs the most recent prior value area? -> discovery / balanced regime
+        if nvah and price > nvah:   reg = f"discovery-UP (price>{nvah} prevVAH -> favor longs on VAH pullback+rejection)"
+        elif nval and price < nval: reg = f"discovery-DOWN (price<{nval} prevVAL -> favor shorts on VAL pullback+rejection)"
+        else:                       reg = f"balanced (inside {nval}-{nvah} -> fade extremes toward POC, don't chase center)"
+        print(f"prevVA[open-vs-value]: {reg}")
+        # each prior level relative to price (above/below + pip distance) for Rules 1/2/7 (with-trend + nearest-active)
+        for p in prior_vas:
+            md = (p.get("date") or "")[5:]
+            parts = []
+            for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
+                if lvl is None: continue
+                parts.append(f"{role} {lvl} ({'above' if lvl >= price else 'below'} {abs(lvl-price)/PIP:.0f}p)")
+            print(f"  prevVA {md}: " + " | ".join(parts))
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 
     if draw:
