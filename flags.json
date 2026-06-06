@@ -24,5 +24,6 @@
   "ai_decide": true,
   "zone_bounce": true,
   "va_reject": true,
+  "draw_overlay": true,
   "hard_floor": true
 }

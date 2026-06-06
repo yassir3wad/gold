@@ -18,9 +18,10 @@ import tpo, va_store as vs
 
 SYMBOL = "XAUUSD"
 CLOSE_HOUR = 22   # daily TPO session close, UTC (see tpo.SESSION_CLOSE_HOUR)
-# Replay runs ONLY on the dedicated backtest tab (last XAUUSD window), never the live chart. Override with
+# Replay runs ONLY on the dedicated backtest tab, never the live chart. The LIVE gold chart is eabXWKAd
+# (instruments.json XAUUSD.chart); the backtest/spare XAUUSD+TPO tab is eFMec2F9. Override with
 # TV_BACKTEST_CHART if the window id changes.
-BACKTEST_CHART = os.environ.get("TV_BACKTEST_CHART", "eabXWKAd")
+BACKTEST_CHART = os.environ.get("TV_BACKTEST_CHART", "eFMec2F9")
 SCANNER_PLIST = os.path.expanduser("~/Library/LaunchAgents/com.yassir.goldscalper.plist")
 
 
@@ -66,8 +67,11 @@ def harvest(date, force=False):
         finally:
             tpo._default_tv(BACKTEST_CHART, "replay", "stop")   # restore realtime on the backtest tab
     if va and va.get("poc") and va.get("vah") and va.get("val"):
-        vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=va.get("sp"))
-        print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={va.get('sp')}", flush=True)
+        # SP-preservation: never overwrite an existing non-empty SP with an empty read (verbose can come back
+        # empty for a past-day replay, which would otherwise wipe verified single prints).
+        sp = va.get("sp") or ((vs.get(SYMBOL, date) or {}).get("sp") or [])
+        vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=sp)
+        print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={sp}", flush=True)
         return True
     print(f"{date}  INCOMPLETE {va}", flush=True)
     return False

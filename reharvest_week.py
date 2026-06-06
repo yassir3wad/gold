@@ -9,7 +9,7 @@ import sys, os, datetime as dt
 import tpo, va_store as vs
 
 SYMBOL = "XAUUSD"
-BACKTEST_CHART = os.environ.get("TV_BACKTEST_CHART", "eabXWKAd")   # dedicated backtest tab, never the live chart
+BACKTEST_CHART = os.environ.get("TV_BACKTEST_CHART", "eFMec2F9")   # backtest/spare tab (live gold = eabXWKAd)
 
 
 def daterange(a, b):
@@ -29,8 +29,9 @@ def main():
         except Exception as e:
             print(f"{date}  FETCH-ERROR {e}", flush=True); continue
         if va and va.get("poc") and va.get("vah") and va.get("val"):
-            vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=va.get("sp"))
-            print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={va.get('sp')}", flush=True)
+            sp = va.get("sp") or ((vs.get(SYMBOL, date) or {}).get("sp") or [])   # never wipe verified SP with an empty read
+            vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=sp)
+            print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={sp}", flush=True)
         else:
             print(f"{date}  INCOMPLETE {va}", flush=True)
     # restore realtime on the backtest tab

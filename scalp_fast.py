@@ -29,6 +29,9 @@ except Exception: vastate = None
 try:
     import va_reject as vareject   # entry #13: VWAP value-area rejection (docs/gold-vwap-strategy.md)
 except Exception: vareject = None
+try:
+    import draw_overlay as dovr   # live-chart overlay: prior VA (+Level State) + SP + SMC order blocks
+except Exception: dovr = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -62,6 +65,8 @@ WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a 
 CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
 MAX_CHASE_P = 60                   # skip a continuation entry if price already ran >this many pips off the base
 DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
+OVERLAY_OB_BAND_P = 150            # live overlay: only draw SMC order blocks within this many pips of price
+OVERLAY_MIN_INTERVAL = 300         # live overlay: redraw at most every N seconds (avoid per-tick chart flicker)
 TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of the next structure (don't aim into the wall)
 MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
 BE_TRIGGER_P = 35                  # once a trade runs +this many pips favorable (pre-TP1), move stop to breakeven — protect the scratch (06-04: a short ran +38p, never hit TP1, gave it all back to -30p; BE turns that into 0). Set above typical entry-noise pullbacks so it doesn't scratch winners early.
@@ -741,6 +746,25 @@ def main():
             tv("draw","shape","--type","trend_line","--price",str(sl[-2][1]),"--time",str(b[sl[-2][0]]['time']),
                "--price2",str(sl[-1][1]),"--time2",str(b[sl[-1][0]]['time']))
         print("(trendlines drawn)")
+
+    # --- live overlay: draw the value-area level map + SMC order blocks on the chart so it's VISIBLE.
+    # Throttled (OVERLAY_MIN_INTERVAL) and id-tracked so it refreshes in the loop without flickering or
+    # wiping your own drawings. Live only — skipped in --dry and in backtest (TV_CHART_OVERRIDE) runs.
+    if (FL.get("draw_overlay", True) and dovr is not None and not DRY
+            and not os.environ.get("TV_CHART_OVERRIDE") and prior_vas):
+        _ov = prior_vas[0]
+        _ova = {"vah": _ov.get("vah"), "val": _ov.get("val"), "poc": _ov.get("poc")}
+        _ovst = {}
+        if vastate is not None:
+            for _k, _lvl in (("VAH", _ova["vah"]), ("VAL", _ova["val"]), ("POC", _ova["poc"])):
+                if _lvl is not None:
+                    _ovst[_k] = vastate.level_state(_lvl, b, _k, poc=_ova["poc"], bar_minutes=BASE_TF)["state"]
+        _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if smcmod else []
+        _n = dovr.draw_overlay(os.environ.get("TV_CHART", ""), price, _ova, _ovst, _ov.get("sp"), _boxes,
+                               band=OVERLAY_OB_BAND_P * PIP, t0=b[0]["time"], t1=last["time"],
+                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"))
+        if _n >= 0:
+            print(f"(overlay drawn: {_n} shapes)")
 
     # --- volatility gate ---
     if rng10 < vol_min and not AI:
