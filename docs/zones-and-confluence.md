@@ -13,7 +13,10 @@ total grade = base (our zones: buy/sell zones, Key Levels, support/resistance, v
 ## 1. The base layer — our zones (`zones_sd.py`, computed from bars)
 
 Pure-Python, computed from bars resampled to **4h + 1h** (no chart read → zero CDP load, fully
-backtest-faithful). Four distinct sub-layers (do NOT conflate — see [[zone-taxonomy]]):
+backtest-faithful). **Analysis TFs are 4h + 1h only — no daily-TF structure** (4h covers the higher-TF
+structure for a scalp; daily zones/patterns are too distant to act on). Daily appears *only* as daily-derived
+levels: **prior-day high/low (PDH/PDL)** and **prior-3-day value areas**. Four distinct sub-layers (do NOT
+conflate — see [[zone-taxonomy]]):
 
 ### Buy / Sell ZONES (order-block boxes)
 - A **buy zone** at a swing low, a **sell zone** at a swing high — **any color, any volume** (purely
