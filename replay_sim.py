@@ -112,6 +112,8 @@ def main():
         if a.regime_refresh and analyzed % a.regime_refresh == 0:
             try: os.remove(vpfile)                       # force a fresh 30m-regime read at the current cursor
             except Exception: pass
+            try: os.remove(os.path.expanduser(f"~/.tv_fast_{SUFFIX}_smc.json"))   # date-faithful SMC/TL re-read at the cursor
+            except Exception: pass
         if analyzed and analyzed % zone_every == 0:      # ~hourly: rebuild date-faithful zones at the current cursor + redraw
             regen_zones(CH)
         analyzed += 1

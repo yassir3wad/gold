@@ -4,7 +4,7 @@ MANDATORY input (the indicator must be on every chart): order-block / FVG boxes,
 EQH/EQL liquidity. Each SMC element a signal aligns with is a '+' on the trade grade — on TOP of our own
 zones (zones_sd). Date-faithful in replay (the indicator recomputes on the historical bars).
 """
-import subprocess, os, json
+import subprocess, os, json, time
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 SMC_FILTER = "Smart Money"
@@ -76,16 +76,22 @@ def read_trendlines(chart, tv=None):
         return []
 
 
-def read_htf_context(chart, smc_tfs=("240", "60"), tl_tf="240", base_tf="1", tv=None):
+def read_htf_context(chart, smc_tfs=("240", "60"), tl_tf="240", base_tf="1", tv=None, render_wait=4.0):
     """Read the structural confluence on the higher TFs: SMC on each of `smc_tfs` (4h major + 1h scalp
     structure) and Auto Trendlines on `tl_tf` (4h). Restores the execution TF. Cached per scan by the engine.
-    Returns {smc_by_tf, trendlines, present}."""
+    NOTE: the SMC indicator needs a few seconds to RENDER after a TF switch — we wait `render_wait` before
+    reading, else it returns empty. Returns {smc_by_tf, trendlines, present}."""
     _tv = tv or _default_tv
+    live = tv is None                              # only sleep for real reads (tests inject tv)
     smc_by_tf = {}
     for tf in smc_tfs:
         _tv(chart, "timeframe", str(tf))
+        if live and render_wait:
+            time.sleep(render_wait)
         smc_by_tf[str(tf)] = read_smc(chart, tv=tv)
     _tv(chart, "timeframe", str(tl_tf))
+    if live and render_wait:
+        time.sleep(render_wait)
     trendlines = read_trendlines(chart, tv=tv)
     _tv(chart, "timeframe", str(base_tf))   # restore execution TF (1m live / 5m backtest)
     return {"smc_by_tf": smc_by_tf, "trendlines": trendlines,

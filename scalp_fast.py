@@ -14,6 +14,9 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 try:
     sys.path.insert(0, TVDIR); import news as newsmod   # FF economic-calendar blackout (cache-only, no fetch in scanner)
 except Exception: newsmod = None
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import smc as smcmod   # SMC + Auto-Trendlines confluence
+except Exception: smcmod = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -55,6 +58,8 @@ VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day)
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
 BASE_TF = int(os.environ.get("TV_BASE_TF", "1"))   # execution timeframe in minutes (1m default; 5m via TV_BASE_TF=5)
 ER_STRIDE = max(1, 15 // BASE_TF)  # bars per 15m step (15 on 1m, 3 on 5m) so the ER stays a 15m-sampled read
+SMC_TTL = 3600        # SMC/trendline HTF context refreshes slowly (4h); cached this long (live). Backtest clears the cache per replay step-refresh, so it stays date-faithful.
+SMC_TOL = 8           # pips: proximity for SMC level/trendline confluence
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
 RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
                                    # is structurally un-tradeable (no room / negative R:R) and is auto-skipped
@@ -262,7 +267,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
-                 "confluence": True, "volume_profile": True, "zone_reclaim": False,
+                 "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": True,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "hard_floor": True, "rsi_reset_gate": False}   # rsi_reset_gate OFF until data validates thresholds
@@ -540,6 +545,26 @@ def line_through(p1, p2):
     return m, y1 - m * x1
 
 def proj(line, x): return line[0] * x + line[1]
+
+def smc_context():
+    """Cached HTF SMC + Auto-Trendlines confluence context (4h + 1h). Cached to a file (TTL); the backtest
+    clears this cache at its step-refresh so it stays date-faithful. Returns {} if unavailable."""
+    if not smcmod:
+        return {}
+    s = os.environ.get("STATE_SUFFIX") or SYMBOL.lower()
+    f = os.path.expanduser(f"~/.tv_fast_{s}_smc.json")
+    try:
+        c = json.load(open(f))
+        if time.time() - c.get("t", 0) < SMC_TTL:
+            return c.get("ctx", {})
+    except Exception:
+        pass
+    try:
+        ctx = smcmod.read_htf_context(os.environ.get("TV_CHART", ""), base_tf=str(BASE_TF))
+        json.dump({"t": time.time(), "ctx": ctx}, open(f, "w"))
+        return ctx
+    except Exception:
+        return {}
 
 def main():
     draw = "--draw" in sys.argv
@@ -907,6 +932,20 @@ def main():
     if FL["session_filter"] and not sess_ok and not grade.startswith("A+") and not AI:
         print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
+
+    # --- SMC + Auto-Trendlines confluence (MANDATORY HTF context: 4h + 1h) — a '+' on top of our zones ---
+    if FL.get("smc_confluence", True) and smcmod:
+        sctx = smc_context()
+        if not sctx.get("present"):
+            print(">> WARN: LuxAlgo SMC indicator not on chart — mandatory confluence missing (grade not boosted).")
+        else:
+            cf = smcmod.grade_confluence(entry, side, sctx, SMC_TOL * VS)
+            if cf["score"]:
+                htf_note += f" | +{cf['score']} SMC/TL ({', '.join(cf['reasons'][:3])})"
+                if cf["score"] >= 2:                       # 2+ aligned HTF elements = a real grade boost
+                    grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
+                elif grade.startswith("B"):                # a single SMC '+' nudges open-space up
+                    grade = "A"
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     # Zone-rejection stops sit BEYOND the rejection zone's far edge (+buffer) with a WIDER cap, so ordinary
