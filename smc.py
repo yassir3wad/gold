@@ -111,12 +111,29 @@ def grade_confluence(price, side, ctx, tol):
     return {"score": score, "reasons": reasons}
 
 
-def read_chart_context(chart, tv=None):
-    """Option A: read SMC + Auto Trendlines on the CURRENT chart (NO TF switch, no render-wait, no extra
-    tabs). The indicators must be on the execution/replay chart. Fast and date-faithful in replay. Returns
-    {smc, trendlines, present}. The HTF structural layer is supplied separately by our own zones (zones_sd)."""
+def _find_tid(studies, name_substr):
+    return next((s.get("id") for s in studies if name_substr in (s.get("name") or "")), None)
+
+
+def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0):
+    """Option A: read SMC + Auto Trendlines on the CURRENT chart (NO TF switch, no extra tabs). Since Pine
+    indicators must be VISIBLE to read, we SHOW them → wait to render → read → HIDE — so the chart stays
+    clean (we draw our own zones from the stored data) and the indicators don't constantly re-render. Cached
+    by the engine and refreshed ~hourly. Returns {smc, trendlines, present}."""
+    _tv = tv or _default_tv
+    live = tv is None
+    smc_id = tl_id = None
+    if manage_visibility:
+        studies = (_tv(chart, "state") or {}).get("studies", [])
+        smc_id = _find_tid(studies, "Smart Money"); tl_id = _find_tid(studies, "Auto Trendlines")
+        for tid in (smc_id, tl_id):
+            if tid: _tv(chart, "indicator", "toggle", tid, "--visible", "true")
+        if live and (smc_id or tl_id) and render_wait: time.sleep(render_wait)   # let them render before reading
     smc = read_smc(chart, tv=tv)
     trendlines = read_trendlines(chart, tv=tv)
+    if manage_visibility:
+        for tid in (smc_id, tl_id):
+            if tid: _tv(chart, "indicator", "toggle", tid, "--hidden")   # hide again — store-and-hide
     return {"smc": smc, "trendlines": trendlines, "present": smc.get("present", False)}
 
 

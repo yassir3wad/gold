@@ -71,11 +71,20 @@ def test_htf_context():
 def test_read_chart_context():
     calls = []
     def spy(chart, *a):
-        calls.append(a); return fake_tv(None)(chart, *a)
+        calls.append(a)
+        if a and a[0] == "state":
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "id": "AJ1"},
+                                {"name": "Auto Trendlines", "id": "TL1"}]}
+        return fake_tv(None)(chart, *a)
     ctx = S.read_chart_context("X", tv=spy)
     check("chart-ctx: NO timeframe switch (Option A)", not any(a and a[0] == "timeframe" for a in calls))
     check("chart-ctx: returns smc + trendlines + present", set(ctx) == {"smc", "trendlines", "present"})
     check("chart-ctx: smc read on current chart", ctx["present"] is True and len(ctx["smc"]["boxes"]) == 2)
+    # store-and-hide: shows then hides BOTH indicators
+    toggles = [a for a in calls if a and a[0] == "indicator" and a[1] == "toggle"]
+    shown = [a for a in toggles if "--visible" in a]; hidden = [a for a in toggles if "--hidden" in a]
+    check("chart-ctx: shows both indicators to read", len(shown) == 2)
+    check("chart-ctx: hides both after reading (store-and-hide)", len(hidden) == 2)
 
 
 def test_grade_confluence():
