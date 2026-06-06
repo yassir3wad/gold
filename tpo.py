@@ -103,12 +103,17 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
 
     def read_va():
         labs = ((tv(chart, "data", "labels", "-f", TPO_FILTER, "-n", "600").get("studies", []) or [{}])[0]).get("labels", [])
-        m = {}
+        m = {}; sp = []
         for l in labs:
             t = str(l.get("text", "")).strip()
             if t in ("VAH", "VAL", "POC") and t not in m:
                 m[t] = l.get("price")
-        return m if all(k in m for k in ("VAH", "VAL", "POC")) else None
+            elif t == "SP" and l.get("price") is not None:
+                sp.append(l.get("price"))   # single-print levels (target hierarchy, Rule 3/4)
+        if not all(k in m for k in ("VAH", "VAL", "POC")):
+            return None
+        m["SP"] = sp
+        return m
 
     tv(chart, "replay", "start", "--date", date)
     time.sleep(3)
@@ -138,5 +143,25 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
         tv(chart, "replay", "step")
     if tid:
         tv(chart, "indicator", "toggle", tid, "--hidden")
-    return {"poc": best.get("POC"), "vah": best.get("VAH"), "val": best.get("VAL")}
+    return {"poc": best.get("POC"), "vah": best.get("VAH"), "val": best.get("VAL"),
+            "sp": group_sp(best.get("SP", []))}
+
+
+def group_sp(prices, max_gap=None):
+    """Group single-print LEVELS into [lo, hi] zones: adjacent SP levels (within ~2.5 tick-spacings) belong
+    to the same single-print zone. `max_gap` auto-derives from the tightest level spacing if not given.
+    Pure (testable). Returns sorted [[lo, hi], ...]."""
+    ps = sorted({round(p, 2) for p in prices if p is not None})
+    if not ps:
+        return []
+    if max_gap is None:
+        gaps = [ps[i + 1] - ps[i] for i in range(len(ps) - 1)]
+        max_gap = (min(gaps) * 2.5) if gaps else 0.0
+    zones = [[ps[0], ps[0]]]
+    for p in ps[1:]:
+        if p - zones[-1][1] <= max_gap:
+            zones[-1][1] = p
+        else:
+            zones.append([p, p])
+    return zones
 

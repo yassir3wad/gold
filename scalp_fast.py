@@ -715,6 +715,8 @@ def main():
             for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
                 if lvl is None: continue
                 parts.append(f"{role} {lvl} ({'above' if lvl >= price else 'below'} {abs(lvl-price)/PIP:.0f}p)")
+            if p.get("sp"):   # single-print zones = target levels (Rule 3/4 hierarchy: POC -> single prints -> ...)
+                parts.append("SP[targets] " + ", ".join(f"{z[0]}-{z[1]}" for z in p["sp"]))
             print(f"  prevVA {md}: " + " | ".join(parts))
     print(f"HTF: {'@R '+at_R[2] if at_R else ''}{'@S '+at_S[2] if at_S else ''}{'(open space)' if not at_R and not at_S else ''}")
 

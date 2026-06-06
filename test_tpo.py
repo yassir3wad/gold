@@ -59,8 +59,17 @@ def test_unrelated_colors_dropped():
     check("no VA/POC -> no session", T.tpo_sessions(lines) == [])
 
 
+def test_group_sp():
+    z = T.group_sp([4427, 4423, 4400, 4394, 4388, 4382])   # one run 4382-4400 + a tight pair 4423/4427
+    check("group_sp: 2 zones from 2 clusters", len(z) == 2)
+    check("group_sp: zones are [lo,hi], sorted", z[0] == [4382, 4400] and z[-1] == [4423, 4427])
+    check("group_sp: empty -> []", T.group_sp([]) == [])
+    check("group_sp: single level -> one point-zone", T.group_sp([4400]) == [[4400, 4400]])
+    check("group_sp: dedups + ignores None", T.group_sp([4400, 4400, None]) == [[4400, 4400]])
+
+
 def main():
-    for fn in (test_pairs_and_poc, test_rgb_match_ignores_alpha, test_poc_only_session, test_unrelated_colors_dropped):
+    for fn in (test_pairs_and_poc, test_rgb_match_ignores_alpha, test_poc_only_session, test_unrelated_colors_dropped, test_group_sp):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
