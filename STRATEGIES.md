@@ -129,6 +129,9 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | `tg_monitor.sh` | start/stop/status the autonomous launchd monitor |
 | `tpo.py` / `va_store.py` | Read prior-day VAH/POC/VAL + single-print zones off the Kioseff **TPO indicator**; immutable sqlite cache (`value_areas.db`) |
 | `va_state.py` | Rules 6/7: classify a prior VA level vs current-session bars → **Level State** (Untested/Rejected/Accepted/Flipped) |
+| `va_reject.py` | Entry #13: VWAP value-area rejection trigger (the `gold-vwap-strategy.md` setups) |
+| `draw_overlay.py` | Live-chart overlay: prior VAH/VAL/POC (date + Level State) + SP zones + near-price SMC order blocks; loop-refreshed, id-tracked |
+| `docs/value-area-system.md` | End-to-end map of the whole prior-day value-area subsystem (harvest → store → state → trade → draw) |
 | `harvest_daily.py` | Self-dating, idempotent daily VA harvest of the most-recent closed session. Replay runs ONLY on the **dedicated backtest tab** (`TV_BACKTEST_CHART`, default `eabXWKAd`) — never the live chart — and pins the pair to PEPPERSTONE:XAUUSD + verifies it before reading. Refuses to store a read unless the replay cursor is confirmed on the target date (no silent mis-dating). |
 | `reharvest_week.py` | One-off: force re-harvest a date range (used to backfill SP zones) |
 | `docs/value-area-framework.md` / `docs/gold-vwap-strategy.md` | Rules 1–7 framework + the VWAP-bias execution spec the AI applies |

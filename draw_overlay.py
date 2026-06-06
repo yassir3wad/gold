@@ -6,13 +6,12 @@
 
 `overlay_specs(...)` is the PURE decision of WHAT to draw (testable). `draw_overlay(...)` executes it and
 tracks the entity ids it created in a state file so the next refresh removes ONLY our shapes — never the
-user's own drawings (so it can run every loop tick on the live chart). Tag is appended to every label.
+user's own drawings (so it can run every loop tick on the live chart).
 """
 import subprocess, os, json, time
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
-TAG = "ENG"   # appended as " [ENG]" to every label so the overlay is recognizable
-STATE = os.path.expanduser("~/.tv_overlay_ids.json")
+STATE = os.path.expanduser("~/.tv_overlay_ids.json")   # entity ids we drew (per chart) — refresh removes only these
 
 # colors (match draw_review's value-area palette)
 POC_C = "rgba(240,220,40,0.95)"    # yellow
@@ -115,7 +114,7 @@ def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None
     specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date)
     new_ids = []
     for s in specs:
-        lab = f"{s['label']} [{TAG}]"
+        lab = s["label"]   # shapes are tracked by entity id (STATE), so no visible tag is needed
         if s["type"] == "hline":
             r = _tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{s['price']}",
                     "--time", str(int(t1 or t0 or 0)), "--text", lab,
