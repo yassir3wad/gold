@@ -19,7 +19,8 @@ def fake_tv(canned):
         if "labels" in a:
             return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]",
                                  "labels": [{"text": "BOS", "price": 4500}, {"text": "CHoCH", "price": 4480},
-                                            {"text": "EQH", "price": 4525}, {"text": "EQL", "price": 4455}]}]}
+                                            {"text": "EQH", "price": 4525}, {"text": "EQL", "price": 4455},
+                                            {"text": "Strong High", "price": 4530}, {"text": "Weak Low", "price": 4450}]}]}
         return {"studies": []}
     return tv
 
@@ -30,8 +31,35 @@ def test_read_smc():
     check("read: 2 boxes", len(smc["boxes"]) == 2)
     check("read: structure = BOS+CHoCH only", sorted(s["text"] for s in smc["structure"]) == ["BOS", "CHoCH"])
     check("read: liquidity = EQH+EQL only", sorted(l["text"] for l in smc["liquidity"]) == ["EQH", "EQL"])
+    check("read: swings = Strong/Weak High/Low (default-on liquidity)",
+          sorted(s["text"] for s in smc["swings"]) == ["Strong High", "Weak Low"])
     empty = S.read_smc("X", tv=lambda c, *a: {"studies": []})
     check("read: missing indicator -> present False", empty["present"] is False)
+
+
+def test_dedup_levels():
+    items = [{"text": "BOS", "price": 4500}, {"text": "BOS", "price": 4501}, {"text": "CHoCH", "price": 4480}]
+    out = S.dedup_levels(items, tol=2)
+    check("dedup_levels: prices within tol collapse to one", len(out) == 2)
+    out0 = S.dedup_levels([{"price": 4500}, {"price": 4500}, {"price": 4480}], tol=0)
+    check("dedup_levels: exact duplicates collapse at tol 0", len(out0) == 2)
+
+
+def test_case_insensitive_and_dedup():
+    def tv(chart, *a):
+        if "boxes" in a:
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "zones": []}]}
+        if "labels" in a:
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "labels": [
+                {"text": "bos", "price": 4500}, {"text": "BOS", "price": 4501},   # case-variant + near-dup
+                {"text": "choch", "price": 4480},
+                {"text": "eql", "price": 4455}, {"text": "strong low", "price": 4450}]}]}
+        return {"studies": []}
+    smc = S.read_smc("X", tv=tv, dedup_tol=2)
+    # 'bos'/'BOS' (near-dup) collapse to one, plus 'choch' -> 2 structure entries (case-insensitive match)
+    check("ci+dedup: lowercase recognized & near-dups collapsed", len(smc["structure"]) == 2)
+    check("ci: lowercase 'eql' -> liquidity", any(l["text"].upper() == "EQL" for l in smc["liquidity"]))
+    check("ci: lowercase 'strong low' -> swing", any("low" in s["text"].lower() for s in smc["swings"]))
 
 
 def test_in_box():
@@ -53,6 +81,9 @@ def test_confluence():
     # Auto-Trendline alignment adds a point
     r3 = S.confluence(4300, "LONG", smc, tol=3, trendlines=[4301])
     check("confluence: near an Auto-Trendline -> +1", r3["score"] == 1 and "Auto-Trendline" in r3["reasons"])
+    # near the Strong High (4530) -> +1 strong/weak H/L liquidity
+    r4 = S.confluence(4529, "LONG", smc, tol=3)
+    check("confluence: near Strong/Weak H/L -> +1", any("strong/weak" in x.lower() for x in r4["reasons"]))
 
 
 def test_htf_context():
@@ -97,7 +128,7 @@ def test_grade_confluence():
 
 
 def main():
-    for fn in (test_read_smc, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
+    for fn in (test_read_smc, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

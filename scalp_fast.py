@@ -561,7 +561,7 @@ def smc_context():
     except Exception:
         pass
     try:
-        ctx = smcmod.read_chart_context(os.environ.get("TV_CHART", ""))
+        ctx = smcmod.read_chart_context(os.environ.get("TV_CHART", ""), dedup_tol=SMC_TOL)
         json.dump({"t": time.time(), "ctx": ctx}, open(f, "w"))
         return ctx
     except Exception:

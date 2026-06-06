@@ -21,17 +21,40 @@ def _default_tv(chart, *a):
         return {}
 
 
-def read_smc(chart, tv=None):
+# Label texts LuxAlgo draws (matched case-insensitively — the indicator emits mixed case e.g. 'CHoCH').
+_STRUCTURE_TAGS = ("BOS", "CHOCH")                                  # break-of-structure lines
+_LIQUIDITY_TAGS = ("EQH", "EQL")                                    # equal-highs/lows liquidity
+_SWING_TAGS = ("STRONG HIGH", "WEAK HIGH", "STRONG LOW", "WEAK LOW")  # trailing strong/weak swing extremes (default-on)
+
+
+def dedup_levels(items, tol=0.0):
+    """Collapse labels whose prices cluster within `tol`. LuxAlgo's default Mode='Historical' keeps EVERY
+    past BOS/CHoCH line, so many sit at ~the same level; this stops stale repeats from cluttering the list.
+    Greedy: sort by price, keep the first of each cluster. Returns a filtered list (original dicts)."""
+    out = []
+    for it in sorted(items, key=lambda x: x.get("price", 0)):
+        if not out or abs(it.get("price", 0) - out[-1].get("price", 0)) > tol:
+            out.append(it)
+    return out
+
+
+def read_smc(chart, tv=None, dedup_tol=0.0):
     """Pull the SMC boxes + labels. Returns {present, boxes:[{high,low}], structure:[{text,price}],
-    liquidity:[{text,price}]}. `present` is False when the indicator isn't on the chart (it's mandatory)."""
+    liquidity:[{text,price}], swings:[{text,price}]}. `structure`=BOS/CHoCH, `liquidity`=EQH/EQL,
+    `swings`=Strong/Weak High/Low (default-on trailing extremes — protected liquidity a scalp targets).
+    Matching is case-insensitive; `structure` is deduped within `dedup_tol`. `present` is False when the
+    indicator isn't on the chart (it's mandatory)."""
     tv = tv or _default_tv
     bx = tv(chart, "data", "boxes", "--study-filter", SMC_FILTER).get("studies", [])
     lb = tv(chart, "data", "labels", "--study-filter", SMC_FILTER).get("studies", [])
     boxes = bx[0].get("zones", []) if bx else []
     labels = lb[0].get("labels", []) if lb else []
-    structure = [l for l in labels if l.get("text") in ("BOS", "CHoCH")]
-    liquidity = [l for l in labels if l.get("text") in ("EQH", "EQL")]
-    return {"present": bool(bx), "boxes": boxes, "structure": structure, "liquidity": liquidity}
+    def _tag(l): return (l.get("text") or "").strip().upper()
+    structure = dedup_levels([l for l in labels if _tag(l) in _STRUCTURE_TAGS], dedup_tol)
+    liquidity = [l for l in labels if _tag(l) in _LIQUIDITY_TAGS]
+    swings = [l for l in labels if _tag(l) in _SWING_TAGS]
+    return {"present": bool(bx), "boxes": boxes, "structure": structure,
+            "liquidity": liquidity, "swings": swings}
 
 
 TRENDLINE_FILTER = "Auto Trendlines"
@@ -115,7 +138,7 @@ def _find_tid(studies, name_substr):
     return next((s.get("id") for s in studies if name_substr in (s.get("name") or "")), None)
 
 
-def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0):
+def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0, dedup_tol=0.0):
     """Option A: read SMC + Auto Trendlines on the CURRENT chart (NO TF switch, no extra tabs). Since Pine
     indicators must be VISIBLE to read, we SHOW them → wait to render → read → HIDE — so the chart stays
     clean (we draw our own zones from the stored data) and the indicators don't constantly re-render. Cached
@@ -129,7 +152,7 @@ def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0):
         for tid in (smc_id, tl_id):
             if tid: _tv(chart, "indicator", "toggle", tid, "--visible", "true")
         if live and (smc_id or tl_id) and render_wait: time.sleep(render_wait)   # let them render before reading
-    smc = read_smc(chart, tv=tv)
+    smc = read_smc(chart, tv=tv, dedup_tol=dedup_tol)
     trendlines = read_trendlines(chart, tv=tv)
     if manage_visibility:
         for tid in (smc_id, tl_id):
@@ -148,7 +171,8 @@ def near_level(price, levels, tol):
 
 def confluence(price, side, smc, tol, trendlines=None):
     """Confluence score added to the trade grade (on top of our own zones): +1 in an SMC order-block/FVG,
-    +1 near a BOS/CHoCH, +1 near EQH/EQL liquidity, +1 near an Auto-Trendline. Returns {score, reasons}."""
+    +1 near a BOS/CHoCH, +1 near EQH/EQL liquidity, +1 near a Strong/Weak High/Low, +1 near an
+    Auto-Trendline. Returns {score, reasons}."""
     score = 0; reasons = []
     if in_box(price, smc.get("boxes", [])):
         score += 1; reasons.append("SMC order-block/FVG")
@@ -156,6 +180,8 @@ def confluence(price, side, smc, tol, trendlines=None):
         score += 1; reasons.append("SMC BOS/CHoCH")
     if near_level(price, [l["price"] for l in smc.get("liquidity", [])], tol):
         score += 1; reasons.append("SMC liquidity (EQH/EQL)")
+    if near_level(price, [s["price"] for s in smc.get("swings", [])], tol):
+        score += 1; reasons.append("SMC strong/weak H/L")
     if near_level(price, trendlines or smc.get("trendlines", []), tol):
         score += 1; reasons.append("Auto-Trendline")
     return {"score": score, "reasons": reasons}

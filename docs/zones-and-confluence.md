@@ -64,10 +64,24 @@ The **mandatory** "+" on top of the base. Read the actual indicators (not our ap
 - inside an **SMC order-block / FVG** box
 - at an **SMC BOS / CHoCH** structure level
 - at **SMC EQH / EQL** liquidity
+- at an **SMC Strong / Weak High-Low** (the trailing strong/weak swing extremes — protected liquidity a
+  scalp targets; a *Strong High* unbroken = counter-trend resistance, when taken the trend flips)
 - on an **Auto-Trendline** (its diagonal lines projected to the current bar, read via chart-model eval)
 
 ≥2 confluences → bump the grade (B→A, A→A+). If the SMC indicator isn't on the chart → **WARN** (mandatory
 input missing), grade not boosted.
+
+### What the indicator actually draws (from the LuxAlgo source, `smc-indicator.txt`)
+Default-on elements our reader sees: **5 internal order-block boxes** (no text), **BOS/CHoCH** lines+labels
+(both internal-dashed and swing-solid), **EQH/EQL** (dotted), and **Strong/Weak High-Low** lines+labels.
+FVG, Premium/Discount, and MTF levels are **off by default**. Key reading facts:
+- Labels are matched **case-insensitively** (the indicator emits mixed case, e.g. `CHoCH`).
+- Default **Mode = Historical** keeps *every* past BOS/CHoCH line → many stale labels at ~the same price.
+  We **dedup** structure within the instrument tolerance (`SMC_TOL`) so repeats don't inflate the list.
+- An **order block** = within the leg from the swing pivot to the break, the candle with the extreme
+  high/low, boxed full **high→low**, extended right, **invalidated when price wicks through it** (default
+  HIGHLOW mitigation). That wick-through kill **matches our own Key-Level rule** — independent confirmation.
+  (LuxAlgo's box geometry differs from our body-bottom-by-color zones; ours is the base, theirs the "+".)
 
 ### Option A — read on the execution chart, store-and-hide (the chosen design)
 Reading multi-TF SMC by **switching the chart's timeframe** every scan was slow (~140s) and hung the CDP
