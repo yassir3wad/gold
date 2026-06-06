@@ -8,6 +8,7 @@ Pins to a dedicated chart; nothing wired into the engine. For visual review befo
 import argparse, subprocess, os, json, time
 import zones_sd as Z
 import patterns as P
+import smc as SMC
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 TAG = "REVIEW"
@@ -55,11 +56,14 @@ def main():
 
     SUP = json.dumps({"linecolor": "rgba(0,210,90,0.85)", "linestyle": 0, "linewidth": 2})   # support line (green)
     RES = json.dumps({"linecolor": "rgba(240,70,70,0.85)", "linestyle": 0, "linewidth": 2})   # resistance line (red)
+    PURP = json.dumps({"linecolor": "rgba(180,120,255,0.85)", "linestyle": 2})   # SMC structure / liquidity / swings
+    ORNG = json.dumps({"linecolor": "rgba(255,170,60,0.85)", "linestyle": 1})    # Auto-Trendline (projected to now)
 
     tv(CH, "symbol", "XAUUSD")
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     tv(CH, "draw", "clear")
-    drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0}
+    drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0}
+    log = {"date": a.date, "chart": CH, "price": None, "zones": [], "sr": [], "va": [], "smc": {}}
     cur_price = None
     sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
@@ -102,11 +106,15 @@ def main():
         if (buy and nbuy >= 5) or (not buy and nsell >= 5):
             continue
         flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
-        kl = z["key_level"] and not flipped
+        # KL is a property of the buy/sell ZONE tier — NOT the support/resistance LINE tier. A zone whose
+        # origin is a strong level candle is labeled support/resistance and must never carry a "KL" tag.
+        kl = z["key_level"] and not flipped and not z.get("strong_lvl")
         flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
         ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
         right_edge = z["t1"] + 50 * 4 * 3600   # extend boxes ~50 4h-bars into the empty right side
         rect(CH, z["time"], z["lo"], right_edge, z["hi"], f"{z['tf']} {role}{flag}", ov)
+        log["zones"].append({"tf": z["tf"], "role": role, "lo": z["lo"], "hi": z["hi"], "mid": round(mid, 2),
+                             "key_level": bool(kl), "score": z.get("score"), "flip": bool(flipped)})
         seen.append(mid); drawn["demand" if buy else "supply"] += 1
         if kl: drawn["KL"] += 1
         nbuy += buy; nsell += (not buy)
@@ -122,6 +130,7 @@ def main():
                 continue
             seen.append(p)
             hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color)
+            log["sr"].append({"role": role, "price": p, "tf": l, "flip": bool(fl)})
             drawn[role] += 1
             if len(seen) >= 4:
                 break
@@ -136,10 +145,38 @@ def main():
             hline(CH, v["poc"], f"POC {md}", BLUE)
             hline(CH, v["vah"], f"VAH {md}", GRAY)
             hline(CH, v["val"], f"VAL {md}", GRAY)
+            log["va"].append({"date": v["date"], "poc": v["poc"], "vah": v["vah"], "val": v["val"]})
             drawn["va"] += 3
 
-    tv(CH, "timeframe", a.display_tf)
-    print(f"drawn on {CH} @ {a.date}: {drawn}")
+    # --- SMC confluence layer (LuxAlgo) — read on the chart (store-and-hide), draw as our own labeled lines ---
+    tv(CH, "timeframe", a.display_tf)   # read SMC on the display TF (1h)
+    try:
+        sctx = SMC.read_chart_context(CH, dedup_tol=8)
+        sm = sctx.get("smc", {})
+        # Historical mode dumps the WHOLE chart (200+ boxes, 500+ labels). Draw only what's near the working
+        # price; keep the full read in the log for reference.
+        band = round(0.02 * cur_price, 2) if cur_price else 100
+        nf = SMC.filter_near(sctx, cur_price, band); near = nf["smc"]
+        log["smc"] = {"present": sctx.get("present"), "near_band": band,
+                      "boxes": sm.get("boxes", []), "structure": sm.get("structure", []),
+                      "liquidity": sm.get("liquidity", []), "swings": sm.get("swings", []),
+                      "trendlines": sctx.get("trendlines", []),
+                      "near": {"boxes": near.get("boxes", []), "structure": near.get("structure", []),
+                               "liquidity": near.get("liquidity", []), "swings": near.get("swings", []),
+                               "trendlines": nf.get("trendlines", [])}}
+        for s in near.get("structure", []):
+            hline(CH, s["price"], f"SMC {s.get('text','')}", PURP); drawn["smc"] += 1
+        for l in near.get("liquidity", []) + near.get("swings", []):
+            hline(CH, l["price"], f"SMC {l.get('text','')}", PURP); drawn["smc"] += 1
+        for tl in nf.get("trendlines", []):
+            hline(CH, tl, "Auto-TL", ORNG); drawn["smc"] += 1
+        # OB boxes carry no time in the read — log them; the SMC indicator itself shows the exact boxes.
+    except Exception as e:
+        log["smc"] = {"error": str(e)}
+
+    log["price"] = cur_price
+    out = f"/tmp/review_{a.date}.json"; json.dump(log, open(out, "w"), indent=1)
+    print(f"drawn on {CH} @ {a.date}: {drawn}\nlog: {out}")
 
 
 if __name__ == "__main__":

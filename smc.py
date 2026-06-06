@@ -38,15 +38,16 @@ def dedup_levels(items, tol=0.0):
     return out
 
 
-def read_smc(chart, tv=None, dedup_tol=0.0):
+def read_smc(chart, tv=None, dedup_tol=0.0, max_labels=600):
     """Pull the SMC boxes + labels. Returns {present, boxes:[{high,low}], structure:[{text,price}],
     liquidity:[{text,price}], swings:[{text,price}]}. `structure`=BOS/CHoCH, `liquidity`=EQH/EQL,
     `swings`=Strong/Weak High/Low (default-on trailing extremes — protected liquidity a scalp targets).
     Matching is case-insensitive; `structure` is deduped within `dedup_tol`. `present` is False when the
-    indicator isn't on the chart (it's mandatory)."""
+    indicator isn't on the chart (it's mandatory). `max_labels` lifts the reader's default 50-label cap —
+    Historical mode emits 500+ labels, so the Strong/Weak swings get truncated away without this."""
     tv = tv or _default_tv
     bx = tv(chart, "data", "boxes", "--study-filter", SMC_FILTER).get("studies", [])
-    lb = tv(chart, "data", "labels", "--study-filter", SMC_FILTER).get("studies", [])
+    lb = tv(chart, "data", "labels", "--study-filter", SMC_FILTER, "--max", str(max_labels)).get("studies", [])
     boxes = bx[0].get("zones", []) if bx else []
     labels = lb[0].get("labels", []) if lb else []
     def _tag(l): return (l.get("text") or "").strip().upper()
@@ -163,6 +164,21 @@ def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0, 
 def in_box(price, boxes, pad=0.0):
     """The order-block / FVG box containing price (± pad), or None."""
     return next((b for b in boxes if b["low"] - pad <= price <= b["high"] + pad), None)
+
+
+def filter_near(ctx, price, band):
+    """Keep only the SMC elements within `band` of `price`. LuxAlgo's default Mode=Historical emits the
+    indicator's ENTIRE history (200+ boxes, 500+ labels spanning the whole chart); for a scalp only the
+    handful at the working price matter. Used to de-clutter drawing/logging (confluence already credits
+    near-price only). Accepts a read_chart_context dict {smc, trendlines, ...}; returns a filtered copy."""
+    if not price:
+        return ctx
+    sm = dict(ctx.get("smc", {}))
+    sm["boxes"] = [b for b in sm.get("boxes", []) if b["low"] - band <= price <= b["high"] + band]
+    for k in ("structure", "liquidity", "swings"):
+        sm[k] = [x for x in sm.get(k, []) if abs(x.get("price", 0) - price) <= band]
+    tls = [t for t in ctx.get("trendlines", []) if abs(t - price) <= band]
+    return {**ctx, "smc": sm, "trendlines": tls}
 
 
 def near_level(price, levels, tol):

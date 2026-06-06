@@ -45,6 +45,36 @@ def test_dedup_levels():
     check("dedup_levels: exact duplicates collapse at tol 0", len(out0) == 2)
 
 
+def test_read_smc_lifts_label_cap():
+    seen = {}
+    def tv(chart, *a):
+        if "labels" in a:
+            seen["a"] = a
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "labels": []}]}
+        if "boxes" in a:
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "zones": []}]}
+        return {"studies": []}
+    S.read_smc("X", tv=tv)
+    a = seen.get("a", ())
+    check("read: labels read lifts the 50-label cap (--max passed, >=200)",
+          "--max" in a and int(a[a.index("--max") + 1]) >= 200)
+
+
+def test_filter_near():
+    ctx = {"smc": {"boxes": [{"high": 4520, "low": 4505}, {"high": 5306, "low": 5300}],
+                   "structure": [{"text": "BOS", "price": 4500}, {"text": "BOS", "price": 4870}],
+                   "liquidity": [{"text": "EQL", "price": 4531}],
+                   "swings": [{"text": "Strong High", "price": 4870}]},
+           "trendlines": [4542, 4870], "present": True}
+    out = S.filter_near(ctx, price=4539, band=50)
+    check("filter_near: keeps the near box, drops the far one",
+          len(out["smc"]["boxes"]) == 1 and out["smc"]["boxes"][0]["high"] == 4520)
+    check("filter_near: drops far structure", [s["price"] for s in out["smc"]["structure"]] == [4500])
+    check("filter_near: keeps near liquidity", len(out["smc"]["liquidity"]) == 1)
+    check("filter_near: drops far swing", out["smc"]["swings"] == [])
+    check("filter_near: filters trendlines to near price", out["trendlines"] == [4542])
+
+
 def test_case_insensitive_and_dedup():
     def tv(chart, *a):
         if "boxes" in a:
@@ -128,7 +158,7 @@ def test_grade_confluence():
 
 
 def main():
-    for fn in (test_read_smc, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
+    for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
