@@ -111,6 +111,15 @@ def grade_confluence(price, side, ctx, tol):
     return {"score": score, "reasons": reasons}
 
 
+def read_chart_context(chart, tv=None):
+    """Option A: read SMC + Auto Trendlines on the CURRENT chart (NO TF switch, no render-wait, no extra
+    tabs). The indicators must be on the execution/replay chart. Fast and date-faithful in replay. Returns
+    {smc, trendlines, present}. The HTF structural layer is supplied separately by our own zones (zones_sd)."""
+    smc = read_smc(chart, tv=tv)
+    trendlines = read_trendlines(chart, tv=tv)
+    return {"smc": smc, "trendlines": trendlines, "present": smc.get("present", False)}
+
+
 def in_box(price, boxes, pad=0.0):
     """The order-block / FVG box containing price (± pad), or None."""
     return next((b for b in boxes if b["low"] - pad <= price <= b["high"] + pad), None)

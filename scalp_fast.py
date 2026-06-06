@@ -547,8 +547,9 @@ def line_through(p1, p2):
 def proj(line, x): return line[0] * x + line[1]
 
 def smc_context():
-    """Cached HTF SMC + Auto-Trendlines confluence context (4h + 1h). Cached to a file (TTL); the backtest
-    clears this cache at its step-refresh so it stays date-faithful. Returns {} if unavailable."""
+    """SMC + Auto-Trendlines confluence read on the CURRENT (execution/replay) chart — no TF switch (Option
+    A). Cached to a file (TTL) to avoid re-reading every tick; the backtest clears this cache at its
+    step-refresh so it stays date-faithful. The HTF layer comes from our own zones. Returns {} if missing."""
     if not smcmod:
         return {}
     s = os.environ.get("STATE_SUFFIX") or SYMBOL.lower()
@@ -560,7 +561,7 @@ def smc_context():
     except Exception:
         pass
     try:
-        ctx = smcmod.read_htf_context(os.environ.get("TV_CHART", ""), base_tf=str(BASE_TF))
+        ctx = smcmod.read_chart_context(os.environ.get("TV_CHART", ""))
         json.dump({"t": time.time(), "ctx": ctx}, open(f, "w"))
         return ctx
     except Exception:
@@ -939,7 +940,7 @@ def main():
         if not sctx.get("present"):
             print(">> WARN: LuxAlgo SMC indicator not on chart — mandatory confluence missing (grade not boosted).")
         else:
-            cf = smcmod.grade_confluence(entry, side, sctx, SMC_TOL * VS)
+            cf = smcmod.confluence(entry, side, sctx.get("smc", {}), SMC_TOL * VS, trendlines=sctx.get("trendlines", []))
             if cf["score"]:
                 htf_note += f" | +{cf['score']} SMC/TL ({', '.join(cf['reasons'][:3])})"
                 if cf["score"] >= 2:                       # 2+ aligned HTF elements = a real grade boost

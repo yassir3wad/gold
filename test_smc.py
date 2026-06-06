@@ -68,6 +68,16 @@ def test_htf_context():
     check("htf: present True", ctx["present"] is True)
 
 
+def test_read_chart_context():
+    calls = []
+    def spy(chart, *a):
+        calls.append(a); return fake_tv(None)(chart, *a)
+    ctx = S.read_chart_context("X", tv=spy)
+    check("chart-ctx: NO timeframe switch (Option A)", not any(a and a[0] == "timeframe" for a in calls))
+    check("chart-ctx: returns smc + trendlines + present", set(ctx) == {"smc", "trendlines", "present"})
+    check("chart-ctx: smc read on current chart", ctx["present"] is True and len(ctx["smc"]["boxes"]) == 2)
+
+
 def test_grade_confluence():
     smc = S.read_smc("X", tv=fake_tv(None))
     ctx = {"smc_by_tf": {"240": smc, "60": smc}, "trendlines": [4510.0]}
@@ -78,7 +88,7 @@ def test_grade_confluence():
 
 
 def main():
-    for fn in (test_read_smc, test_in_box, test_confluence, test_htf_context, test_grade_confluence):
+    for fn in (test_read_smc, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
