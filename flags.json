@@ -4,7 +4,7 @@
   "double_top_bottom": true,
   "momentum_impulse": true,
   "liquidity_sweep": true,
-  "break_retest": true,
+  "break_retest": false,
   "vwap": true,
   "session_breakout": true,
   "extended_levels": true,
