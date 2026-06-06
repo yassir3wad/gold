@@ -32,3 +32,8 @@ logs/security/
 outcomes.db
 outcomes.db-shm
 outcomes.db-wal
+
+# prior-day value-area cache (generated)
+value_areas.db
+value_areas.db-shm
+value_areas.db-wal
