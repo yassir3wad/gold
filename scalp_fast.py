@@ -26,6 +26,9 @@ except Exception: vastore = None
 try:
     import va_state as vastate   # Rules 6/7: prior-VA Level State (Untested/Rejected/Accepted/Flipped)
 except Exception: vastate = None
+try:
+    import va_reject as vareject   # entry #13: VWAP value-area rejection (docs/gold-vwap-strategy.md)
+except Exception: vareject = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -877,6 +880,14 @@ def main():
         if (swhi >= rhi + 3*VS*PIP and last['close'] < rhi and last['close'] < last['open']
                 and (last['close'] - rlo) >= room_min*PIP):
             setups.append(("SHORT", "CRT sweep+reclaim", last['close'], round(swhi + buf_p*PIP, PXD)))
+    # 13) VWAP value-area rejection (docs/gold-vwap-strategy.md): VWAP-aligned rejection off a VALID prior
+    # VAL/POC/flipped-VAH (long) or VAH/POC/flipped-VAL (short), R:R>=1:2 to the nearest VWAP/POC target.
+    # Reversal-class (the "VWAP" tag exempts it from the volume/anti-chase filters below).
+    if FL.get("va_reject", True) and vareject is not None and vw and prior_vas:
+        _pv = prior_vas[0]
+        for s in vareject.detect_va_reject(price, vw, {"vah": _pv.get("vah"), "val": _pv.get("val"), "poc": _pv.get("poc")},
+                                           b, pip=PIP, bar_minutes=BASE_TF):
+            setups.append((s[0], s[1], s[2], round(s[3], PXD)))
     # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce/CRT) exempt
     if FL["volume_filter"] and not vol_ok and not AI:
         setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT"))]

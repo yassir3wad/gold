@@ -23,5 +23,6 @@
   "session_sweep": true,
   "ai_decide": true,
   "zone_bounce": true,
+  "va_reject": true,
   "hard_floor": true
 }
