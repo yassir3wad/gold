@@ -153,23 +153,18 @@ def main():
     try:
         sctx = SMC.read_chart_context(CH, dedup_tol=8)
         sm = sctx.get("smc", {})
-        # Historical mode dumps the WHOLE chart (200+ boxes, 500+ labels). Draw only what's near the working
-        # price; keep the full read in the log for reference.
-        band = round(0.02 * cur_price, 2) if cur_price else 100
-        nf = SMC.filter_near(sctx, cur_price, band); near = nf["smc"]
-        log["smc"] = {"present": sctx.get("present"), "near_band": band,
-                      "boxes": sm.get("boxes", []), "structure": sm.get("structure", []),
-                      "liquidity": sm.get("liquidity", []), "swings": sm.get("swings", []),
-                      "trendlines": sctx.get("trendlines", []),
-                      "near": {"boxes": near.get("boxes", []), "structure": near.get("structure", []),
-                               "liquidity": near.get("liquidity", []), "swings": near.get("swings", []),
-                               "trendlines": nf.get("trendlines", [])}}
-        for s in near.get("structure", []):
+        log["smc"] = {"present": sctx.get("present"), "boxes": sm.get("boxes", []),
+                      "structure": sm.get("structure", []), "liquidity": sm.get("liquidity", []),
+                      "swings": sm.get("swings", []), "trendlines": sctx.get("trendlines", [])}
+        for s in sm.get("structure", []):
             hline(CH, s["price"], f"SMC {s.get('text','')}", PURP); drawn["smc"] += 1
-        for l in near.get("liquidity", []) + near.get("swings", []):
+        for l in sm.get("liquidity", []) + sm.get("swings", []):
             hline(CH, l["price"], f"SMC {l.get('text','')}", PURP); drawn["smc"] += 1
-        for tl in nf.get("trendlines", []):
-            hline(CH, tl, "Auto-TL", ORNG); drawn["smc"] += 1
+        # Keep the Auto Trendlines indicator VISIBLE (its actual diagonal lines) rather than flattening them
+        # to horizontals — read_chart_context hid it during store-and-hide, so re-show it.
+        tlid = next((s["id"] for s in (tv(CH, "state") or {}).get("studies", []) if "Auto Trendlines" in (s.get("name") or "")), None)
+        if tlid:
+            tv(CH, "indicator", "toggle", tlid, "--visible", "true"); drawn["smc"] += 1
         # OB boxes carry no time in the read — log them; the SMC indicator itself shows the exact boxes.
     except Exception as e:
         log["smc"] = {"error": str(e)}
