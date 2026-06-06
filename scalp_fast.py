@@ -23,6 +23,9 @@ except Exception: tpomod = None
 try:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import va_store as vastore   # reliable prior-day value-area cache (DB)
 except Exception: vastore = None
+try:
+    import va_state as vastate   # Rules 6/7: prior-VA Level State (Untested/Rejected/Accepted/Flipped)
+except Exception: vastate = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -714,7 +717,14 @@ def main():
             parts = []
             for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
                 if lvl is None: continue
-                parts.append(f"{role} {lvl} ({'above' if lvl >= price else 'below'} {abs(lvl-price)/PIP:.0f}p)")
+                tag = f"{role} {lvl} ({'above' if lvl >= price else 'below'} {abs(lvl-price)/PIP:.0f}p)"
+                # Rules 6/7 — Level State from current-session bars (Untested/Rejected/Accepted/Flipped).
+                # Only meaningful for the most recent prior day's levels (priority Rule); older ones are context.
+                if vastate is not None and p is prior_vas[0]:
+                    st = vastate.level_state(lvl, b, role, poc=p.get("poc"), bar_minutes=BASE_TF)
+                    cf = st["evidence"]["confidence"]
+                    tag += f" [{st['state']}{'?' if cf == 'weak' else ''}]"
+                parts.append(tag)
             if p.get("sp"):   # single-print zones = target levels (Rule 3/4 hierarchy: POC -> single prints -> ...)
                 parts.append("SP[targets] " + ", ".join(f"{z[0]}-{z[1]}" for z in p["sp"]))
             print(f"  prevVA {md}: " + " | ".join(parts))
