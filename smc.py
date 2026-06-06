@@ -76,6 +76,35 @@ def read_trendlines(chart, tv=None):
         return []
 
 
+def read_htf_context(chart, smc_tfs=("240", "60"), tl_tf="240", base_tf="1", tv=None):
+    """Read the structural confluence on the higher TFs: SMC on each of `smc_tfs` (4h major + 1h scalp
+    structure) and Auto Trendlines on `tl_tf` (4h). Restores the execution TF. Cached per scan by the engine.
+    Returns {smc_by_tf, trendlines, present}."""
+    _tv = tv or _default_tv
+    smc_by_tf = {}
+    for tf in smc_tfs:
+        _tv(chart, "timeframe", str(tf))
+        smc_by_tf[str(tf)] = read_smc(chart, tv=tv)
+    _tv(chart, "timeframe", str(tl_tf))
+    trendlines = read_trendlines(chart, tv=tv)
+    _tv(chart, "timeframe", str(base_tf))   # restore execution TF (1m live / 5m backtest)
+    return {"smc_by_tf": smc_by_tf, "trendlines": trendlines,
+            "present": any(s.get("present") for s in smc_by_tf.values())}
+
+
+def grade_confluence(price, side, ctx, tol):
+    """Aggregate confluence across the HTF context: SMC alignment on each TF (4h, 1h) + Auto-Trendline once.
+    Each '+' raises the trade grade on top of our own zones. Returns {score, reasons}."""
+    score = 0; reasons = []
+    for tf, smc in ctx.get("smc_by_tf", {}).items():
+        r = confluence(price, side, smc, tol)   # SMC only (trendlines handled once below)
+        if r["score"]:
+            score += r["score"]; reasons += [f"{tf}m {x}" for x in r["reasons"]]
+    if near_level(price, ctx.get("trendlines", []), tol):
+        score += 1; reasons.append("Auto-Trendline 4h")
+    return {"score": score, "reasons": reasons}
+
+
 def in_box(price, boxes, pad=0.0):
     """The order-block / FVG box containing price (± pad), or None."""
     return next((b for b in boxes if b["low"] - pad <= price <= b["high"] + pad), None)

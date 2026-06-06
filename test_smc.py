@@ -55,8 +55,30 @@ def test_confluence():
     check("confluence: near an Auto-Trendline -> +1", r3["score"] == 1 and "Auto-Trendline" in r3["reasons"])
 
 
+def test_htf_context():
+    calls = []
+    def spy(chart, *a):
+        calls.append(a)
+        return fake_tv(None)(chart, *a)
+    ctx = S.read_htf_context("X", smc_tfs=("240", "60"), tl_tf="240", base_tf="5", tv=spy)
+    tf_calls = [a for a in calls if a and a[0] == "timeframe"]
+    check("htf: reads 4h + 1h SMC then restores 5m",
+          tf_calls == [("timeframe", "240"), ("timeframe", "60"), ("timeframe", "240"), ("timeframe", "5")])
+    check("htf: smc per TF (4h + 1h)", set(ctx["smc_by_tf"]) == {"240", "60"})
+    check("htf: present True", ctx["present"] is True)
+
+
+def test_grade_confluence():
+    smc = S.read_smc("X", tv=fake_tv(None))
+    ctx = {"smc_by_tf": {"240": smc, "60": smc}, "trendlines": [4510.0]}
+    # price 4510 hits box + BOS on BOTH TFs + a trendline -> high aggregate score
+    r = S.grade_confluence(4510, "LONG", ctx, tol=12)
+    check("grade-conf: aggregates across TFs + trendline", r["score"] >= 5)
+    check("grade-conf: tags the TF in reasons", any("240m" in x for x in r["reasons"]))
+
+
 def main():
-    for fn in (test_read_smc, test_in_box, test_confluence):
+    for fn in (test_read_smc, test_in_box, test_confluence, test_htf_context, test_grade_confluence):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
