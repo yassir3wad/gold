@@ -1,6 +1,8 @@
-# Gold Trading AI Strategy — Without Footprint / Bookmap
+# Gold VWAP Strategy (AI-judged) — Without Footprint / Bookmap
 
-**This is the canonical strategy the AI review applies to gold value-area signals.** It supersedes the
+**A VWAP-bias strategy: every setup keys off price's position relative to the current-session VWAP, with
+prior-day value areas (VAH/VAL/POC) as the levels traded.** This is the canonical strategy the AI review
+applies to gold value-area signals. It supersedes the
 generic framework (`value-area-framework.md`) for *execution* because it uses **only data we actually have**
 (no footprint/delta/DOM) and gives concrete setups + a required output format. The engine emits the inputs
 (prev VAH/VAL/POC + single prints from `va_store`, VWAP+bands, structure, session/prev H/L); the AI applies

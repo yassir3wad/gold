@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for va_state.py — Rules 6 & 7 of the value-area framework / gold-va-strategy: classify a prior-day
+"""Tests for va_state.py — Rules 6 & 7 of the value-area framework / gold-vwap-strategy: classify a prior-day
 VA level (VAH/VAL/POC) against the CURRENT session's bars into Level State =
 Untested / Rejected / Accepted / Flipped, using ONLY price/candle data (no footprint/delta — see
-docs/gold-va-strategy.md). Pure stdlib.
+docs/gold-vwap-strategy.md). Pure stdlib.
     python3 test_va_state.py   (exit 0 = all pass)
 """
 import sys

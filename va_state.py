@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rules 6 & 7 of the value-area framework (docs/value-area-framework.md, docs/gold-va-strategy.md):
+"""Rules 6 & 7 of the value-area framework (docs/value-area-framework.md, docs/gold-vwap-strategy.md):
 classify a prior-day VA level (VAH/VAL/POC) against the CURRENT session's bars into a Level State —
 Untested / Rejected / Accepted / Flipped — using ONLY price/candle data. We have no footprint/delta/DOM,
 so acceptance is judged from closes-beyond / value-beyond / time-beyond / POC-migration, and rejection
@@ -17,7 +17,7 @@ bars: chronological list of {"open","high","low","close"} (current session). Pur
 
 # fraction of the session beyond a level that counts as "value built there"
 _VALUE_FRAC = 0.50
-# minutes beyond a level that counts as acceptance (gold-va-strategy: >30 min)
+# minutes beyond a level that counts as acceptance (gold-vwap-strategy: >30 min)
 _TIME_BEYOND_MIN = 30
 
 
