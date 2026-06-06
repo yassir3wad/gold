@@ -109,10 +109,15 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
             if t in ("VAH", "VAL", "POC") and t not in m:
                 m[t] = l.get("price")
             elif t == "SP" and l.get("price") is not None:
-                sp.append(l.get("price"))   # single-print levels (target hierarchy, Rule 3/4)
+                sp.append(l.get("price"))
         if not all(k in m for k in ("VAH", "VAL", "POC")):
             return None
-        m["SP"] = sp
+        # SP harvest is PAUSED: the TPO draws SP labels for EVERY session visible on screen, and this read
+        # can't yet tell the target session's single prints from a neighbour's — so it produced phantom SP
+        # zones (e.g. a bogus 4428–4494 on 2026-06-03). VAH/VAL/POC are one current-session set (clean). Until
+        # the SP read is scoped to the target session's x-position (verified live against the chart), we drop
+        # SP rather than ship a wrong S/R target into the live engine. `sp` is kept above for that future fix.
+        m["SP"] = []
         return m
 
     tv(chart, "replay", "start", "--date", date)
