@@ -46,8 +46,16 @@ conflate — see [[zone-taxonomy]]):
   generic buy/sell zone).
 
 ### Value areas
-- Prior-3-day **POC / VAH / VAL** (volume profile), labeled by date. A closed day's profile is **fixed →
-  cached** (computed once).
+- Prior-day **POC / VAH / VAL** are **read from the Realtime TPO Profile [Kioseff] indicator** (via
+  `tpo.py`, matching its VA/POC line objects by color — see `tpo-indicator.md`). We use the indicator
+  directly rather than reimplementing its algorithm (nothing to duplicate/maintain). Needs a symbol with
+  real volume — **PEPPERSTONE:XAUUSD**, not OANDA.
+- **Caveat:** the read is reliable **live** (chart at "now"); in **replay/backtest** the indicator's drawn
+  lines don't track the cursor (proved: returned stale sessions), so VA confluence is **best-effort in
+  backtest** — to revisit. Stored as data in the zone file; drawing on the review chart is optional.
+- **How they're traded** (priority, acceptance/rejection, open-vs-value, invalidation, multi-day
+  selection) is the **Previous Value Area Trading Framework** → `docs/value-area-framework.md`; the AI
+  review consults it when a signal sits at a VAH/VAL/POC.
 
 ### Traditional key levels (`levels.py`)
 - Horizontal levels with **touch-count strength** (more clean touches = stronger — the howtotrade book

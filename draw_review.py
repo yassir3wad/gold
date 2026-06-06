@@ -9,6 +9,7 @@ import argparse, subprocess, os, json, time
 import zones_sd as Z
 import patterns as P
 import smc as SMC
+import tpo as TPO
 
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 TAG = "REVIEW"
@@ -35,8 +36,10 @@ def rect(chart, t0, lo, t1, hi, label, ov):
        "--text", f"{label} [{TAG}]")
 
 
-def hline(chart, price, label, ov):
-    tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{price}",
+def hline(chart, price, label, ov, t):
+    # horizontal_line REQUIRES a finite --time anchor (else "point.time NaN" → silent fail). The line is
+    # still full-width; the time only anchors its handle/label. `t` = a recent (cursor) bar time.
+    tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{price}", "--time", str(int(t)),
        "--text", f"{label} [{TAG}]", "--overrides", ov)
 
 
@@ -46,7 +49,9 @@ def main():
     ap.add_argument("--chart", default="eFMec2F9")
     ap.add_argument("--display-tf", default="60")
     ap.add_argument("--symbol", default="PEPPERSTONE:XAUUSD")   # PEPPERSTONE has real volume (OANDA gold doesn't) → value areas + TPO work
+    ap.add_argument("--layers", default="zones,sr,va,smc")   # comma-list of layers to draw: zones,sr,va,smc (e.g. --layers va)
     a = ap.parse_args(); CH = a.chart
+    LAYERS = {x.strip() for x in a.layers.split(",") if x.strip()}
     # KL = bright/solid, normal zone = faint. demand=green, supply=red.
     GREEN_KL = json.dumps({"backgroundColor": "rgba(0,210,90,0.28)", "color": "rgba(0,230,100,0.95)"})
     GREEN    = json.dumps({"backgroundColor": "rgba(0,200,80,0.08)", "color": "rgba(0,200,80,0.45)"})
@@ -54,6 +59,9 @@ def main():
     RED      = json.dumps({"backgroundColor": "rgba(230,60,60,0.08)", "color": "rgba(230,60,60,0.45)"})
     BLUE  = json.dumps({"linecolor": "rgba(70,130,220,0.8)", "linestyle": 2})
     GRAY  = json.dumps({"linecolor": "rgba(150,150,150,0.7)", "linestyle": 2})
+    POC_C = json.dumps({"linecolor": "rgba(240,220,40,0.95)", "linestyle": 0, "linewidth": 2})    # POC = yellow
+    VAH_C = json.dumps({"linecolor": "rgba(70,130,240,0.95)", "linestyle": 0, "linewidth": 2})    # VAH = blue
+    VAL_C = json.dumps({"linecolor": "rgba(180,90,240,0.95)", "linestyle": 0, "linewidth": 2})    # VAL = purple
 
     SUP = json.dumps({"linecolor": "rgba(0,210,90,0.85)", "linestyle": 0, "linewidth": 2})   # support line (green)
     RES = json.dumps({"linecolor": "rgba(240,70,70,0.85)", "linestyle": 0, "linewidth": 2})   # resistance line (red)
@@ -66,6 +74,7 @@ def main():
     drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0}
     log = {"date": a.date, "chart": CH, "price": None, "zones": [], "sr": [], "va": [], "smc": {}}
     cur_price = None
+    anchor_t = None   # a recent (cursor) bar time — REQUIRED to anchor horizontal_line draws
     sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
     # --- buy/sell ZONES (4h + 1h) — collect all VALID, then prioritize + dedupe + cap ---
@@ -74,7 +83,7 @@ def main():
         b = bars_tf(CH, tf, n)
         if not b:
             continue
-        t1 = b[-1]["time"]; cur_price = b[-1]["close"]
+        t1 = b[-1]["time"]; cur_price = b[-1]["close"]; anchor_t = t1
         for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
             if z["valid"]:
                 c = b[z["i"]]
@@ -93,7 +102,7 @@ def main():
     # buy/sell zones don't care about volume/color — only KEY LEVEL (BOS) ranks them; then nearest to price
     zones.sort(key=lambda z: (0 if z["key_level"] else 1, abs(zmid(z) - cur_price)))
     seen = []; nbuy = nsell = 0
-    for z in zones:
+    for z in (zones if "zones" in LAYERS else []):
         mid = zmid(z)
         if any(abs(mid - q) < 15 for q in seen):
             continue
@@ -130,45 +139,52 @@ def main():
             if any(abs(p - q) < 15 for q in seen):
                 continue
             seen.append(p)
-            hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color)
+            hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color, anchor_t)
             log["sr"].append({"role": role, "price": p, "tf": l, "flip": bool(fl)})
             drawn[role] += 1
             if len(seen) >= 4:
                 break
-    if cur_price:
+    if cur_price and "sr" in LAYERS:
         draw_sr("support", SUP, True)
         draw_sr("resistance", RES, False)
 
-    b30 = bars_tf(CH, "30", 400)
-    if b30:
-        for v in Z.prior_day_vas(b30, ref_ts=b30[-1]["time"], n=3):
-            md = v["date"][5:]
-            hline(CH, v["poc"], f"POC {md}", BLUE)
-            hline(CH, v["vah"], f"VAH {md}", GRAY)
-            hline(CH, v["val"], f"VAL {md}", GRAY)
-            log["va"].append({"date": v["date"], "poc": v["poc"], "vah": v["vah"], "val": v["val"]})
-            drawn["va"] += 3
+    b30 = bars_tf(CH, "30", 400)   # value areas computed from 30m bars (PEPPERSTONE has real volume)
+    va_t = anchor_t or (int(b30[-1]["time"]) if b30 else None)   # time anchor required by horizontal_line (line is full-width)
 
-    # --- SMC confluence layer (LuxAlgo) — read on the chart (store-and-hide), draw as our own labeled lines ---
-    tv(CH, "timeframe", a.display_tf)   # read SMC on the display TF (1h)
-    try:
-        sctx = SMC.read_chart_context(CH, dedup_tol=8)
-        sm = sctx.get("smc", {})
-        log["smc"] = {"present": sctx.get("present"), "boxes": sm.get("boxes", []),
-                      "structure": sm.get("structure", []), "liquidity": sm.get("liquidity", []),
-                      "swings": sm.get("swings", []), "trendlines": sctx.get("trendlines", [])}
-        for s in sm.get("structure", []):
-            hline(CH, s["price"], f"SMC {s.get('text','')}", PURP); drawn["smc"] += 1
-        for l in sm.get("liquidity", []) + sm.get("swings", []):
-            hline(CH, l["price"], f"SMC {l.get('text','')}", PURP); drawn["smc"] += 1
-        # Keep the Auto Trendlines indicator VISIBLE (its actual diagonal lines) rather than flattening them
-        # to horizontals — read_chart_context hid it during store-and-hide, so re-show it.
-        tlid = next((s["id"] for s in (tv(CH, "state") or {}).get("studies", []) if "Auto Trendlines" in (s.get("name") or "")), None)
-        if tlid:
-            tv(CH, "indicator", "toggle", tlid, "--visible", "true"); drawn["smc"] += 1
-        # OB boxes carry no time in the read — log them; the SMC indicator itself shows the exact boxes.
-    except Exception as e:
-        log["smc"] = {"error": str(e)}
+    def draw_va(price, lab, ov):
+        if price is None or not va_t:
+            return
+        hline(CH, price, lab, ov, va_t)   # full-width horizontal line
+        tv(CH, "draw", "shape", "--type", "text", "--price", f"{price}", "--time", str(int(va_t)), "--text", f"{lab} [{TAG}]")
+        drawn["va"] += 1
+
+    # --- prior-day value areas (date-stamped): POC yellow / VAH blue / VAL purple, labeled e.g. VAH-05-29 ---
+    # TPO indicator values can't be reliably dated (it exposes only bar-indices) — our prior_day_vas matches it
+    # and carries the date, so we use it for the labels.
+    if b30 and va_t and "va" in LAYERS:
+        for v in Z.prior_day_vas(b30, ref_ts=b30[-1]["time"], n=3):
+            md = v["date"][5:]   # MM-DD
+            draw_va(v["poc"], f"POC-{md}", POC_C)
+            draw_va(v["vah"], f"VAH-{md}", VAH_C)
+            draw_va(v["val"], f"VAL-{md}", VAL_C)
+            log["va"].append({"date": v["date"], "poc": v["poc"], "vah": v["vah"], "val": v["val"]})
+
+    # --- SMC confluence layer (LuxAlgo) — read into the LOG as data only (not drawn); keep Auto Trendlines on ---
+    if "smc" in LAYERS:
+        try:
+            tv(CH, "timeframe", a.display_tf)   # read SMC on the display TF (1h)
+            sctx = SMC.read_chart_context(CH, dedup_tol=8)
+            sm = sctx.get("smc", {})
+            log["smc"] = {"present": sctx.get("present"), "boxes": sm.get("boxes", []),
+                          "structure": sm.get("structure", []), "liquidity": sm.get("liquidity", []),
+                          "swings": sm.get("swings", []), "trendlines": sctx.get("trendlines", [])}
+            # SMC kept as DATA only (in the log → confluence / engine) — NOT drawn on the chart (it flooded it).
+            # Keep the Auto Trendlines indicator VISIBLE (its diagonal lines) — read_chart_context hid it.
+            tlid = next((s["id"] for s in (tv(CH, "state") or {}).get("studies", []) if "Auto Trendlines" in (s.get("name") or "")), None)
+            if tlid:
+                tv(CH, "indicator", "toggle", tlid, "--visible", "true"); drawn["smc"] += 1
+        except Exception as e:
+            log["smc"] = {"error": str(e)}
 
     log["price"] = cur_price
     out = f"/tmp/review_{a.date}.json"; json.dump(log, open(out, "w"), indent=1)
