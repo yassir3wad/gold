@@ -18,6 +18,9 @@ import tpo, va_store as vs
 
 SYMBOL = "XAUUSD"
 CLOSE_HOUR = 22   # daily TPO session close, UTC (see tpo.SESSION_CLOSE_HOUR)
+# Replay runs ONLY on the dedicated backtest tab (last XAUUSD window), never the live chart. Override with
+# TV_BACKTEST_CHART if the window id changes.
+BACKTEST_CHART = os.environ.get("TV_BACKTEST_CHART", "eabXWKAd")
 SCANNER_PLIST = os.path.expanduser("~/Library/LaunchAgents/com.yassir.goldscalper.plist")
 
 
@@ -59,9 +62,9 @@ def harvest(date, force=False):
         return True
     with _pause_scanner():
         try:
-            va = tpo.fetch_va(SYMBOL, date)
+            va = tpo.fetch_va(SYMBOL, date, chart=BACKTEST_CHART)
         finally:
-            tpo._default_tv("", "replay", "stop")   # always restore realtime
+            tpo._default_tv(BACKTEST_CHART, "replay", "stop")   # restore realtime on the backtest tab
     if va and va.get("poc") and va.get("vah") and va.get("val"):
         vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=va.get("sp"))
         print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={va.get('sp')}", flush=True)

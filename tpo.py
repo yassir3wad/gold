@@ -55,6 +55,30 @@ def tpo_sessions(all_lines):
     return sorted(out, key=lambda s: s["x"])
 
 
+_SP_X_TOL = 1   # SP labels sit at the VA anchor x (or +1 bar); residue from other sessions sits far away
+
+
+def session_sp(labels):
+    """From the TPO indicator's VERBOSE labels, return only the CURRENT session's single-print prices.
+    The indicator draws exactly one VAH/VAL/POC label set (the current session) at a common bar `x`; that
+    session's SP labels sit at the same x (±1 bar). During replay stepping, stale SP labels accumulate as
+    orphaned-primitive residue at OTHER x's — we drop those by keeping only SP within `_SP_X_TOL` bars of
+    the VA anchor. Returns a flat list of SP prices (group into zones with group_sp). Pure (testable)."""
+    va_xs = [l.get("x") for l in labels
+             if str(l.get("text", "")).strip() in ("VAH", "VAL", "POC") and l.get("x") is not None]
+    if not va_xs:
+        return []
+    anchor = max(va_xs)   # the latest (rightmost) session = the one being harvested
+    out = []
+    for l in labels:
+        if str(l.get("text", "")).strip() != "SP":
+            continue
+        x, p = l.get("x"), l.get("price")
+        if x is not None and p is not None and abs(x - anchor) <= _SP_X_TOL:
+            out.append(p)
+    return out
+
+
 def read_tpo_lines(chart, tv=None, render_wait=4.0):
     """Resolve the TPO study id FRESH (it rotates), show it, read its line objects, hide it, and group
     into per-session value areas. Returns [{x, vah, val, poc}] (x = session-start bar index)."""
@@ -79,6 +103,7 @@ def _next_day(date):
 
 SESSION_CLOSE_HOUR = 22   # the gold daily TPO session rolls over at ~22:00 UTC (verified)
 READ_FROM_HOUR = 15       # start scanning late bars here (the day's last bar before the 22:00 close varies)
+CHART_SYMBOL = "PEPPERSTONE:XAUUSD"   # the pair the TPO harvest reads (set on the dedicated backtest tab)
 
 
 def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
@@ -88,10 +113,18 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
     After 22:00 the labels switch to the next (empty) session. So we replay to `date` and step the cursor
     into that 21:xx window, then read the labels. The date is known from the cursor WE set — no bar-index
     dating. Returns {poc, vah, val} (None if the indicator hadn't rendered). For va_store fallback.
+
+    Runs on the DEDICATED BACKTEST TAB (pass `chart` / TV_CHART = the backtest window id) so replay never
+    touches the live chart. We pin the pair to PEPPERSTONE:XAUUSD and VERIFY it before trusting any read —
+    if the tab isn't on XAUUSD we refuse (return incomplete) rather than harvest the wrong instrument.
     """
     tv = tv or _default_tv
     chart = chart or os.environ.get("TV_CHART", "")
+    tv(chart, "symbol", CHART_SYMBOL)
     tv(chart, "timeframe", "30")
+    sym = (tv(chart, "state") or {}).get("symbol") or ""
+    if "XAUUSD" not in sym.upper():   # wrong pair on the tab -> don't harvest into the XAUUSD store
+        return {"poc": None, "vah": None, "val": None, "sp": []}
     target = dt.datetime.strptime(date, "%Y-%m-%d").date()
 
     def cursor_dt():
@@ -102,22 +135,23 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
         return t is None or t.date() > target or (t.date() == target and t.hour >= SESSION_CLOSE_HOUR)
 
     def read_va():
-        labs = ((tv(chart, "data", "labels", "-f", TPO_FILTER, "-n", "600").get("studies", []) or [{}])[0]).get("labels", [])
-        m = {}; sp = []
-        for l in labs:
+        # VAH/VAL/POC: non-verbose read is reliable in replay (verbose returns empty when replaying a past
+        # day — it only carries data for the latest/realtime session).
+        nv = ((tv(chart, "data", "labels", "-f", TPO_FILTER, "-n", "600").get("studies", []) or [{}])[0]).get("labels", [])
+        m = {}
+        for l in nv:
             t = str(l.get("text", "")).strip()
             if t in ("VAH", "VAL", "POC") and t not in m:
                 m[t] = l.get("price")
-            elif t == "SP" and l.get("price") is not None:
-                sp.append(l.get("price"))
         if not all(k in m for k in ("VAH", "VAL", "POC")):
             return None
-        # SP harvest is PAUSED: the TPO draws SP labels for EVERY session visible on screen, and this read
-        # can't yet tell the target session's single prints from a neighbour's — so it produced phantom SP
-        # zones (e.g. a bogus 4428–4494 on 2026-06-03). VAH/VAL/POC are one current-session set (clean). Until
-        # the SP read is scoped to the target session's x-position (verified live against the chart), we drop
-        # SP rather than ship a wrong S/R target into the live engine. `sp` is kept above for that future fix.
-        m["SP"] = []
+        # SP: needs the bar `x` to scope to the current session (SP labels accumulate replay residue at other
+        # x's). x only comes from the verbose read, which only returns data for the latest session. So we
+        # scope SP when verbose has data, and DROP SP otherwise (fail-safe — never store a neighbour's phantom
+        # single prints into the live engine). Past-day backfills get no SP; the daily harvest of the
+        # just-closed (latest) session gets clean, session-scoped SP.
+        vb = ((tv(chart, "data", "labels", "-f", TPO_FILTER, "-n", "600", "--verbose").get("studies", []) or [{}])[0]).get("labels", [])
+        m["SP"] = session_sp(vb) if vb else []
         return m
 
     tv(chart, "replay", "start", "--date", date)
@@ -136,18 +170,30 @@ def fetch_va(symbol, date, chart=None, tv=None, render_wait=8.0):
     # value area. A weekday rolls over at ~22:00 (its post-22:00 reads are incomplete, so `best` stays at the
     # pre-22:00 close); a Friday's session runs to the weekend, so its last complete read is at ~23:59. Stop
     # when the cursor crosses into the next calendar day.
-    best = {}
-    for i in range(30):
+    # ONLY read while the cursor is CONFIRMED on the target date. Replay's current_date intermittently comes
+    # back None (or replay fails to navigate); if we read then, we'd capture the realtime/latest session and
+    # mislabel it as `date` (silent corruption). So: None cursor -> step & retry, never read; date < target ->
+    # step forward; date == target -> read (keep last complete); date > target -> done. If we never confirm
+    # the target date, `best` stays empty and we return an INCOMPLETE result (the caller won't store it).
+    best = {}; confirmed = False; first = True
+    for _ in range(40):
         t = cursor_dt()
-        if t and t.date() > target:
+        if t is None:                       # can't confirm where we are — don't trust any on-screen read
+            tv(chart, "replay", "step"); time.sleep(2.0); continue
+        if t.date() > target:
             break
-        time.sleep(render_wait if i == 0 else 3.0)
+        if t.date() < target:               # replay landed before the target day — advance
+            tv(chart, "replay", "step"); continue
+        time.sleep(render_wait if first else 3.0); first = False
+        confirmed = True
         m = read_va()
         if m:
             best = m
         tv(chart, "replay", "step")
     if tid:
         tv(chart, "indicator", "toggle", tid, "--hidden")
+    if not confirmed:                       # never reached the target date — refuse to return a mislabeled VA
+        return {"poc": None, "vah": None, "val": None, "sp": []}
     return {"poc": best.get("POC"), "vah": best.get("VAH"), "val": best.get("VAL"),
             "sp": group_sp(best.get("SP", []))}
 

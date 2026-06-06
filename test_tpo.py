@@ -59,6 +59,35 @@ def test_unrelated_colors_dropped():
     check("no VA/POC -> no session", T.tpo_sessions(lines) == [])
 
 
+def test_session_sp():
+    # Verbose TPO labels: ONE clean VA set at the anchor x (=28); the session's SP sit at x=28/29 (±1).
+    # Replay residue / other sessions' SP sit at a far x (here 10) and MUST be dropped.
+    labels = [
+        {"text": "VAH", "price": 4467.28, "x": 28},
+        {"text": "VAL", "price": 4348.87, "x": 28},
+        {"text": "POC", "price": 4461.64, "x": 28},
+        {"text": "SP", "price": 4382.70, "x": 29},   # current session SP (anchor+1) -> keep
+        {"text": "SP", "price": 4388.34, "x": 29},
+        {"text": "SP", "price": 4427.81, "x": 28},   # at anchor -> keep
+        {"text": "SP", "price": 4494.11, "x": 10},   # residue from another cursor state -> drop
+        {"text": "SP", "price": 4428.57, "x": 5},    # residue -> drop
+    ]
+    sp = T.session_sp(labels)
+    check("session_sp: keeps only anchor-x (±1) SP", sorted(sp) == [4382.70, 4388.34, 4427.81])
+    check("session_sp: drops far-x residue", 4494.11 not in sp and 4428.57 not in sp)
+
+
+def test_session_sp_no_va():
+    check("session_sp: no VA anchor -> []", T.session_sp([{"text": "SP", "price": 4400, "x": 5}]) == [])
+
+
+def test_session_sp_no_sp():
+    # a day with VA labels but genuinely no single prints -> []
+    labels = [{"text": "VAH", "price": 4479, "x": 12}, {"text": "VAL", "price": 4444, "x": 12},
+              {"text": "POC", "price": 4463, "x": 12}]
+    check("session_sp: VA but no SP -> []", T.session_sp(labels) == [])
+
+
 def test_group_sp():
     z = T.group_sp([4427, 4423, 4400, 4394, 4388, 4382])   # one run 4382-4400 + a tight pair 4423/4427
     check("group_sp: 2 zones from 2 clusters", len(z) == 2)
@@ -69,7 +98,8 @@ def test_group_sp():
 
 
 def main():
-    for fn in (test_pairs_and_poc, test_rgb_match_ignores_alpha, test_poc_only_session, test_unrelated_colors_dropped, test_group_sp):
+    for fn in (test_pairs_and_poc, test_rgb_match_ignores_alpha, test_poc_only_session, test_unrelated_colors_dropped,
+               test_session_sp, test_session_sp_no_va, test_session_sp_no_sp, test_group_sp):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
