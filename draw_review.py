@@ -45,6 +45,7 @@ def main():
     ap.add_argument("--date", required=True)
     ap.add_argument("--chart", default="eFMec2F9")
     ap.add_argument("--display-tf", default="60")
+    ap.add_argument("--symbol", default="PEPPERSTONE:XAUUSD")   # PEPPERSTONE has real volume (OANDA gold doesn't) → value areas + TPO work
     a = ap.parse_args(); CH = a.chart
     # KL = bright/solid, normal zone = faint. demand=green, supply=red.
     GREEN_KL = json.dumps({"backgroundColor": "rgba(0,210,90,0.28)", "color": "rgba(0,230,100,0.95)"})
@@ -59,7 +60,7 @@ def main():
     PURP = json.dumps({"linecolor": "rgba(180,120,255,0.85)", "linestyle": 2})   # SMC structure / liquidity / swings
     ORNG = json.dumps({"linecolor": "rgba(255,170,60,0.85)", "linestyle": 1})    # Auto-Trendline (projected to now)
 
-    tv(CH, "symbol", "XAUUSD")
+    tv(CH, "symbol", a.symbol)
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     tv(CH, "draw", "clear")
     drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0}
