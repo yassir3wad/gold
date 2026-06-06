@@ -37,14 +37,43 @@ def read_smc(chart, tv=None):
 TRENDLINE_FILTER = "Auto Trendlines"
 
 
+# JS run in the chart page: reads the Auto Trendlines DIAGONAL lines from the chart model and projects each
+# to the current bar, keeping only those within `band` of price (the line-reader can't extract diagonals,
+# so we go straight to the primitives). Date-faithful: xnow = the replay cursor bar.
+_TL_JS = r"""(function(){
+  var chart=window.TradingViewApi._activeChartWidgetWV.value()._chartWidget;
+  var bars=chart.model().mainSeries().bars(); var xnow=bars.lastIndex();
+  var px=bars.valueAt(xnow); var price=px?px[4]:0;
+  var sources=chart.model().model().dataSources(); var out=[];
+  for(var si=0;si<sources.length;si++){var s=sources[si]; if(!s.metaInfo) continue;
+    var m=s.metaInfo(); var name=m.description||m.shortDescription||'';
+    if(name.indexOf('Auto Trendlines')===-1) continue;
+    var g=s._graphics; if(!g||!g._primitivesCollection) continue;
+    var outer=g._primitivesCollection.dwglines; if(!outer) continue;
+    var inner=outer.get('lines'); if(!inner) continue;
+    var coll=inner.get(false); if(!coll||!coll._primitivesDataById) continue;
+    coll._primitivesDataById.forEach(function(v){
+      if(v.y1!=null&&v.y2!=null&&v.y1!==v.y2&&v.x1!=null&&v.x2!=null&&v.x1!==v.x2){
+        var val=v.y1+(v.y2-v.y1)*(xnow-v.x1)/(v.x2-v.x1);
+        if(price>0&&Math.abs(val-price)<price*0.06) out.push(Math.round(val*100)/100);}});}
+  out.sort(function(a,b){return a-b;}); return {price:price, levels:out};})()"""
+
+
 def read_trendlines(chart, tv=None):
-    """Read the 'Auto Trendlines' indicator's line levels. NOTE: that indicator draws DIAGONAL lines, which
-    the line-reader can't extract (returns 0 horizontal levels) — so this is empty in practice. Trendline
-    confluence is computed from our own HTF trendlines instead (see patterns/htf_trendlines)."""
-    tv = tv or _default_tv
-    studies = tv(chart, "data", "lines", "--study-filter", TRENDLINE_FILTER).get("studies", [])
-    s = next((x for x in studies if x.get("name") == "Auto Trendlines"), None)
-    return list(s.get("horizontal_levels", [])) if s else []
+    """Auto Trendlines (TradingView indicator) — its DIAGONAL lines projected to the current bar, near price.
+    Read via raw chart-model eval (the pine line-reader can't see diagonals). Returns a list of price levels;
+    empty if the indicator isn't on the chart. tv injectable for tests (returns []) ."""
+    if tv is not None:
+        return []
+    env = dict(os.environ)
+    if chart:
+        env["TV_CHART"] = chart
+    try:
+        r = subprocess.run(["node", "src/cli/index.js", "ui", "eval", _TL_JS], cwd=TVDIR,
+                           capture_output=True, text=True, timeout=40, env=env)
+        return json.loads(r.stdout).get("result", {}).get("levels", [])
+    except Exception:
+        return []
 
 
 def in_box(price, boxes, pad=0.0):
