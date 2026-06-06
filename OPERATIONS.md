@@ -116,6 +116,18 @@ right windows) and, for any **high-impact** event that **just released**, Telegr
 `python3 refresh_zones.py --symbol <SYM>` (derives D/4H/1H/15m pivots + EMAs + PDH/PDL + round numbers + the
 chart's Trading Sessions ranges). Visualize them on the chart with `python3 draw_zones.py --symbol <SYM>`.
 
+### HOURLY structural refresh + confluence (zones-and-confluence system)
+**Every hour, ALL structural context is refreshed and re-drawn, and the indicators are hidden between
+refreshes.** This is the `zones_sd` + `smc.py` grading layer (full detail: `docs/zones-and-confluence.md`):
+- **Our zones** (buy/sell zones, Key Levels, support/resistance, value areas — computed on 4h+1h bars) are
+  recomputed on the latest bars and **re-drawn on the hour**.
+- **Confluence (mandatory)** — LuxAlgo **SMC** (order-blocks/structure/liquidity) + **Auto-Trendlines** are
+  read off the **execution chart** via **store-and-hide** (show → render → read → hide), **cached ~1h**
+  (`~/.tv_fast_<suffix>_smc.json`). The chart then shows only our clean drawings; the indicators don't
+  re-render between refreshes. A signal at our zone that ALSO aligns with SMC OB / BOS-CHoCH / EQH-EQL / a
+  trendline gets a grade **"+"** per alignment (≥2 → bump B→A→A+). SMC indicator absent ⇒ WARN.
+- Between hourly refreshes the per-minute tick uses the **stored** zones/SMC — no chart reads, no CDP load.
+
 ---
 
 ## 3. The discipline (what passes vs gets rejected)

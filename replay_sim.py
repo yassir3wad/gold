@@ -8,6 +8,13 @@ Isolation (so the LIVE loop is never touched):
   - pins the scanner to a backtest chart via TV_CHART_OVERRIDE (the loop never sets this)
   - isolates volatile state via STATE_SUFFIX (separate VP cache/cooldown; zones stay read-only-shared)
 
+HOURLY structural refresh (date-faithful): every regime-refresh window (~1h of replay time) this clears the
+30m-regime cache AND the SMC/Auto-Trendline cache (~/.tv_fast_<suffix>_smc.json) so the scanner re-reads
+zones + the SMC/trendline confluence from the bars AT THE REPLAY CURSOR — i.e. the values that existed on
+that date, not today's. Zones are recomputed on the replay bars; SMC/trendlines use the same store-and-hide
+read as live (show → render → read → hide), only ~once per replay-hour (gentle on the CDP). Full detail:
+docs/zones-and-confluence.md.
+
     python3 replay_sim.py --date 2026-06-04 --chart eFMec2F9 --start-hour 6 --end-hour 22
 """
 import argparse, subprocess, os, json, re, time, datetime as dt
