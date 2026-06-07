@@ -46,7 +46,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Evidence-tag every roadmap signal | Partial | `docs/signal-roadmap-detailed.md` has an evidence-status section and defaults all unlisted signals to `not-tested`; still lacks an explicit per-row status column in the big table. |
 | Disable or observation-gate `momentum_impulse` | Done | `OBSERVE_FAMILIES = {"momentum_impulse"}` logs it as observation-only and blocks it from normal firing/review unless `observation_gate=false`. |
 | Add setup-family daily caps | Done | `FAMILY_CAPS` and `family_fired_today()` cap fired trades/reviews by strategy family unless `family_caps=false`. |
-| Tighten `zone_bounce` and `liquidity_sweep` | Done | Both now require stacked local confluence or valid prior-VA context before surfacing. Continue monitoring live expectancy after spread. |
+| Tighten `zone_bounce` and `liquidity_sweep` | Done | Both now require stacked local confluence or valid prior-VA context before surfacing. The pure context helpers are tested, and strict-reversal suppressions are logged for measurement. |
 | Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
 | Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
 | Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |

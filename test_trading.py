@@ -206,6 +206,43 @@ def test_reversal_rsi_extreme():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 4b) reversal context quality floor — stacked confluence OR valid prior VA
+# ─────────────────────────────────────────────────────────────────────────────
+class _FakeVAState:
+    def __init__(self, state, confidence="strong"):
+        self.state = state
+        self.confidence = confidence
+
+    def level_state(self, lvl, bars, role, poc=None, bar_minutes=5):
+        return {"state": self.state, "evidence": {"confidence": self.confidence}}
+
+
+def test_reversal_context_floor():
+    prior = [{"vah": 4500.0, "poc": 4475.0, "val": 4450.0}]
+    bars = [_bar(4501, 4490)]
+    check("prior VA: rejected strong valid",
+          sf.valid_prior_va_near(4500.4, prior, bars, 1.0, 5, state_mod=_FakeVAState("Rejected")) is True)
+    check("prior VA: flipped strong valid",
+          sf.valid_prior_va_near(4450.2, prior, bars, 1.0, 5, state_mod=_FakeVAState("Flipped")) is True)
+    check("prior VA: accepted invalid",
+          sf.valid_prior_va_near(4500.0, prior, bars, 1.0, 5, state_mod=_FakeVAState("Accepted")) is False)
+    check("prior VA: weak rejected invalid",
+          sf.valid_prior_va_near(4500.0, prior, bars, 1.0, 5, state_mod=_FakeVAState("Rejected", "weak")) is False)
+    check("prior VA: too far invalid",
+          sf.valid_prior_va_near(4510.0, prior, bars, 1.0, 5, state_mod=_FakeVAState("Rejected")) is False)
+
+    check("reversal context: stacked confluence passes",
+          sf.reversal_context_ok("LONG", 4400.0, conf_s=2, conf_r=0, prior_vas=[], bars=bars,
+                                 dyn_tolp=1.0, bar_minutes=5, state_mod=_FakeVAState("Accepted")) is True)
+    check("reversal context: valid prior VA passes below conf floor",
+          sf.reversal_context_ok("SHORT", 4500.0, conf_s=0, conf_r=1, prior_vas=prior, bars=bars,
+                                 dyn_tolp=1.0, bar_minutes=5, state_mod=_FakeVAState("Rejected")) is True)
+    check("reversal context: no confluence and invalid VA fails",
+          sf.reversal_context_ok("SHORT", 4500.0, conf_s=0, conf_r=1, prior_vas=prior, bars=bars,
+                                 dyn_tolp=1.0, bar_minutes=5, state_mod=_FakeVAState("Accepted")) is False)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 5) core setup detectors — characterization tests pinning current behavior
 # ─────────────────────────────────────────────────────────────────────────────
 def _bar(h, l, o=None, c=None, v=1):
@@ -309,7 +346,7 @@ def main():
     for fn in (test_hard_floor, test_skip_key_and_dedup, test_log_floor_skip_writes_and_dedups,
                test_stats, test_norm_grade, test_num, test_parse_time,
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
-               test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
+               test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome):
         try:
