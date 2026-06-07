@@ -20,8 +20,11 @@ BOXES = [
 ]
 
 
+TRENDLINES = [4458.0, 4170.0]   # one near price (drawn), one far (still drawn — read already filters near)
+
+
 def specs():
-    return D.overlay_specs(4460.0, VA, STATES, SP, BOXES, band=35.0, va_date="2026-06-05")
+    return D.overlay_specs(4460.0, VA, STATES, SP, BOXES, band=35.0, va_date="2026-06-05", trendlines=TRENDLINES)
 
 
 def test_va_lines():
@@ -52,13 +55,20 @@ def test_order_blocks_near_price_only():
     check("demand vs supply different colors", demand["color"] != supply["color"])
 
 
+def test_trendlines():
+    tl = [x for x in specs() if x["kind"] == "TL"]
+    check("a TL hline per trendline", len(tl) == 2 and all(x["type"] == "hline" for x in tl))
+    check("TL lines at the trendline prices", sorted(x["price"] for x in tl) == [4170.0, 4458.0])
+    check("TL distinct color from VA lines", tl[0]["color"] not in (D.POC_C, D.VAH_C, D.VAL_C))
+
+
 def test_no_va_no_lines():
     s = D.overlay_specs(4460.0, {"vah": None, "val": None, "poc": None}, {}, [], BOXES, band=35.0)
-    check("no VA -> no hlines, still draws nearby OBs", all(x["type"] != "hline" for x in s) and any(x["kind"].startswith("OB") for x in s))
+    check("no VA -> no VA hlines, still draws nearby OBs", all(x["kind"] not in ("POC","VAH","VAL") for x in s) and any(x["kind"].startswith("OB") for x in s))
 
 
 def main():
-    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_no_va_no_lines):
+    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_trendlines, test_no_va_no_lines):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

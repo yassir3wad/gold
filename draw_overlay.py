@@ -21,9 +21,10 @@ SP_C  = "rgba(255,170,60,0.85)"    # orange
 OB_DEMAND_C = "rgba(0,200,90,0.85)"   # green (bullish OB below price)
 OB_SUPPLY_C = "rgba(240,70,70,0.85)"  # red (bearish OB above price)
 OB_NEUTRAL_C = "rgba(150,150,150,0.8)"
+TL_C  = "rgba(255,170,60,0.85)"       # orange — Auto Trendlines (projected to price; separate from SMC)
 
 
-def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None):
+def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None, trendlines=None):
     """Return a list of draw specs (pure). Each spec:
       {type:'hline', kind, price, label, color}              — a horizontal level
       {type:'rect',  kind, price(hi), price2(lo), label, color}  — a zone/box
@@ -57,6 +58,10 @@ def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None)
         else:                  # straddles price
             kind, color = "OB", OB_NEUTRAL_C
         out.append({"type": "rect", "kind": kind, "price": hi, "price2": lo, "label": "OB", "color": color})
+    # Auto Trendlines (TradingView indicator) projected to price — a SEPARATE indicator from SMC
+    for p in (trendlines or []):
+        if p is not None:
+            out.append({"type": "hline", "kind": "TL", "price": p, "label": "trendline", "color": TL_C})
     return out
 
 
@@ -103,7 +108,7 @@ def _recent(chart, min_interval):
     return (time.time() - ts) < min_interval
 
 
-def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None):
+def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None, trendlines=None):
     """Refresh the overlay on `chart`: remove our previous shapes, draw the current specs, record new ids.
     `t0`/`t1` = bar-time anchors (hlines/rects need a time); pass the visible range's start/end.
     `min_interval` (s) throttles redraws so the live loop doesn't flicker the chart every tick; returns -1
@@ -111,7 +116,7 @@ def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None
     if _recent(chart, min_interval):
         return -1
     _clear_ours(chart)
-    specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date)
+    specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date, trendlines=trendlines)
     new_ids = []
     for s in specs:
         lab = s["label"]   # shapes are tracked by entity id (STATE), so no visible tag is needed

@@ -25,5 +25,7 @@
   "zone_bounce": true,
   "va_reject": true,
   "draw_overlay": true,
+  "smc_confluence": true,
+  "auto_trendlines": true,
   "hard_floor": true
 }

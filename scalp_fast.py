@@ -759,10 +759,12 @@ def main():
             for _k, _lvl in (("VAH", _ova["vah"]), ("VAL", _ova["val"]), ("POC", _ova["poc"])):
                 if _lvl is not None:
                     _ovst[_k] = vastate.level_state(_lvl, b, _k, poc=_ova["poc"], bar_minutes=BASE_TF)["state"]
-        _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if smcmod else []
+        _sctx = smc_context() if smcmod else {}
+        _boxes = (_sctx.get("smc", {}) or {}).get("boxes", [])
+        _tls = _sctx.get("trendlines", []) if FL.get("auto_trendlines", True) else []
         _n = dovr.draw_overlay(os.environ.get("TV_CHART", ""), price, _ova, _ovst, _ov.get("sp"), _boxes,
                                band=OVERLAY_OB_BAND_P * PIP, t0=b[0]["time"], t1=last["time"],
-                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"))
+                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"), trendlines=_tls)
         if _n >= 0:
             print(f"(overlay drawn: {_n} shapes)")
 
@@ -1036,19 +1038,28 @@ def main():
         print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
 
-    # --- SMC + Auto-Trendlines confluence (MANDATORY HTF context: 4h + 1h) — a '+' on top of our zones ---
-    if FL.get("smc_confluence", True) and smcmod:
+    # --- HTF confluence — a '+' on top of our zones. SMC (LuxAlgo) and Auto-Trendlines are SEPARATE
+    # indicators scored INDEPENDENTLY: a trendline touch counts even when the SMC indicator isn't present/read
+    # (previously the trendline score was gated behind SMC presence, so it silently did nothing). ---
+    if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True)) and smcmod:
         sctx = smc_context()
-        if not sctx.get("present"):
-            print(">> WARN: LuxAlgo SMC indicator not on chart — mandatory confluence missing (grade not boosted).")
-        else:
-            cf = smcmod.confluence(entry, side, sctx.get("smc", {}), SMC_TOL * VS, trendlines=sctx.get("trendlines", []))
-            if cf["score"]:
-                htf_note += f" | +{cf['score']} SMC/TL ({', '.join(cf['reasons'][:3])})"
-                if cf["score"] >= 2:                       # 2+ aligned HTF elements = a real grade boost
-                    grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
-                elif grade.startswith("B"):                # a single SMC '+' nudges open-space up
-                    grade = "A"
+        cf_score = 0; cf_reasons = []
+        if FL.get("smc_confluence", True):
+            if not sctx.get("present"):
+                print(">> WARN: LuxAlgo SMC indicator not on chart — SMC confluence missing.")
+            else:
+                c = smcmod.confluence(entry, side, sctx.get("smc", {}), SMC_TOL * VS)   # pure SMC (no trendlines)
+                cf_score += c["score"]; cf_reasons += c["reasons"]
+        if FL.get("auto_trendlines", True):                # Auto Trendlines — independent of SMC
+            tls = sctx.get("trendlines", [])
+            if tls and smcmod.near_level(entry, tls, SMC_TOL * VS):
+                cf_score += 1; cf_reasons.append("Auto-Trendline")
+        if cf_score:
+            htf_note += f" | +{cf_score} HTF ({', '.join(cf_reasons[:3])})"
+            if cf_score >= 2:                              # 2+ aligned HTF elements = a real grade boost
+                grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
+            elif grade.startswith("B"):                    # a single '+' nudges open-space up
+                grade = "A"
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     # Zone-rejection stops sit BEYOND the rejection zone's far edge (+buffer) with a WIDER cap, so ordinary
