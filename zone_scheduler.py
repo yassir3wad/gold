@@ -394,6 +394,10 @@ class ZoneScheduler:
         Uses CronTrigger to schedule zone refreshes at configured session open times
         with optional offset (e.g., 5 min after London open)."""
 
+        if not self.config.get("session_refresh_enabled", True):
+            logging.info("Session-based refresh is disabled in config")
+            return
+
         # Check if session refresh is enabled
         refresh_on_open = self.config.get("refresh_on_session_open", [])
         if not refresh_on_open:
@@ -580,6 +584,9 @@ Configuration:
     # Test mode: print session schedule and exit (before importing dependencies)
     if args.test_session_schedule:
         config = load_config()
+        if not config.get("session_refresh_enabled", True):
+            print("Session-based refresh is disabled in config")
+            sys.exit(0)
         refresh_on_open = config.get("refresh_on_session_open", [])
         session_times = config.get("session_times", {})
         offset_minutes = config.get("session_offset_minutes", 5)

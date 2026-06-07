@@ -13,6 +13,13 @@ def check(n, c): _r.append((n, bool(c)))
 
 def fake_tv(canned):
     def tv(chart, *a):
+        if a and a[0] == "state":
+            return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "id": "SMC1"},
+                                {"name": "Auto Trendlines", "id": "TL1"}]}
+        if a and a[0] == "indicator":
+            return {}
+        if a and a[0] == "ui" and len(a) >= 3 and a[1] == "eval":
+            return {"result": {"levels": [4301.0, 4301.4, 4302.0]}}
         if "boxes" in a:
             return {"studies": [{"name": "Smart Money Concepts [LuxAlgo]",
                                  "zones": [{"high": 4520, "low": 4505}, {"high": 4470, "low": 4460}]}]}
@@ -158,8 +165,25 @@ def test_grade_confluence():
 
 
 def test_read_trendlines_mtf():
-    # contract: injected tv short-circuits to [] (the live read is I/O); default TFs are 4h/1h/15m
-    check("mtf trendlines: tv-injected -> []", S.read_trendlines_mtf("X", tv=fake_tv(None)) == [])
+    # injected tv should exercise the full path: switch TFs, read, dedup, restore base TF.
+    calls = []
+    current_tf = {"tf": None}
+    def spy(chart, *a):
+        calls.append(a)
+        if a and a[0] == "state":
+            return {"studies": [{"name": "Auto Trendlines", "id": "TL1"}]}
+        if a and a[0] == "indicator":
+            return {}
+        if a and a[0] == "timeframe":
+            current_tf["tf"] = a[1]
+            return {}
+        if a and a[0] == "ui" and len(a) >= 3 and a[1] == "eval":
+            levels = {"240": [4301.0, 4301.4, 4302.0], "60": [4301.1, 4302.0], "15": [4301.2]}
+            return {"result": {"levels": levels.get(current_tf["tf"], [])}}
+        return {"studies": []}
+    out = S.read_trendlines_mtf("X", tv=spy, render_wait=0, dedup_tol=0.5)
+    check("mtf trendlines: injected path returns deduped levels", out == [4301.0, 4302.0])
+    check("mtf trendlines: switches 4h/1h/15m and restores base", [a for a in calls if a and a[0] == "timeframe"] == [("timeframe", "240"), ("timeframe", "60"), ("timeframe", "15"), ("timeframe", "5")])
     import inspect
     check("mtf trendlines: reads 4h/1h/15m by default",
           inspect.signature(S.read_trendlines_mtf).parameters["tfs"].default == ("240", "60", "15"))
@@ -214,7 +238,8 @@ def test_assert_smc():
     try: S.assert_smc("X", tv=absent)
     except S.SMCMissing: raised = True
     check("assert_smc: raises SMCMissing when absent", raised)
-    check("read_smc_mtf: tv-injected -> {}", S.read_smc_mtf("X", 4300, tv=absent) == {})
+    mtf = S.read_smc_mtf("X", 4300, tfs=("240",), base_tf="5", tv=fake_tv(None), render_wait=0)
+    check("read_smc_mtf: tv-injected returns snapshot", "240" in mtf and mtf["240"]["boxes"])
 
 
 def _smc_block():

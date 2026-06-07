@@ -98,17 +98,17 @@ def read_smc_mtf(chart, price, tfs=("240", "60", "15"), base_tf="5", band=200.0,
     which are stable, remain — swings are KEPT regardless since they define the range). Switches TF, restores
     `base_tf`, hides the indicator after. Raises SMCMissing if absent. tv injectable for tests (returns {}).
     Per-TF: {boxes:[{high,low,side}], structure, liquidity, swings, premium, discount, equilibrium}."""
-    if tv is not None:
-        return {}
-    assert_smc(chart)
-    sid = _find_tid((_default_tv(chart, "state") or {}).get("studies", []), SMC_FILTER)
-    _default_tv(chart, "indicator", "toggle", sid, "--visible", "true")
+    _tv = tv or _default_tv
+    live = tv is None
+    assert_smc(chart, tv=_tv)
+    sid = _find_tid((_tv(chart, "state") or {}).get("studies", []), SMC_FILTER)
+    _tv(chart, "indicator", "toggle", sid, "--visible", "true")
     out = {}
     for tf in tfs:
-        _default_tv(chart, "timeframe", str(tf))
-        if render_wait:
+        _tv(chart, "timeframe", str(tf))
+        if live and render_wait:
             time.sleep(render_wait)
-        m = read_smc(chart)
+        m = read_smc(chart, tv=tv)
         near = lambda xs: [{"text": x["text"], "price": round(x["price"], 2)} for x in xs
                            if x.get("price") is not None and abs(x["price"] - price) <= band]
         boxes = [{"high": round(b["high"], 2), "low": round(b["low"], 2),
@@ -120,8 +120,8 @@ def read_smc_mtf(chart, price, tfs=("240", "60", "15"), base_tf="5", band=200.0,
                         "swings": [{"text": s["text"], "price": round(s["price"], 2)} for s in m["swings"]],
                         "premium": vz["premium"] if vz else None, "discount": vz["discount"] if vz else None,
                         "equilibrium": vz["eq"] if vz else None}
-    _default_tv(chart, "indicator", "toggle", sid, "--hidden")
-    _default_tv(chart, "timeframe", str(base_tf))
+    _tv(chart, "indicator", "toggle", sid, "--hidden")
+    _tv(chart, "timeframe", str(base_tf))
     return out
 
 
@@ -185,7 +185,11 @@ def read_trendlines(chart, tv=None):
     Read via raw chart-model eval (the pine line-reader can't see diagonals). Returns a list of price levels;
     empty if the indicator isn't on the chart. tv injectable for tests (returns []) ."""
     if tv is not None:
-        return []
+        try:
+            r = tv(chart, "ui", "eval", _TL_JS)
+            return (r or {}).get("result", {}).get("levels", [])
+        except Exception:
+            return []
     env = dict(os.environ)
     if chart:
         env["TV_CHART"] = chart
@@ -217,28 +221,28 @@ def read_trendlines_mtf(chart, tfs=("240", "60", "15"), base_tf="5", tv=None, re
     return them as one deduped list of price levels for confluence. The indicator recomputes per chart TF, so
     we switch TF, let it render, read, and restore the execution TF (`base_tf`). The indicator must be VISIBLE
     to read, so we show it for the sweep and hide it after. tv injectable for tests (returns [])."""
-    if tv is not None:
-        return []
-    studies = (_default_tv(chart, "state") or {}).get("studies", [])
+    _tv = tv or _default_tv
+    live = tv is None
+    studies = (_tv(chart, "state") or {}).get("studies", [])
     tl_id = _find_tid(studies, "Auto Trendlines")
     if not tl_id:                       # mandatory — fail loud, don't silently return []
         raise TrendlinesMissing(
             f"Auto Trendlines indicator is NOT enabled on chart '{chart or 'default'}'. Add it before trading.")
-    _default_tv(chart, "indicator", "toggle", tl_id, "--visible", "true")
+    _tv(chart, "indicator", "toggle", tl_id, "--visible", "true")
     levels = []
     for tf in tfs:
-        _default_tv(chart, "timeframe", str(tf))
+        _tv(chart, "timeframe", str(tf))
         lv = []
         for i in range(2):                          # retry once on empty (render lag after a TF switch)
-            if render_wait:
+            if live and render_wait:
                 time.sleep(render_wait)
-            lv = read_trendlines(chart)
+            lv = read_trendlines(chart, tv=tv)
             if lv:
                 break
         levels += lv
     if tl_id:
-        _default_tv(chart, "indicator", "toggle", tl_id, "--hidden")
-    _default_tv(chart, "timeframe", str(base_tf))   # restore execution TF
+        _tv(chart, "indicator", "toggle", tl_id, "--hidden")
+    _tv(chart, "timeframe", str(base_tf))   # restore execution TF
     # dedup the float levels (near-duplicates across TFs collapse to one)
     out = []
     for p in sorted({round(x, 2) for x in levels if x is not None}):

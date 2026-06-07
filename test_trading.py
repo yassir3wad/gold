@@ -219,11 +219,17 @@ class _FakeVAState:
 
 def test_reversal_context_floor():
     prior = [{"vah": 4500.0, "poc": 4475.0, "val": 4450.0}]
+    prior_multi = [
+        {"vah": 4510.0, "poc": 4485.0, "val": 4460.0},
+        {"vah": 4500.0, "poc": 4475.0, "val": 4450.0},
+    ]
     bars = [_bar(4501, 4490)]
     check("prior VA: rejected strong valid",
           sf.valid_prior_va_near(4500.4, prior, bars, 1.0, 5, state_mod=_FakeVAState("Rejected")) is True)
     check("prior VA: flipped strong valid",
           sf.valid_prior_va_near(4450.2, prior, bars, 1.0, 5, state_mod=_FakeVAState("Flipped")) is True)
+    check("prior VA: scans older days too",
+          sf.valid_prior_va_near(4450.2, prior_multi, bars, 1.0, 5, state_mod=_FakeVAState("Rejected")) is True)
     check("prior VA: accepted invalid",
           sf.valid_prior_va_near(4500.0, prior, bars, 1.0, 5, state_mod=_FakeVAState("Accepted")) is False)
     check("prior VA: weak rejected invalid",
