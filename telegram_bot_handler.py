@@ -41,6 +41,17 @@ def _load_config():
         print(f"[ERROR] Failed to load config from {CONFIG_FILE}: {e}", file=sys.stderr)
         return None, None
 
+
+def _telegram_ok(result):
+    """Return True only when Telegram returns ok:true, not just when curl exits 0."""
+    if result.returncode != 0:
+        return False
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except Exception:
+        return False
+    return bool(payload.get("ok"))
+
 def send_message(token, chat_id, text):
     """Send a text message to Telegram chat."""
     try:
@@ -52,7 +63,7 @@ def send_message(token, chat_id, text):
             capture_output=True,
             text=True
         )
-        return result.returncode == 0
+        return _telegram_ok(result)
     except Exception as e:
         print(f"[ERROR] Failed to send message: {e}", file=sys.stderr)
         return False

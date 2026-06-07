@@ -19,6 +19,18 @@ def _load_config():
     except Exception:
         return None, None
 
+
+def _telegram_ok(result):
+    """Return True only when the Telegram API reports ok:true.
+    Curl transport success alone is not enough; Telegram can return HTTP 200 with {"ok": false, ...}."""
+    if result.returncode != 0:
+        return False
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except Exception:
+        return False
+    return bool(payload.get("ok"))
+
 def format_zone_summary(changes_by_symbol):
     """
     Format zone refresh changes into a human-readable summary for Telegram.
@@ -96,7 +108,7 @@ def send_message(text, dry_run=False):
             capture_output=True,
             text=True
         )
-        return result.returncode == 0
+        return _telegram_ok(result)
     except Exception as e:
         print(f"[ERROR] Failed to send Telegram message: {e}", file=sys.stderr)
         return False
@@ -136,7 +148,7 @@ def send_alert(title, message, dry_run=False):
             capture_output=True,
             text=True
         )
-        return result.returncode == 0
+        return _telegram_ok(result)
     except Exception as e:
         print(f"[ERROR] Failed to send Telegram alert: {e}", file=sys.stderr)
         return False
@@ -177,7 +189,7 @@ def send_photo(photo_path, caption="", dry_run=False):
         cmd.append(f"https://api.telegram.org/bot{tok}/sendPhoto")
 
         result = subprocess.run(cmd, timeout=25, capture_output=True, text=True)
-        return result.returncode == 0
+        return _telegram_ok(result)
     except Exception as e:
         print(f"[ERROR] Failed to send Telegram photo: {e}", file=sys.stderr)
         return False

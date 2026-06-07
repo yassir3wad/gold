@@ -25,7 +25,10 @@ def _tg(msg):
         tok = c.get("bot_token") or c.get("token"); chat = str(c.get("chat_id"))
         import urllib.parse
         d = urllib.parse.urlencode({"chat_id": chat, "text": msg}).encode()
-        urllib.request.urlopen("https://api.telegram.org/bot"+tok+"/sendMessage", data=d, timeout=20)
+        resp = urllib.request.urlopen("https://api.telegram.org/bot"+tok+"/sendMessage", data=d, timeout=20)
+        payload = json.loads(resp.read().decode() or "{}")
+        if not payload.get("ok"):
+            print("tg err: Telegram API returned ok=false")
     except Exception as e: print("tg err:", e)
 
 def _local(d):   # UTC-aware datetime -> the Mac's local timezone (what the user sees)
