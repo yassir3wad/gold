@@ -275,23 +275,35 @@ def load_zones():
     return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
 
 
-def merge_classic_zones(htf_r, htf_s, classic, pip, tol_pips=5):
-    """Merge the classic sd_zones/sd_sr into the resistance/support level lists for confluence, SKIPPING a
-    classic level whose price range OVERLAPS an existing wall (within tol_pips) — so conf_R/conf_S never
-    double-count the same price area when a classic zone coincides with an old HTF cluster. Pure (testable).
-    buy zone/support → support side; sell zone/resistance → resistance side. Returns (R, S)."""
-    tol = tol_pips * pip
+def merge_classic_zones(htf_r, htf_s, classic):
+    """Merge ALL classic sd_zones/sd_sr into the resistance/support level lists for confluence + targets, so
+    what's DRAWN (draw_review) is exactly what's TRADED — overlapping zones are NOT dropped (dropping would
+    hide a drawn zone from the engine). Double-counting is prevented at COUNT time (see count_distinct_at),
+    not by discarding zones. buy zone/support → support side; sell zone/resistance → resistance side.
+    Returns (R, S). Pure (testable)."""
     R = list(htf_r); S = list(htf_s)
-    def dup(lo, hi, lst): return any(not (hi < elo - tol or lo > ehi + tol) for elo, ehi, _ in lst)
     for zz in (classic or {}).get("zones", []):
-        tgt = S if zz["role"] in ("buy zone", "support") else R
-        if not dup(zz["lo"], zz["hi"], tgt):
-            tgt.append((zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}"))
+        tup = (zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}")
+        (S if zz["role"] in ("buy zone", "support") else R).append(tup)
     for s in (classic or {}).get("sr", []):
-        tgt = S if s["role"] == "support" else R
-        if not dup(s["price"], s["price"], tgt):
-            tgt.append((s["price"], s["price"], f"{s['tf']} {s['role']} (classic)"))
+        tup = (s["price"], s["price"], f"{s['tf']} {s['role']} (classic)")
+        (S if s["role"] == "support" else R).append(tup)
     return R, S
+
+
+def count_distinct_at(levels, price, edge=4):
+    """Count DISTINCT price clusters in `levels` [(lo,hi,lab)…] that bracket `price` (within `edge`), merging
+    overlapping/adjacent brackets so the SAME wall covered by several sources (e.g. an old HTF cluster + a
+    coinciding classic zone) counts ONCE, not N times. This is where drawn-zone overlaps are de-duplicated
+    for the confluence count, instead of dropping zones from the level map. Pure (testable)."""
+    hit = sorted((lo, hi) for lo, hi, _ in levels if lo - edge <= price <= hi + edge)
+    n = 0; cur_hi = None
+    for lo, hi in hit:
+        if cur_hi is None or lo > cur_hi + edge:
+            n += 1; cur_hi = hi
+        else:
+            cur_hi = max(cur_hi, hi)
+    return n
 
 
 def kl_upgrade(grade):
@@ -720,10 +732,10 @@ def main():
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
     # CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) join the confluence machinery:
     # buy zone/support → support side; sell zone/resistance → resistance side. So at_R/at_S/conf_R/conf_S and
-    # the target picker grade against EXACTLY what's drawn. merge_classic_zones DEDUPES against existing walls
-    # so an overlapping classic zone can't double-count in conf_R/conf_S. (KL top-tier boost is in grading.)
+    # the target picker grade against EXACTLY what's drawn (drawn == traded — overlapping zones are kept, not
+    # dropped; conf_R/conf_S de-dup at COUNT time via count_distinct_at). (KL top-tier boost is in grading.)
     if FL.get("classic_zones", True):
-        HTF_R, HTF_S = merge_classic_zones(HTF_R, HTF_S, CLASSIC, PIP)
+        HTF_R, HTF_S = merge_classic_zones(HTF_R, HTF_S, CLASSIC)
     tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
@@ -817,8 +829,8 @@ def main():
     at_R = near_htf(price, HTF_R) or near_htf(price, ptR, tol=dyn_tolp)
     at_S = near_htf(price, HTF_S) or near_htf(price, ptS, tol=dyn_tolp)
     # confluence: how many distinct levels sit right at price (used to strengthen/justify the grade)
-    conf_R = len([1 for lo,hi,_ in HTF_R if lo-4<=price<=hi+4] + [1 for p,_,_ in ptR if abs(p-price)<=dyn_tolp])
-    conf_S = len([1 for lo,hi,_ in HTF_S if lo-4<=price<=hi+4] + [1 for p,_,_ in ptS if abs(p-price)<=dyn_tolp])
+    conf_R = count_distinct_at(HTF_R, price) + len([1 for p,_,_ in ptR if abs(p-price)<=dyn_tolp])   # distinct clusters → overlapping classic+HTF walls count ONCE
+    conf_S = count_distinct_at(HTF_S, price) + len([1 for p,_,_ in ptS if abs(p-price)<=dyn_tolp])
     # next structure above / below entry (for adaptive TP) — horizontal walls only.
     # EMAs and VWAP are dynamic lines price flows THROUGH, so they don't cap a target.
     is_wall = lambda lab: not ("EMA" in lab or "VWAP" in lab)

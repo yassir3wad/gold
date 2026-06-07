@@ -351,22 +351,35 @@ def test_kl_upgrade():
     check("kl_upgrade: C not promoted", sf.kl_upgrade("C-into-zone") == "C-into-zone")
 
 
-def test_merge_classic_dedup():
+def test_merge_classic_keeps_all():
+    # drawn == traded: EVERY classic zone enters the level map (none dropped, even overlapping ones).
     htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
     classic = {"zones": [
-        {"role": "sell zone", "lo": 4402, "hi": 4408, "tf": "4H", "kl": False},   # overlaps old R → must be skipped
-        {"role": "buy zone",  "lo": 4250, "hi": 4260, "tf": "1H", "kl": True},     # distinct → added to S
+        {"role": "sell zone", "lo": 4402, "hi": 4408, "tf": "4H", "kl": False},   # overlaps old R — kept anyway
+        {"role": "buy zone",  "lo": 4250, "hi": 4260, "tf": "1H", "kl": True},
     ], "sr": [
-        {"role": "resistance", "price": 4405, "tf": "4H", "flip": False},          # overlaps old R → skipped
-        {"role": "support",    "price": 4280, "tf": "1H", "flip": False},          # distinct → added to S
+        {"role": "resistance", "price": 4405, "tf": "4H", "flip": False},          # overlaps old R — kept anyway
+        {"role": "support",    "price": 4280, "tf": "1H", "flip": False},
     ]}
-    R, S = sf.merge_classic_zones(htf_r, htf_s, classic, 0.10)
-    check("merge: overlapping classic R NOT double-counted at 4405",
-          len([1 for lo, hi, _ in R if lo - 4 <= 4405 <= hi + 4]) == 1)
-    check("merge: distinct classic buy zone added to S", any("buy zone" in lab for _, _, lab in S))
-    check("merge: distinct classic support added to S", any("support (classic)" in lab for _, _, lab in S))
-    check("merge: S grew by exactly the 2 distinct levels", len(S) == 3)
+    R, S = sf.merge_classic_zones(htf_r, htf_s, classic)
+    check("merge: overlapping classic zone is NOT dropped (drawn==traded)", any("sell zone" in lab for _, _, lab in R))
+    check("merge: overlapping classic S/R line is NOT dropped", any("resistance (classic)" in lab for _, _, lab in R))
+    check("merge: all classic zones in R/S (3R: old + sell + res-line)", len(R) == 3)
+    check("merge: all classic supports in S (old + buy + sup-line)", len(S) == 3)
     check("merge: inputs untouched (returns copies)", len(htf_r) == 1 and len(htf_s) == 1)
+
+
+def test_count_distinct_at():
+    # an old HTF wall + a coinciding classic zone at the SAME price counts ONCE (no double-count) ...
+    overlapping = [(4400, 4410, "old R"), (4402, 4408, "4H sell zone")]
+    check("count: overlapping walls at price count once", sf.count_distinct_at(overlapping, 4405) == 1)
+    # a far wall that doesn't bracket the price isn't counted
+    far = [(4400, 4406, "wall A"), (4470, 4480, "wall B")]
+    check("count: far non-bracketing wall not counted", sf.count_distinct_at(far, 4403) == 1)
+    # price squeezed BETWEEN two separate walls (gap > edge) → counts as 2 distinct
+    straddle = [(4395, 4401, "below"), (4409, 4415, "above")]
+    check("count: price between two distinct walls counts 2", sf.count_distinct_at(straddle, 4405) == 2)
+    check("count: nothing at price → 0", sf.count_distinct_at(overlapping, 4300) == 0)
 
 
 def main():
@@ -375,7 +388,7 @@ def main():
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
-               test_simulate_outcome, test_kl_upgrade, test_merge_classic_dedup):
+               test_simulate_outcome, test_kl_upgrade, test_merge_classic_keeps_all, test_count_distinct_at):
         try:
             fn()
         except Exception as e:
