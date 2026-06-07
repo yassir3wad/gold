@@ -32,6 +32,9 @@ except Exception: vareject = None
 try:
     import draw_overlay as dovr   # live-chart overlay: prior VA (+Level State) + SP + SMC order blocks
 except Exception: dovr = None
+try:
+    import confidence as confmod   # 0-10 confidence score (aggregates all confluence) + opt-in size scaling
+except Exception: confmod = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
@@ -71,6 +74,7 @@ MAX_CHASE_P = 60                   # skip a continuation entry if price already 
 DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
 OVERLAY_OB_BAND_P = 150            # live overlay: only draw SMC order blocks within this many pips of price
 OVERLAY_MIN_INTERVAL = 300         # live overlay: redraw at most every N seconds (avoid per-tick chart flicker)
+CONF_SIZE_LO, CONF_SIZE_HI = 0.75, 1.5   # confidence-sizing: risk multiplier at confidence 0 / 10 (only if confidence_sizing on)
 TP_BUFFER_P = 8                    # adaptive TP stops this many pips short of the next structure (don't aim into the wall)
 MIN_ROOM_P = 25                    # skip a trade if usable room to the next structure is below this (bad R:R)
 BE_TRIGGER_P = 35                  # once a trade runs +this many pips favorable (pre-TP1), move stop to breakeven — protect the scratch (06-04: a short ran +38p, never hit TP1, gave it all back to -30p; BE turns that into 0). Set above typical entry-noise pullbacks so it doesn't scratch winners early.
@@ -1053,9 +1057,10 @@ def main():
     # --- HTF confluence — a '+' on top of our zones. SMC (LuxAlgo) and Auto-Trendlines are SEPARATE
     # indicators scored INDEPENDENTLY: a trendline touch counts even when the SMC indicator isn't present/read
     # (previously the trendline score was gated behind SMC presence, so it silently did nothing). ---
+    cf_score = 0   # SMC + Auto-Trendline confluence score (hoisted for the confidence calc below)
     if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True)) and smcmod:
         sctx = smc_context()
-        cf_score = 0; cf_reasons = []
+        cf_reasons = []
         if FL.get("smc_confluence", True):
             if not sctx.get("present"):
                 print(">> WARN: LuxAlgo SMC indicator not on chart — SMC confluence missing.")
@@ -1102,8 +1107,28 @@ def main():
     else:
         tp1 = round(entry - tp1_p*PIP, PXD); tp2 = round(entry - tp2_p*PIP, PXD)
     risk = abs(entry - sl_lvl) / PIP
+    # --- confidence: aggregate EVERY confluence axis into a 0-10 score that survives the A+ ceiling, so a
+    # 5-factor monster reads stronger than a bare A+. Drives size ONLY when `confidence_sizing` is on. ---
+    conf_now = conf_S if side == "LONG" else conf_R
+    _wt = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
+    _ct = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
+    _trend = True if _wt else (False if _ct else None)
+    _rsidiv = bool(rsi is not None and rsi_divergence(b, side))
+    _lvl_valid = False
+    if vastate is not None and prior_vas:
+        _pv0 = prior_vas[0]
+        for _k, _lv in (("VAH", _pv0.get("vah")), ("VAL", _pv0.get("val")), ("POC", _pv0.get("poc"))):
+            if _lv is not None and abs(_lv - entry) <= dyn_tolp and \
+               vastate.level_state(_lv, b, _k, poc=_pv0.get("poc"), bar_minutes=BASE_TF)["state"] in ("Rejected", "Flipped"):
+                _lvl_valid = True; break
+    conf_score = confmod.score(grade, conf=conf_now, smc_tl=cf_score, rsi_div=_rsidiv, with_trend=_trend,
+                               rr=(tp1_p / risk if risk > 0 else None), level_valid=_lvl_valid) if confmod else None
+    conf_lbl = confmod.label(conf_score) if confmod and conf_score is not None else ""
     # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), rounded to broker step + clamped
-    _raw = RISK_USD / (PIP_VALUE * risk) if (risk > 0 and PIP_VALUE > 0) else LOT_MIN
+    risk_usd = RISK_USD
+    if FL.get("confidence_sizing", False) and confmod and conf_score is not None:
+        risk_usd = round(RISK_USD * confmod.size_multiplier(conf_score, lo=CONF_SIZE_LO, hi=CONF_SIZE_HI), 2)
+    _raw = risk_usd / (PIP_VALUE * risk) if (risk > 0 and PIP_VALUE > 0) else LOT_MIN
     lot = round(round(_raw / LOT_STEP) * LOT_STEP, 4)
     lot = max(LOT_MIN, min(LOT_MAX, lot))
     # --- pre-hold HARD FLOOR: drop structurally un-tradeable signals (negative R:R / no room — the chop-spam
@@ -1133,8 +1158,10 @@ def main():
             _htf = at_S if side == "LONG" else at_R
             log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, [_reason])
         return
-    print(f"\n>> FAST SIGNAL: {side} [{grade}] [{why}]{htf_note}")
-    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${RISK_USD:.0f}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
+    _cf = f"  confidence {conf_score}/10 ({conf_lbl})" if conf_score is not None else ""
+    print(f"\n>> FAST SIGNAL: {side} [{grade}]{_cf} [{why}]{htf_note}")
+    _szt = f" [conf-sized {risk_usd/RISK_USD:.2f}×]" if (FL.get('confidence_sizing', False) and risk_usd != RISK_USD) else ""
+    print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${risk_usd:.0f}{_szt}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
     arrow = "🟢⬆️" if side == "LONG" else "🔴⬇️"
     hz = at_R or at_S   # the actual extended level that drove the grade (incl. VWAP/round#/PDH/Asian)
@@ -1142,9 +1169,10 @@ def main():
     room_p = round(abs(wall - entry)/PIP) if wall else None
     bias = ("with-trend" if (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
             else "COUNTER-trend" if regime in ("UP", "DOWN") else "no clear trend")
+    _cfline = f"\n• Confidence: {conf_score}/10 ({conf_lbl})" if conf_score is not None else ""
     ctx = (f"📊 {why} @ {hz[2] if hz else 'open space'}\n"
            f"• Trend: 30m {regime} ({bias})\n"
-           f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence\n"
+           f"• RSI {rsi:.0f} · 15m ER {chop_er}{' ⚠CHOP' if is_chop else ' (trending)'} · {conf}× confluence{_cfline}\n"
            f"• Room to next structure: {str(room_p)+'p' if room_p is not None else 'open'}"
            f"{' ⚠tight' if room_p is not None and room_p < room_min else ''}")
     msg = (f"{arrow} {SYMBOL} — CONFIRMED {side} [{grade}]\n\n"

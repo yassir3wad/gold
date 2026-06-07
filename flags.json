@@ -27,5 +27,6 @@
   "draw_overlay": true,
   "smc_confluence": true,
   "auto_trendlines": true,
+  "confidence_sizing": false,
   "hard_floor": true
 }

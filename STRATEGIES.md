@@ -36,6 +36,8 @@ Each signal is graded by how it aligns with a **level map** (HTF zones + dynamic
 - **B** — momentum in **open space** (no nearby level). `B+vol` if volume confirms.
 - **C-into-zone** — a LONG poking *into* resistance, or SHORT *into* support, **without** a real break → **SUPPRESSED** (not fired). *(This is the fix for the "short into support" loss.)*
 
+**Confidence (0–10)** — the letter grade ceilings at A+, so a 5-factor monster and a bare A+ look identical. `confidence.py` aggregates **every** axis (grade + level-map confluence count + SMC/Auto-Trendline score + RSI divergence + with/counter-trend + R:R≥2 + a valid prior-VA Level State) into a 0–10 score, shown in the readout and alert (`confidence N/10 (very-high/high/medium/low)`). With `confidence_sizing` **on** (default OFF), it scales position size: high-confidence trades risk up to `CONF_SIZE_HI`×, low ones down to `CONF_SIZE_LO`× the base `RISK_USD`; off, sizing stays fixed-risk.
+
 **Level map** = the drawn HTF zones (`HTF_R` / `HTF_S`) **plus** dynamic levels (when `extended_levels` on): **VWAP (+ bands), round numbers, prior-day H/L, Asian-range H/L**, and (when `ema_levels` on) **EMA 50 / 100 / 200**. VWAP and the EMAs are **read live from your chart indicators** (not computed); the scanner self-heals by re-adding any that get removed. EMAs are read at the chart's timeframe and labeled by length via a rank-match (the value used is always the chart's plotted value). **Proximity:** wide `HTF_R`/`HTF_S` zones count as "at level" within ±4 (`near_htf` tol); dynamic point-levels (VWAP/EMA/round/PDH/Asian) use a tight **±15 pip** halo (`DYN_TOL`) so a far-away VWAP no longer inflates a grade to A+.
 
 ---
@@ -134,6 +136,7 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | `va_state.py` | Rules 6/7: classify a prior VA level vs current-session bars → **Level State** (Untested/Rejected/Accepted/Flipped) |
 | `va_reject.py` | Entry #13: VWAP value-area rejection trigger (the `gold-vwap-strategy.md` setups) |
 | `draw_overlay.py` | Live-chart overlay: prior VAH/VAL/POC (date + Level State) + SP zones + near-price SMC order blocks; loop-refreshed, id-tracked |
+| `confidence.py` | 0–10 confidence score (aggregates grade + confluence + SMC/TL + RSI-div + trend + R:R + Level-State) → optional `confidence_sizing` risk multiplier |
 | `docs/trendlines.md` | Auto Trendlines as multi-TF (4h/1h/15m) confluence — decoupled from SMC, mandatory (`assert_trendlines`) |
 | `docs/value-area-system.md` | End-to-end map of the whole prior-day value-area subsystem (harvest → store → state → trade → draw) |
 | `harvest_daily.py` | Self-dating, idempotent daily VA harvest of the most-recent closed session. Replay runs ONLY on the **dedicated backtest tab** (`TV_BACKTEST_CHART`, default `eabXWKAd`) — never the live chart — and pins the pair to PEPPERSTONE:XAUUSD + verifies it before reading. Refuses to store a read unless the replay cursor is confirmed on the target date (no silent mis-dating). |
