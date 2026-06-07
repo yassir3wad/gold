@@ -125,8 +125,36 @@ Auto-Trendline confluence — then re-drawn; the indicators stay hidden between 
 
 ---
 
+## 3.5 The classic zones ARE the engine's zones now (drawn == traded)
+
+Previously the classic `zones_sd` layer was **drawn but not traded** — `scalp_fast` graded against a separate,
+simpler `refresh_zones` pivot/EMA/round-number cluster. That gap is closed. One **shared builder** is the
+single source of truth so what's drawn is exactly what's graded:
+
+- **`zones_sd.build_classic_zones(tf_bars, cur_price)`** (pure) — does the full classification (origin-candle
+  buy/sell zones; strong-level candle → support/resistance zone; KL = BOS+impulse+never-wicked; 4h-covers-1h
+  dedup; nearest-first, capped 5/side; active S/R levels). Returns `{zones:[…], sr:[…]}`.
+- **`refresh_zones.py`** calls it on **4h + 1h** bars (counts 80/160, matching draw_review) and writes
+  `sd_zones` + `sd_sr` into `zones_<sym>.json` every hourly refresh (live and date-faithful in backtest).
+- **`draw_review.py`** calls the **same** builder → the boxes/lines you review are byte-for-byte the engine's.
+- **`scalp_fast.load_zones()`** reads `sd_zones`/`sd_sr` into `CLASSIC`; `main()` merges them into the
+  confluence machinery: **buy zone / support → `HTF_S`**, **sell zone / resistance → `HTF_R`** (and the S/R
+  levels too). So `at_R`/`at_S`, `conf_R`/`conf_S` and the target picker all grade against them automatically.
+- **KL = top-probability tier:** a **Key-Level** classic zone in the trade direction at price adds a hard
+  **+2** to the HTF confluence (→ A+) and is surfaced as `⭐KL` in the signal. Plain (non-KL) classic zones
+  count as ordinary zone confluence via the merge.
+- Flag **`classic_zones`** (default ON). With no `sd_zones` in the file yet (pre-refresh), `CLASSIC` is empty
+  → no behavior change until the next refresh writes them.
+
+The formal algorithm spec (zone states, the 0–100 score rubric, rejection-confirmation, BOS, targets, AI-review
+rules) is in **`docs/sd-zone-algorithm-spec.md`**. Implemented today: zone geometry, KL (BOS+impulse+wick),
+touch decay, broken/flip, position-based buy/sell, the merge + KL grade boost. **Not yet** (gaps to revisit):
+the full `NEW/UNTESTED/TESTED_ONCE/MITIGATED/BROKEN/FLIPPED` state machine, the additive 0–100 score, and a
+hard *rejection-confirmation* entry gate (we currently confirm via the existing pattern/trigger families).
+
 ## 4. Modules
-- `zones_sd.py` (+ `test_zones_sd.py`, 31 tests) — buy/sell zones, Key Levels, support/resistance, value areas
+- `zones_sd.py` (+ `test_zones_sd.py`, 35 tests) — buy/sell zones, Key Levels, support/resistance, value
+  areas, **`build_classic_zones`** (the shared drawn==traded builder)
 - `patterns.py` (+ tests, 20) — pivots, channel, fib, double-top/bottom
 - `levels.py` (+ tests, 14) — traditional touch-count levels, round numbers, pivots, confluence
 - `smc.py` (+ tests, 22) — read LuxAlgo SMC + Auto-Trendlines, store-and-hide, confluence scorer
@@ -134,8 +162,12 @@ Auto-Trendline confluence — then re-drawn; the indicators stay hidden between 
 - `scalp_fast.py` — confluence wired into the grade (flag `smc_confluence`, mandatory)
 
 ## 5. Status
-- All modules built + tested (worktree `feature/5m-backtest`); live engine untouched.
-- SMC + Auto-Trendlines confluence **wired into the grade** (Option A, store-and-hide).
-- **Pending:** wire `zones_sd` in as the grade *base* (engine still grades off the older `refresh_zones`
-  levels); run the one-day backtest (held by user).
+- All modules built + tested.
+- SMC confluence is now the **stored multi-TF snapshot** (`smc_mtf`, soft) — see `smc-indicator-dropped`
+  memory; the flaky per-tick `smc_confluence` stays off.
+- **DONE (2026-06-08):** `zones_sd` classic zones are wired into the grade as a first-class layer via the
+  shared `build_classic_zones` builder (drawn == traded); KL zones are the top tier (+2 → A+). Flag
+  `classic_zones` (default ON).
+- **Before trusting live:** run a date-faithful backtest with `classic_zones` on (PEPPERSTONE feed) and
+  compare net-of-cost vs off — the classic zones change what the engine grades against.
 - Connecting requires TradingView launched **with CDP** — see [[tradingview-cdp-launch]].

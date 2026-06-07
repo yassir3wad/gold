@@ -75,78 +75,34 @@ def main():
     log = {"date": a.date, "chart": CH, "price": None, "zones": [], "sr": [], "va": [], "smc": {}}
     cur_price = None
     anchor_t = None   # a recent (cursor) bar time — REQUIRED to anchor horizontal_line draws
-    sr = []   # (price, kind 'H'/'L', tf-label) horizontal support/resistance LEVELS
 
-    # --- buy/sell ZONES (4h + 1h) — collect all VALID, then prioritize + dedupe + cap ---
-    zones = []
-    for tf, n, lab in [("240", 80, "4H"), ("60", 160, "1H")]:
-        b = bars_tf(CH, tf, n)
-        if not b:
-            continue
-        t1 = b[-1]["time"]; cur_price = b[-1]["close"]; anchor_t = t1
-        for z in Z.mark_key_levels(b, left=2, right=2, lookback=20):
-            if z["valid"]:
-                c = b[z["i"]]
-                strong = (Z.big_candle(b, z["i"], 20) and Z.small_opposite_wick(c)
-                          and Z.has_direction_wick(c) and Z.volume_fib(b, z["i"], 20))
-                zones.append({**z, "t1": t1, "tf": lab, "strong_lvl": strong, "green": c["close"] > c["open"]})
-        for x in Z.sr_levels(b, lookback=20):
-            sr.append((x["price"], x["role"], x["flipped"], lab))
+    # --- CLASSIC zones via the SHARED builder (zones_sd.build_classic_zones) so DRAWN == TRADED: the engine
+    # (refresh_zones → scalp_fast) grades against EXACTLY these same zones. Bar counts match refresh_zones. ---
+    b4 = bars_tf(CH, "240", 80); b1 = bars_tf(CH, "60", 160)
+    if b1:
+        cur_price = b1[-1]["close"]; anchor_t = b1[-1]["time"]
+    elif b4:
+        cur_price = b4[-1]["close"]; anchor_t = b4[-1]["time"]
+    classic = Z.build_classic_zones([("4H", b4), ("1H", b1)], cur_price) if cur_price else {"zones": [], "sr": []}
 
-    # drop a lower-TF (1h) zone if a higher-TF (4h) zone fully covers it (100% containment)
-    hi_tf = [z for z in zones if z["tf"] == "4H"]
-    zones = [z for z in zones if not (z["tf"] == "1H" and
-             any(h["lo"] <= z["lo"] and h["hi"] >= z["hi"] for h in hi_tf))]
+    if "zones" in LAYERS:
+        for z in classic["zones"]:
+            buy = z["role"] in ("buy zone", "support")
+            kl = z["kl"]
+            ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
+            flag = " (flip)" if z["flip"] else (f" KL {z['score']}" if kl else "")
+            right_edge = (z["t1"] or anchor_t) + 50 * 4 * 3600   # extend boxes ~50 4h-bars into the empty right side
+            rect(CH, z["time"] or anchor_t, z["lo"], right_edge, z["hi"], f"{z['tf']} {z['role']}{flag}", ov)
+            log["zones"].append(z)
+            drawn["demand" if buy else "supply"] += 1
+            if kl: drawn["KL"] += 1
 
-    zmid = lambda z: (z["lo"] + z["hi"]) / 2
-    # buy/sell zones don't care about volume/color — only KEY LEVEL (BOS) ranks them; then nearest to price
-    zones.sort(key=lambda z: (0 if z["key_level"] else 1, abs(zmid(z) - cur_price)))
-    seen = []; nbuy = nsell = 0
-    for z in (zones if "zones" in LAYERS else []):
-        mid = zmid(z)
-        if any(abs(mid - q) < 15 for q in seen):
-            continue
-        # role by position; but if the origin candle is a STRONG level candle (big + volume + small wick),
-        # it's a support/resistance ZONE (green->support, red->resistance), not a generic buy/sell zone.
-        buy = z["hi"] < cur_price if (z["hi"] < cur_price or z["lo"] > cur_price) else (z["kind"] == "demand")
-        if z.get("strong_lvl"):
-            role = "support" if z["green"] else "resistance"
-        else:
-            role = "buy zone" if buy else "sell zone"
-        if (buy and nbuy >= 5) or (not buy and nsell >= 5):
-            continue
-        flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
-        # KL is a property of the buy/sell ZONE tier — NOT the support/resistance LINE tier. A zone whose
-        # origin is a strong level candle is labeled support/resistance and must never carry a "KL" tag.
-        kl = z["key_level"] and not flipped and not z.get("strong_lvl")
-        flag = " (flip)" if flipped else (f" KL {z['score']}" if kl else "")
-        ov = (GREEN_KL if kl else GREEN) if buy else (RED_KL if kl else RED)
-        right_edge = z["t1"] + 50 * 4 * 3600   # extend boxes ~50 4h-bars into the empty right side
-        rect(CH, z["time"], z["lo"], right_edge, z["hi"], f"{z['tf']} {role}{flag}", ov)
-        log["zones"].append({"tf": z["tf"], "role": role, "lo": z["lo"], "hi": z["hi"], "mid": round(mid, 2),
-                             "key_level": bool(kl), "score": z.get("score"), "flip": bool(flipped)})
-        seen.append(mid); drawn["demand" if buy else "supply"] += 1
-        if kl: drawn["KL"] += 1
-        nbuy += buy; nsell += (not buy)
-
-    # --- support / resistance LEVELS (big high-volume candle; role flips on break) ---
-    # keep only the nearest few that are ACTIVE: support below price, resistance above price.
-    def draw_sr(role, color, below):
-        cand = sorted({(p, fl, l) for p, r, fl, l in sr if r == role and ((p < cur_price) == below)},
-                      key=lambda x: abs(x[0] - cur_price))
-        seen = []
-        for p, fl, l in cand:
-            if any(abs(p - q) < 15 for q in seen):
-                continue
-            seen.append(p)
-            hline(CH, p, f"{role.capitalize()} {l}" + (" flip" if fl else ""), color, anchor_t)
-            log["sr"].append({"role": role, "price": p, "tf": l, "flip": bool(fl)})
-            drawn[role] += 1
-            if len(seen) >= 4:
-                break
     if cur_price and "sr" in LAYERS:
-        draw_sr("support", SUP, True)
-        draw_sr("resistance", RES, False)
+        for s in classic["sr"]:
+            color = SUP if s["role"] == "support" else RES
+            hline(CH, s["price"], f"{s['role'].capitalize()} {s['tf']}" + (" flip" if s["flip"] else ""), color, anchor_t)
+            log["sr"].append(s)
+            drawn[s["role"]] += 1
 
     b30 = bars_tf(CH, "30", 400)   # 30m for the TPO indicator read
     va_t = anchor_t or (int(b30[-1]["time"]) if b30 else None)   # time anchor required by horizontal_line

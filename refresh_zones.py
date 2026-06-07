@@ -9,6 +9,8 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 sys.path.insert(0, TVDIR)
 try: import smc as smcmod   # LuxAlgo SMC multi-TF read (stored snapshot for trade-check)
 except Exception: smcmod = None
+try: import zones_sd as zsd   # classic supply/demand + S/R zones (SAME computation draw_review draws → drawn==traded)
+except Exception: zsd = None
 IS_BACKTEST = ("--out" in sys.argv)   # the isolated date-faithful zone file = the true backtest signal; the replay chart normally has no SMC. NOTE: key on --out NOT --chart — a live refresh may pin a chart with --chart and must still capture SMC (or fail loud if it's missing), never silently skip.
 WITH_SMC = ("--with-smc" in sys.argv)   # opt IN to date-faithful SMC capture during a backtest (replay chart must have the SMC indicator); read at the replay cursor so the swings/boxes are date-faithful.
 SYMBOL = "XAUUSD"
@@ -143,11 +145,24 @@ def main():
         except Exception as e:
             print(f"!! SMC read failed: {e}", file=sys.stderr)
         tv('timeframe', '1')   # restore (read_smc_mtf restores base_tf, but be explicit for the session/zone convention)
+    # --- CLASSIC zones (zones_sd) — origin-candle supply/demand boxes + S/R levels, the SAME computation
+    # draw_review draws, so the engine GRADES AGAINST exactly what's drawn. 4h + 1h, bar counts match draw_review. ---
+    classic = {"zones": [], "sr": []}
+    if zsd:
+        try:
+            tv('timeframe', '240'); b4 = tv('ohlcv', '-n', '80').get('bars', [])
+            tv('timeframe', '60');  b1 = tv('ohlcv', '-n', '160').get('bars', [])
+            tv('timeframe', '1')
+            cur = (b1[-1]['close'] if b1 else (b4[-1]['close'] if b4 else price))
+            classic = zsd.build_classic_zones([("4H", b4), ("1H", b1)], cur)
+            print(f"  classic: {len(classic['zones'])} zones ({sum(1 for z in classic['zones'] if z['kl'])} KL), {len(classic['sr'])} S/R levels")
+        except Exception as e:
+            print(f"!! classic zones failed: {e}", file=sys.stderr)
     out = {'ts': time.time(), 'price': price, 'pdh': pdh, 'pdl': pdl,
            'asia_h': asia_h, 'asia_l': asia_l, 'london_h': london_h, 'london_l': london_l, 'ny_h': ny_h, 'ny_l': ny_l,
            'asia_end': asia_end, 'london_end': london_end, 'ny_end': ny_end,
            'htf_r': [[z[0], z[1], z[2]] for z in R], 'htf_s': [[z[0], z[1], z[2]] for z in S],
-           'smc': smc_block}
+           'smc': smc_block, 'sd_zones': classic['zones'], 'sd_sr': classic['sr']}
     json.dump(out, open(ZONES_FILE, 'w'), indent=1)
     print(f"wrote zones.json  asia={asia_h}/{asia_l}(end{asia_end}) london={london_h}/{london_l}(end{london_end}) ny={ny_h}/{ny_l}(end{ny_end})  src={'indicator' if sess else 'fallback-UTC'}")
     if smc_failed:   # fail LOUD (visible in cron logs) — but zones were still written so the engine keeps running

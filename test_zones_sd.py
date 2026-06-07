@@ -144,9 +144,26 @@ def test_sr_levels_and_flip():
           not any(x["origin"] == "support" for x in Z.sr_levels(nolowwick, lookback=5)))
 
 
+def test_build_classic_zones():
+    # 4H bars: demand zone at a green high-volume swing low that broke structure (KL), price ends at 115
+    bars = [C(100,105,99,104,10), C(104,112,103,108,10), C(108,109,102,103,10),
+            C(103,104,96,97,10),  C(97,101,94,100,100),  C(100,107,99,106,10), C(106,116,105,115,10)]
+    cur = bars[-1]["close"]
+    out = Z.build_classic_zones([("4H", bars)], cur)
+    check("classic: returns zones+sr lists", isinstance(out.get("zones"), list) and isinstance(out.get("sr"), list))
+    check("classic: each zone has tf/role/lo/hi/kl", all({"tf","role","lo","hi","kl"} <= set(z) for z in out["zones"]))
+    # the demand region (lo~94) sits below price -> a buy-side zone (buy zone or support)
+    buyside = [z for z in out["zones"] if z["lo"] <= 100 and z["role"] in ("buy zone", "support")]
+    check("classic: demand zone below price is buy-side", len(buyside) >= 1)
+    # 1h zones identical to 4h zones are fully covered -> dropped (only 4H survives)
+    out2 = Z.build_classic_zones([("4H", bars), ("1H", bars)], cur)
+    check("classic: 1h zone covered by 4h is dropped", out2["zones"] and all(z["tf"] == "4H" for z in out2["zones"]))
+
+
 def main():
     for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
-               test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip):
+               test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip,
+               test_build_classic_zones):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

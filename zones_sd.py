@@ -342,3 +342,63 @@ def prior_day_vas(bars, ref_ts, n=3, cache=None, bin_size=1.0):
             cache[key] = {"date": key, "poc": poc, "vah": vah, "val": val}
         out.append(cache[key])
     return out
+
+
+def build_classic_zones(tf_bars, cur_price):
+    """SHARED classic-zone builder — the single source of truth so DRAWN (draw_review) == TRADED
+    (refresh_zones → engine). `tf_bars` = [(tf_label, bars), ...] e.g. [("4H", bars4h), ("1H", bars1h)],
+    highest TF first. Returns {"zones": [...], "sr": [...]} (pure; no chart I/O):
+      zones[] = buy/sell + strong-level boxes, nearest-first, KL-prioritised, deduped (<15) and capped 5/side:
+                {tf, role(buy zone|sell zone|support|resistance), lo, hi, mid, kl, flip, score}
+      sr[]    = ACTIVE support/resistance LEVELS (support below price / resistance above), nearest 4/side:
+                {role, price, tf, flip}
+    Mirrors draw_review.py's classification exactly (origin-candle S/D zones; a strong level candle →
+    support/resistance ZONE not a generic buy/sell zone; KL = key_level and not flipped and not strong)."""
+    zones = []; sr = []
+    for tf, b in tf_bars:
+        if not b:
+            continue
+        t_last = b[-1].get("time")
+        for z in mark_key_levels(b, left=2, right=2, lookback=20):
+            if z["valid"]:
+                c = b[z["i"]]
+                strong = (big_candle(b, z["i"], 20) and small_opposite_wick(c)
+                          and has_direction_wick(c) and volume_fib(b, z["i"], 20))
+                zones.append({**z, "tf": tf, "otime": c.get("time"), "t1": t_last,
+                              "strong_lvl": strong, "green": c["close"] > c["open"]})
+        for x in sr_levels(b, lookback=20):
+            sr.append({"price": x["price"], "role": x["role"], "flip": x["flipped"], "tf": tf})
+    # drop a lower-TF zone fully covered by a higher-TF zone (the first tf_bars entry is the highest TF)
+    hi_tf_label = tf_bars[0][0] if tf_bars else None
+    hi = [z for z in zones if z["tf"] == hi_tf_label]
+    zones = [z for z in zones if z["tf"] == hi_tf_label or
+             not any(h["lo"] <= z["lo"] and h["hi"] >= z["hi"] for h in hi)]
+    zmid = lambda z: (z["lo"] + z["hi"]) / 2
+    zones.sort(key=lambda z: (0 if z["key_level"] else 1, abs(zmid(z) - cur_price)))
+    out_zones = []; seen = []; nbuy = nsell = 0
+    for z in zones:
+        mid = zmid(z)
+        if any(abs(mid - q) < 15 for q in seen):
+            continue
+        buy = z["hi"] < cur_price if (z["hi"] < cur_price or z["lo"] > cur_price) else (z["kind"] == "demand")
+        role = ("support" if z["green"] else "resistance") if z.get("strong_lvl") else ("buy zone" if buy else "sell zone")
+        if (buy and nbuy >= 5) or (not buy and nsell >= 5):
+            continue
+        flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
+        kl = bool(z["key_level"] and not flipped and not z.get("strong_lvl"))
+        out_zones.append({"tf": z["tf"], "role": role, "lo": round(z["lo"], 2), "hi": round(z["hi"], 2),
+                          "mid": round(mid, 2), "kl": kl, "flip": bool(flipped), "score": round(z.get("score", 0.0), 3),
+                          "time": z.get("otime"), "t1": z.get("t1")})
+        seen.append(mid); nbuy += buy; nsell += (not buy)
+    out_sr = []
+    for role, below in (("support", True), ("resistance", False)):
+        cand = sorted({(s["price"], s["flip"], s["tf"]) for s in sr if s["role"] == role and ((s["price"] < cur_price) == below)},
+                      key=lambda x: abs(x[0] - cur_price))
+        sseen = []
+        for p, fl, l in cand:
+            if any(abs(p - q) < 15 for q in sseen):
+                continue
+            sseen.append(p); out_sr.append({"role": role, "price": round(p, 2), "tf": l, "flip": bool(fl)})
+            if len(sseen) >= 4:
+                break
+    return {"zones": out_zones, "sr": out_sr}

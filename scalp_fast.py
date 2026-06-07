@@ -54,6 +54,7 @@ HTF_R = [(4459,4468,"R 4459-68 (15m+1H swing highs)"), (4470,4475,"R 4472 (15m E
 HTF_S = [(4446,4449,"S 4447 (15m EMA50 + 1H/4H lows)"), (4433,4439,"S 4433-39 (1H/15m swing lows)"),
          (4423,4427,"S 4424-26 (PDL + today-low multi-touch)"), (4398,4406,"S 4400 (4H swing low)"),
          (4375,4385,"BUY ZONE Daily EMA200 (~4380)"), (4360,4368,"S 4366 (4H/Daily low)")]
+CLASSIC = {"zones": [], "sr": []}   # classic supply/demand boxes + S/R levels (zones_sd), loaded by load_zones() — the same zones draw_review draws (drawn==traded)
 def near_htf(price, levels, tol=4):
     for lo, hi, lab in levels:
         if lo - tol <= price <= hi + tol: return (lo, hi, lab)
@@ -266,6 +267,8 @@ def load_zones():
             subprocess.run(["python3", "refresh_zones.py", "--symbol", SYMBOL], cwd=TVDIR, capture_output=True, timeout=150)
             z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
         except Exception: pass
+    global CLASSIC
+    CLASSIC = {"zones": (z or {}).get("sd_zones", []) or [], "sr": (z or {}).get("sd_sr", []) or []}   # classic supply/demand + S/R (drawn==traded)
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:
         return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
                 z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
@@ -335,6 +338,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
                  "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": False,
                  "smc_mtf": True,   # consider the STORED multi-TF SMC snapshot (zones file, hourly cron): HTF-weighted OB/swing confluence + soft premium/discount alignment. Stable read (not the flaky per-tick live read smc_confluence).
+                 "classic_zones": True,   # consider the CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) in confluence + grade; a KEY-LEVEL (KL) classic zone is the top-probability tier and boosts the grade.
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
@@ -689,6 +693,16 @@ def main():
     AI = FL.get("ai_decide", False)   # AI-decides mode: bypasses soft quality filters, but still honors hard floor, observation gate, and family caps
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
+    # CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) join the confluence machinery:
+    # buy zone/support → support side; sell zone/resistance → resistance side. So at_R/at_S/conf_R/conf_S and
+    # the target picker grade against EXACTLY what's drawn (the KL top-tier boost is applied later in grading).
+    if FL.get("classic_zones", True):
+        for zz in CLASSIC.get("zones", []):
+            tup = (zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}")
+            (HTF_S if zz["role"] in ("buy zone", "support") else HTF_R).append(tup)
+        for s in CLASSIC.get("sr", []):
+            tup = (s["price"], s["price"], f"{s['tf']} {s['role']} (classic)")
+            (HTF_S if s["role"] == "support" else HTF_R).append(tup)
     tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
@@ -1188,14 +1202,24 @@ def main():
             sig = smcmod.mtf_signal(entry, side, _smcblk, SMC_TOL * VS)
             cf_score += sig["score"]; cf_reasons += sig["reasons"]
             smc_zone, smc_aligned = sig["zone"], sig["aligned"]
-        if cf_score:
-            htf_note += f" | +{cf_score} HTF ({', '.join(cf_reasons[:3])})"
-            if cf_score >= 2:                              # 2+ aligned HTF elements = a real grade boost
-                grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
-            elif grade.startswith("B"):                    # a single '+' nudges open-space up
-                grade = "A"
-        if smc_zone:                                       # surface the range position for the AI judge regardless of score
-            htf_note += f" | SMC {smc_zone}{' ✓aligned' if smc_aligned else (' ✗misaligned' if smc_aligned is False else '')}"
+    # CLASSIC key-level zone — the TOP-probability tier (BOS + impulse + never wicked through). A KL S/D zone
+    # in the trade direction at price is the strongest confluence we have, so it adds a hard +2 (→ A+). Runs
+    # independently of SMC. (Plain non-KL classic zones already count via the at_R/at_S merge in main.)
+    if FL.get("classic_zones", True):
+        _want = ("buy zone", "support") if side == "LONG" else ("sell zone", "resistance")
+        _klz = next((zz for zz in CLASSIC.get("zones", []) if zz.get("kl") and zz.get("role") in _want
+                     and zz["lo"] - (SMC_TOL * VS) <= entry <= zz["hi"] + (SMC_TOL * VS)), None)
+        if _klz:
+            cf_score += 2; cf_reasons.append(f"KL {_klz['tf']} {_klz['role']}")
+            htf_note += f" | ⭐KL {_klz['tf']} {_klz['role']}"
+    if cf_score:
+        htf_note += f" | +{cf_score} HTF ({', '.join(cf_reasons[:3])})"
+        if cf_score >= 2:                              # 2+ aligned HTF elements = a real grade boost
+            grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
+        elif grade.startswith("B"):                    # a single '+' nudges open-space up
+            grade = "A"
+    if smc_zone:                                       # surface the range position for the AI judge regardless of score
+        htf_note += f" | SMC {smc_zone}{' ✓aligned' if smc_aligned else (' ✗misaligned' if smc_aligned is False else '')}"
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     # Zone-rejection stops sit BEYOND the rejection zone's far edge (+buffer) with a WIDER cap, so ordinary

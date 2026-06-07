@@ -27,6 +27,7 @@
   "draw_overlay": true,
   "smc_confluence": false,
   "smc_mtf": true,
+  "classic_zones": true,
   "auto_trendlines": true,
   "confidence_sizing": false,
   "family_caps": true,
