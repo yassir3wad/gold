@@ -16,7 +16,7 @@ Current live logs for the last 14 days show 18 executed trades across symbols, +
 
 This latest review adds five important findings.
 
-First, `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. It now has an evidence-status section that separates `validated`, `experimental`, `rejected`, and `not-tested` families. Remaining improvement: add an explicit evidence/status column to the large 100-signal table so the warning is visible at the exact row the reviewer reads.
+First, `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. It now has an evidence-status section plus an explicit Evidence column in the 100-signal table, so textbook labels such as "Excellent" are separated from project-validated edge at the exact row the reviewer reads.
 
 Second, `draw_overlay.py` had a practical throttle bug. `_recent()` reads `(chart + ":ts")` from `~/.tv_overlay_ids.json`, but `_save_ids()` previously saved only the drawn entity IDs. This is now fixed: `_save_ids()` persists the timestamp, `draw_overlay()` accepts an injectable `state_path`, and `test_draw_overlay.py` covers the throttle path.
 
@@ -24,7 +24,7 @@ Third, current all-symbol log analysis over the last 14 days shows 18 executed t
 
 Fourth, `scalp_fast.py` now has `family_caps` and `observation_gate`, which addresses two major open items. These now apply even when `ai_decide` is enabled. Observe-only families such as `momentum_impulse` are logged but not surfaced/fired unless `observation_gate` is explicitly disabled for research.
 
-Fifth, `docs/signal-roadmap-detailed.md` still says the Confluence Score Guide is "a planned refinement to `confidence.py`." That is stale: `confidence.py` already implements those deductions and `test_confidence.py` covers them.
+Fifth, `docs/signal-roadmap-detailed.md` now correctly says the Confluence Score Guide penalties are implemented in `confidence.py`, which is covered by `test_confidence.py`.
 
 ## Status Tracker
 
@@ -43,7 +43,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Add AI approval checklist / APPROVE-REJECT-WAIT | Done | `scalp_fast.py --review` prints the checklist and asks for `APPROVE / REJECT / WAIT`. |
 | Add cost/decision columns to outcome DB | Done | `outcome_db.py` includes spread/slippage/commission/gross/net and decision source/reason columns, with migration. |
 | Keep 100-signal roadmap as reference, not build list | Done | `docs/signal-roadmap.md` and `docs/signal-roadmap-detailed.md` clearly say roadmap/menu, not build list. |
-| Evidence-tag every roadmap signal | Partial | `docs/signal-roadmap-detailed.md` has an evidence-status section and defaults all unlisted signals to `not-tested`; still lacks an explicit per-row status column in the big table. |
+| Evidence-tag every roadmap signal | Done | `docs/signal-roadmap-detailed.md` has an evidence-status section and an explicit Evidence column in the 100-signal table. Exact known rows are tagged (`validated` VAH/VAL rejection, `rejected` break-and-retest); all other rows default to `not-tested`. |
 | Disable or observation-gate `momentum_impulse` | Done | `OBSERVE_FAMILIES = {"momentum_impulse"}` logs it as observation-only and blocks it from normal firing/review unless `observation_gate=false`. |
 | Add setup-family daily caps | Done | `FAMILY_CAPS` and `family_fired_today()` cap fired trades/reviews by strategy family unless `family_caps=false`. |
 | Tighten `zone_bounce` and `liquidity_sweep` | Done | Both now require stacked local confluence or valid prior-VA context before surfacing. The pure context helpers are tested, and strict-reversal suppressions are logged for measurement. |
@@ -51,7 +51,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
 | Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
 | Add spread/cost to backtest reports | Done | `analyze_logs.py`, `score_signals.py`, and `backtest_multi_day.py` now report gross, cost, and after-spread NET using `instruments.json` or `--spread-pips`. |
-| Fix stale roadmap confidence TODO | Pending | `docs/signal-roadmap-detailed.md` still calls confidence deductions planned, but `confidence.py` already implements them. |
+| Fix stale roadmap confidence TODO | Done | `docs/signal-roadmap-detailed.md` now says the Confluence Score Guide penalties are implemented in `confidence.py`. |
 | Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
 
 ## Current Strengths
@@ -345,8 +345,8 @@ This prevents accidentally reviving rejected ideas.
 
 ## Recommended Next Changes
 
-1. Add an explicit evidence/status column to the big table in `docs/signal-roadmap-detailed.md`.
-2. Fix the stale confidence TODO in `docs/signal-roadmap-detailed.md`; the deductions are already implemented in `confidence.py`.
+1. Keep the roadmap Evidence column current as live/backtest results promote rows out of `not-tested`.
+2. Continue treating `docs/signal-roadmap-detailed.md` as a reference menu; its confidence wording is now current with `confidence.py`.
 3. Monitor cost-adjusted backtest output from `score_signals.py` and `backtest_multi_day.py` against live fills; all three analysis paths now report after-spread NET.
 4. Split pure tests from TradingView-dependent integration tests in `package.json`.
 5. Convert script-style Python tests to import-safe test functions.

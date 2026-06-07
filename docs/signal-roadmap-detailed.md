@@ -7,7 +7,7 @@
 > rarely and only after validating what we have (the crosswalk in `signal-roadmap.md` shows implemented vs.
 > candidate vs. skip). The adopted parts of this file: the **AI approval checklist** (live in `scalp_fast
 > --review`), the **APPROVE/REJECT/WAIT decision format + AI Review JSON** (below), and the **Confluence Score
-> Guide** (a planned refinement to `confidence.py` — TODO, pending the 5m backtest).
+> Guide** penalties implemented in `confidence.py`.
 
 ## Evidence status
 
@@ -128,108 +128,108 @@ Decision thresholds:
 
 # Signal Index
 
-| # | Signal | Category | Gold/XAUUSD | Forex Majors | Best Use |
-|---:|---|---|---|---|---|
-| 1 | [KLZ Retest](#1-klz-retest) | Institutional / SMC | Excellent | Excellent | Intraday |
-| 2 | [Order Block Retest](#2-order-block-retest) | Institutional / SMC | Excellent | Excellent | Intraday/Swing |
-| 3 | [Breaker Block Retest](#3-breaker-block-retest) | Institutional / SMC | Excellent | Very Good | Intraday |
-| 4 | [Mitigation Block Retest](#4-mitigation-block-retest) | Institutional / SMC | Very Good | Very Good | Intraday |
-| 5 | [Fair Value Gap Fill](#5-fair-value-gap-fill) | Institutional / SMC | Excellent | Excellent | Scalping/Intraday |
-| 6 | [Liquidity Sweep](#6-liquidity-sweep) | Institutional / SMC | Excellent | Excellent | Scalping |
-| 7 | [Equal Highs Sweep](#7-equal-highs-sweep) | Institutional / SMC | Excellent | Excellent | Scalping |
-| 8 | [Equal Lows Sweep](#8-equal-lows-sweep) | Institutional / SMC | Excellent | Excellent | Scalping |
-| 9 | [Previous Day High Sweep](#9-previous-day-high-sweep) | Institutional / SMC | Excellent | Very Good | Intraday |
-| 10 | [Previous Day Low Sweep](#10-previous-day-low-sweep) | Institutional / SMC | Excellent | Very Good | Intraday |
-| 11 | [Session High Sweep](#11-session-high-sweep) | Institutional / SMC | Excellent | Very Good | Scalping |
-| 12 | [Session Low Sweep](#12-session-low-sweep) | Institutional / SMC | Excellent | Very Good | Scalping |
-| 13 | [Trendline Liquidity Sweep](#13-trendline-liquidity-sweep) | Institutional / SMC | Very Good | Very Good | Scalping |
-| 14 | [Stop Hunt Reversal](#14-stop-hunt-reversal) | Institutional / SMC | Excellent | Very Good | Scalping |
-| 15 | [Displacement Continuation](#15-displacement-continuation) | Institutional / SMC | Excellent | Excellent | Intraday |
-| 16 | [Previous VAH Rejection](#16-previous-vah-rejection) | Market Profile | Excellent | Good | Intraday |
-| 17 | [Previous VAL Rejection](#17-previous-val-rejection) | Market Profile | Excellent | Good | Intraday |
-| 18 | [VAH Flip Support](#18-vah-flip-support) | Market Profile | Excellent | Good | Intraday |
-| 19 | [VAL Flip Resistance](#19-val-flip-resistance) | Market Profile | Excellent | Good | Intraday |
-| 20 | [Failed Auction Above VAH](#20-failed-auction-above-vah) | Market Profile | Excellent | Good | Intraday |
-| 21 | [Failed Auction Below VAL](#21-failed-auction-below-val) | Market Profile | Excellent | Good | Intraday |
-| 22 | [POC Magnet Rotation](#22-poc-magnet-rotation) | Market Profile | Very Good | Good | Range day |
-| 23 | [Inside Value Rotation](#23-inside-value-rotation) | Market Profile | Good | Good | Range day |
-| 24 | [Outside Value Acceptance](#24-outside-value-acceptance) | Market Profile | Excellent | Good | Trend day |
-| 25 | [Poor High / Poor Low Repair](#25-poor-high-poor-low-repair) | Market Profile | Very Good | Medium | Intraday |
-| 26 | [Single Prints Fill](#26-single-prints-fill) | Market Profile | Very Good | Medium | Intraday |
-| 27 | [LVN Rejection](#27-lvn-rejection) | Market Profile | Very Good | Medium | Intraday |
-| 28 | [HVN Magnet](#28-hvn-magnet) | Market Profile | Good | Medium | Range day |
-| 29 | [VWAP Reclaim Long](#29-vwap-reclaim-long) | VWAP | Excellent | Very Good | Intraday |
-| 30 | [VWAP Rejection Short](#30-vwap-rejection-short) | VWAP | Excellent | Very Good | Intraday |
-| 31 | [VWAP Pullback Long](#31-vwap-pullback-long) | VWAP | Excellent | Very Good | Scalping |
-| 32 | [VWAP Pullback Short](#32-vwap-pullback-short) | VWAP | Excellent | Very Good | Scalping |
-| 33 | [VWAP Band 2 Reversal](#33-vwap-band-2-reversal) | VWAP | Very Good | Good | Scalping |
-| 34 | [VWAP Band Trend Ride](#34-vwap-band-trend-ride) | VWAP | Excellent | Good | Trend day |
-| 35 | [VWAP Chop Filter](#35-vwap-chop-filter) | VWAP | Excellent | Excellent | Filter |
-| 36 | [Anchored VWAP Retest](#36-anchored-vwap-retest) | VWAP | Excellent | Excellent | Intraday/Swing |
-| 37 | [Weekly VWAP Confluence](#37-weekly-vwap-confluence) | VWAP | Very Good | Very Good | Swing |
-| 38 | [VWAP + VAH/VAL Confluence](#38-vwap-vah-val-confluence) | VWAP | Excellent | Good | Intraday |
-| 39 | [Double Top](#39-double-top) | Classic Pattern | Very Good | Excellent | Intraday/Swing |
-| 40 | [Double Bottom](#40-double-bottom) | Classic Pattern | Very Good | Excellent | Intraday/Swing |
-| 41 | [Triple Top](#41-triple-top) | Classic Pattern | Good | Good | Swing |
-| 42 | [Triple Bottom](#42-triple-bottom) | Classic Pattern | Good | Good | Swing |
-| 43 | [Head and Shoulders](#43-head-and-shoulders) | Classic Pattern | Good | Very Good | Intraday/Swing |
-| 44 | [Inverse Head and Shoulders](#44-inverse-head-and-shoulders) | Classic Pattern | Good | Very Good | Intraday/Swing |
-| 45 | [Bull Flag](#45-bull-flag) | Classic Pattern | Excellent | Excellent | Scalping/Intraday |
-| 46 | [Bear Flag](#46-bear-flag) | Classic Pattern | Excellent | Excellent | Scalping/Intraday |
-| 47 | [Bullish Pennant](#47-bullish-pennant) | Classic Pattern | Very Good | Very Good | Intraday |
-| 48 | [Bearish Pennant](#48-bearish-pennant) | Classic Pattern | Very Good | Very Good | Intraday |
-| 49 | [Ascending Triangle](#49-ascending-triangle) | Classic Pattern | Good | Very Good | Intraday |
-| 50 | [Descending Triangle](#50-descending-triangle) | Classic Pattern | Good | Very Good | Intraday |
-| 51 | [Symmetrical Triangle](#51-symmetrical-triangle) | Classic Pattern | Medium | Good | Intraday |
-| 52 | [Rising Wedge](#52-rising-wedge) | Classic Pattern | Very Good | Very Good | Intraday |
-| 53 | [Falling Wedge](#53-falling-wedge) | Classic Pattern | Very Good | Very Good | Intraday |
-| 54 | [Rectangle Breakout](#54-rectangle-breakout) | Classic Pattern | Very Good | Excellent | Intraday |
-| 55 | [Rectangle Reversal](#55-rectangle-reversal) | Classic Pattern | Good | Excellent | Range day |
-| 56 | [Channel Bounce](#56-channel-bounce) | Classic Pattern | Good | Excellent | Intraday |
-| 57 | [Channel Breakout](#57-channel-breakout) | Classic Pattern | Very Good | Excellent | Intraday |
-| 58 | [Parabolic Exhaustion](#58-parabolic-exhaustion) | Classic Pattern | Excellent | Good | Scalping |
-| 59 | [Asian Range Breakout](#59-asian-range-breakout) | Session | Very Good | Excellent | London/NY |
-| 60 | [Asian Range Fakeout](#60-asian-range-fakeout) | Session | Excellent | Excellent | London/NY |
-| 61 | [London Open Sweep](#61-london-open-sweep) | Session | Very Good | Excellent | Scalping |
-| 62 | [London High Sweep in NY](#62-london-high-sweep-in-ny) | Session | Excellent | Very Good | NY Session |
-| 63 | [London Low Sweep in NY](#63-london-low-sweep-in-ny) | Session | Excellent | Very Good | NY Session |
-| 64 | [NY Open Manipulation](#64-ny-open-manipulation) | Session | Excellent | Very Good | Scalping |
-| 65 | [NY AM Continuation](#65-ny-am-continuation) | Session | Excellent | Very Good | Intraday |
-| 66 | [NY Lunch Chop Filter](#66-ny-lunch-chop-filter) | Session | Excellent | Excellent | Filter |
-| 67 | [London Close Reversal](#67-london-close-reversal) | Session | Good | Very Good | Intraday |
-| 68 | [Daily Open Retest](#68-daily-open-retest) | Session | Very Good | Very Good | Intraday |
-| 69 | [Weekly Open Retest](#69-weekly-open-retest) | Session | Very Good | Very Good | Swing |
-| 70 | [Killzone Liquidity Sweep](#70-killzone-liquidity-sweep) | Session | Excellent | Excellent | Scalping |
-| 71 | [Clean Breakout Retest](#71-clean-breakout-retest) | Breakout / Fakeout | Very Good | Excellent | Intraday |
-| 72 | [Failed Breakout](#72-failed-breakout) | Breakout / Fakeout | Excellent | Very Good | Scalping |
-| 73 | [Breakout Without Retest](#73-breakout-without-retest) | Breakout / Fakeout | Medium | Medium | Trend day |
-| 74 | [Compression Breakout](#74-compression-breakout) | Breakout / Fakeout | Excellent | Excellent | Intraday |
-| 75 | [False Break Above Range](#75-false-break-above-range) | Breakout / Fakeout | Excellent | Excellent | Scalping |
-| 76 | [False Break Below Range](#76-false-break-below-range) | Breakout / Fakeout | Excellent | Excellent | Scalping |
-| 77 | [Break and Retest of KLZ](#77-break-and-retest-of-klz) | Breakout / Fakeout | Excellent | Excellent | Intraday |
-| 78 | [Failed Retest](#78-failed-retest) | Breakout / Fakeout | Very Good | Very Good | Scalping |
-| 79 | [Volatility Expansion Breakout](#79-volatility-expansion-breakout) | Breakout / Fakeout | Excellent | Very Good | Intraday |
-| 80 | [News Breakout Continuation](#80-news-breakout-continuation) | Breakout / Fakeout | Good | Medium | News only |
-| 81 | [Bullish Pin Bar](#81-bullish-pin-bar) | Price Action Candle | Good | Very Good | Confirmation |
-| 82 | [Bearish Pin Bar](#82-bearish-pin-bar) | Price Action Candle | Good | Very Good | Confirmation |
-| 83 | [Bullish Engulfing](#83-bullish-engulfing) | Price Action Candle | Very Good | Very Good | Confirmation |
-| 84 | [Bearish Engulfing](#84-bearish-engulfing) | Price Action Candle | Very Good | Very Good | Confirmation |
-| 85 | [Inside Bar Breakout](#85-inside-bar-breakout) | Price Action Candle | Good | Very Good | Intraday |
-| 86 | [Outside Bar Reversal](#86-outside-bar-reversal) | Price Action Candle | Excellent | Very Good | Scalping |
-| 87 | [Marubozu Continuation](#87-marubozu-continuation) | Price Action Candle | Very Good | Good | Momentum |
-| 88 | [Doji at Level](#88-doji-at-level) | Price Action Candle | Medium | Medium | Warning |
-| 89 | [Rejection Wick + BOS](#89-rejection-wick-bos) | Price Action Candle | Excellent | Excellent | Entry trigger |
-| 90 | [Three Candle Reversal](#90-three-candle-reversal) | Price Action Candle | Very Good | Very Good | Entry trigger |
-| 91 | [Bullish BOS](#91-bullish-bos) | Trend / Structure | Excellent | Excellent | Structure |
-| 92 | [Bearish BOS](#92-bearish-bos) | Trend / Structure | Excellent | Excellent | Structure |
-| 93 | [Bullish CHOCH](#93-bullish-choch) | Trend / Structure | Excellent | Excellent | Reversal |
-| 94 | [Bearish CHOCH](#94-bearish-choch) | Trend / Structure | Excellent | Excellent | Reversal |
-| 95 | [Higher High / Higher Low Trend](#95-higher-high-higher-low-trend) | Trend / Structure | Very Good | Excellent | Intraday |
-| 96 | [Lower Low / Lower High Trend](#96-lower-low-lower-high-trend) | Trend / Structure | Very Good | Excellent | Intraday |
-| 97 | [Pullback to Higher Low](#97-pullback-to-higher-low) | Trend / Structure | Very Good | Excellent | Intraday |
-| 98 | [Pullback to Lower High](#98-pullback-to-lower-high) | Trend / Structure | Very Good | Excellent | Intraday |
-| 99 | [Trend Exhaustion](#99-trend-exhaustion) | Trend / Structure | Excellent | Very Good | Reversal |
-| 100 | [Market Structure Shift](#100-market-structure-shift) | Trend / Structure | Excellent | Excellent | Reversal |
+| # | Signal | Category | Gold/XAUUSD | Forex Majors | Evidence | Best Use |
+|---:|---|---|---|---|---|---|
+| 1 | [KLZ Retest](#1-klz-retest) | Institutional / SMC | Excellent | Excellent | `not-tested` | Intraday |
+| 2 | [Order Block Retest](#2-order-block-retest) | Institutional / SMC | Excellent | Excellent | `not-tested` | Intraday/Swing |
+| 3 | [Breaker Block Retest](#3-breaker-block-retest) | Institutional / SMC | Excellent | Very Good | `not-tested` | Intraday |
+| 4 | [Mitigation Block Retest](#4-mitigation-block-retest) | Institutional / SMC | Very Good | Very Good | `not-tested` | Intraday |
+| 5 | [Fair Value Gap Fill](#5-fair-value-gap-fill) | Institutional / SMC | Excellent | Excellent | `not-tested` | Scalping/Intraday |
+| 6 | [Liquidity Sweep](#6-liquidity-sweep) | Institutional / SMC | Excellent | Excellent | `not-tested` | Scalping |
+| 7 | [Equal Highs Sweep](#7-equal-highs-sweep) | Institutional / SMC | Excellent | Excellent | `not-tested` | Scalping |
+| 8 | [Equal Lows Sweep](#8-equal-lows-sweep) | Institutional / SMC | Excellent | Excellent | `not-tested` | Scalping |
+| 9 | [Previous Day High Sweep](#9-previous-day-high-sweep) | Institutional / SMC | Excellent | Very Good | `not-tested` | Intraday |
+| 10 | [Previous Day Low Sweep](#10-previous-day-low-sweep) | Institutional / SMC | Excellent | Very Good | `not-tested` | Intraday |
+| 11 | [Session High Sweep](#11-session-high-sweep) | Institutional / SMC | Excellent | Very Good | `not-tested` | Scalping |
+| 12 | [Session Low Sweep](#12-session-low-sweep) | Institutional / SMC | Excellent | Very Good | `not-tested` | Scalping |
+| 13 | [Trendline Liquidity Sweep](#13-trendline-liquidity-sweep) | Institutional / SMC | Very Good | Very Good | `not-tested` | Scalping |
+| 14 | [Stop Hunt Reversal](#14-stop-hunt-reversal) | Institutional / SMC | Excellent | Very Good | `not-tested` | Scalping |
+| 15 | [Displacement Continuation](#15-displacement-continuation) | Institutional / SMC | Excellent | Excellent | `not-tested` | Intraday |
+| 16 | [Previous VAH Rejection](#16-previous-vah-rejection) | Market Profile | Excellent | Good | `validated` | Intraday |
+| 17 | [Previous VAL Rejection](#17-previous-val-rejection) | Market Profile | Excellent | Good | `validated` | Intraday |
+| 18 | [VAH Flip Support](#18-vah-flip-support) | Market Profile | Excellent | Good | `not-tested` | Intraday |
+| 19 | [VAL Flip Resistance](#19-val-flip-resistance) | Market Profile | Excellent | Good | `not-tested` | Intraday |
+| 20 | [Failed Auction Above VAH](#20-failed-auction-above-vah) | Market Profile | Excellent | Good | `not-tested` | Intraday |
+| 21 | [Failed Auction Below VAL](#21-failed-auction-below-val) | Market Profile | Excellent | Good | `not-tested` | Intraday |
+| 22 | [POC Magnet Rotation](#22-poc-magnet-rotation) | Market Profile | Very Good | Good | `not-tested` | Range day |
+| 23 | [Inside Value Rotation](#23-inside-value-rotation) | Market Profile | Good | Good | `not-tested` | Range day |
+| 24 | [Outside Value Acceptance](#24-outside-value-acceptance) | Market Profile | Excellent | Good | `not-tested` | Trend day |
+| 25 | [Poor High / Poor Low Repair](#25-poor-high-poor-low-repair) | Market Profile | Very Good | Medium | `not-tested` | Intraday |
+| 26 | [Single Prints Fill](#26-single-prints-fill) | Market Profile | Very Good | Medium | `not-tested` | Intraday |
+| 27 | [LVN Rejection](#27-lvn-rejection) | Market Profile | Very Good | Medium | `not-tested` | Intraday |
+| 28 | [HVN Magnet](#28-hvn-magnet) | Market Profile | Good | Medium | `not-tested` | Range day |
+| 29 | [VWAP Reclaim Long](#29-vwap-reclaim-long) | VWAP | Excellent | Very Good | `not-tested` | Intraday |
+| 30 | [VWAP Rejection Short](#30-vwap-rejection-short) | VWAP | Excellent | Very Good | `not-tested` | Intraday |
+| 31 | [VWAP Pullback Long](#31-vwap-pullback-long) | VWAP | Excellent | Very Good | `not-tested` | Scalping |
+| 32 | [VWAP Pullback Short](#32-vwap-pullback-short) | VWAP | Excellent | Very Good | `not-tested` | Scalping |
+| 33 | [VWAP Band 2 Reversal](#33-vwap-band-2-reversal) | VWAP | Very Good | Good | `not-tested` | Scalping |
+| 34 | [VWAP Band Trend Ride](#34-vwap-band-trend-ride) | VWAP | Excellent | Good | `not-tested` | Trend day |
+| 35 | [VWAP Chop Filter](#35-vwap-chop-filter) | VWAP | Excellent | Excellent | `not-tested` | Filter |
+| 36 | [Anchored VWAP Retest](#36-anchored-vwap-retest) | VWAP | Excellent | Excellent | `not-tested` | Intraday/Swing |
+| 37 | [Weekly VWAP Confluence](#37-weekly-vwap-confluence) | VWAP | Very Good | Very Good | `not-tested` | Swing |
+| 38 | [VWAP + VAH/VAL Confluence](#38-vwap-vah-val-confluence) | VWAP | Excellent | Good | `not-tested` | Intraday |
+| 39 | [Double Top](#39-double-top) | Classic Pattern | Very Good | Excellent | `not-tested` | Intraday/Swing |
+| 40 | [Double Bottom](#40-double-bottom) | Classic Pattern | Very Good | Excellent | `not-tested` | Intraday/Swing |
+| 41 | [Triple Top](#41-triple-top) | Classic Pattern | Good | Good | `not-tested` | Swing |
+| 42 | [Triple Bottom](#42-triple-bottom) | Classic Pattern | Good | Good | `not-tested` | Swing |
+| 43 | [Head and Shoulders](#43-head-and-shoulders) | Classic Pattern | Good | Very Good | `not-tested` | Intraday/Swing |
+| 44 | [Inverse Head and Shoulders](#44-inverse-head-and-shoulders) | Classic Pattern | Good | Very Good | `not-tested` | Intraday/Swing |
+| 45 | [Bull Flag](#45-bull-flag) | Classic Pattern | Excellent | Excellent | `not-tested` | Scalping/Intraday |
+| 46 | [Bear Flag](#46-bear-flag) | Classic Pattern | Excellent | Excellent | `not-tested` | Scalping/Intraday |
+| 47 | [Bullish Pennant](#47-bullish-pennant) | Classic Pattern | Very Good | Very Good | `not-tested` | Intraday |
+| 48 | [Bearish Pennant](#48-bearish-pennant) | Classic Pattern | Very Good | Very Good | `not-tested` | Intraday |
+| 49 | [Ascending Triangle](#49-ascending-triangle) | Classic Pattern | Good | Very Good | `not-tested` | Intraday |
+| 50 | [Descending Triangle](#50-descending-triangle) | Classic Pattern | Good | Very Good | `not-tested` | Intraday |
+| 51 | [Symmetrical Triangle](#51-symmetrical-triangle) | Classic Pattern | Medium | Good | `not-tested` | Intraday |
+| 52 | [Rising Wedge](#52-rising-wedge) | Classic Pattern | Very Good | Very Good | `not-tested` | Intraday |
+| 53 | [Falling Wedge](#53-falling-wedge) | Classic Pattern | Very Good | Very Good | `not-tested` | Intraday |
+| 54 | [Rectangle Breakout](#54-rectangle-breakout) | Classic Pattern | Very Good | Excellent | `not-tested` | Intraday |
+| 55 | [Rectangle Reversal](#55-rectangle-reversal) | Classic Pattern | Good | Excellent | `not-tested` | Range day |
+| 56 | [Channel Bounce](#56-channel-bounce) | Classic Pattern | Good | Excellent | `not-tested` | Intraday |
+| 57 | [Channel Breakout](#57-channel-breakout) | Classic Pattern | Very Good | Excellent | `not-tested` | Intraday |
+| 58 | [Parabolic Exhaustion](#58-parabolic-exhaustion) | Classic Pattern | Excellent | Good | `not-tested` | Scalping |
+| 59 | [Asian Range Breakout](#59-asian-range-breakout) | Session | Very Good | Excellent | `not-tested` | London/NY |
+| 60 | [Asian Range Fakeout](#60-asian-range-fakeout) | Session | Excellent | Excellent | `not-tested` | London/NY |
+| 61 | [London Open Sweep](#61-london-open-sweep) | Session | Very Good | Excellent | `not-tested` | Scalping |
+| 62 | [London High Sweep in NY](#62-london-high-sweep-in-ny) | Session | Excellent | Very Good | `not-tested` | NY Session |
+| 63 | [London Low Sweep in NY](#63-london-low-sweep-in-ny) | Session | Excellent | Very Good | `not-tested` | NY Session |
+| 64 | [NY Open Manipulation](#64-ny-open-manipulation) | Session | Excellent | Very Good | `not-tested` | Scalping |
+| 65 | [NY AM Continuation](#65-ny-am-continuation) | Session | Excellent | Very Good | `not-tested` | Intraday |
+| 66 | [NY Lunch Chop Filter](#66-ny-lunch-chop-filter) | Session | Excellent | Excellent | `not-tested` | Filter |
+| 67 | [London Close Reversal](#67-london-close-reversal) | Session | Good | Very Good | `not-tested` | Intraday |
+| 68 | [Daily Open Retest](#68-daily-open-retest) | Session | Very Good | Very Good | `not-tested` | Intraday |
+| 69 | [Weekly Open Retest](#69-weekly-open-retest) | Session | Very Good | Very Good | `not-tested` | Swing |
+| 70 | [Killzone Liquidity Sweep](#70-killzone-liquidity-sweep) | Session | Excellent | Excellent | `not-tested` | Scalping |
+| 71 | [Clean Breakout Retest](#71-clean-breakout-retest) | Breakout / Fakeout | Very Good | Excellent | `not-tested` | Intraday |
+| 72 | [Failed Breakout](#72-failed-breakout) | Breakout / Fakeout | Excellent | Very Good | `not-tested` | Scalping |
+| 73 | [Breakout Without Retest](#73-breakout-without-retest) | Breakout / Fakeout | Medium | Medium | `not-tested` | Trend day |
+| 74 | [Compression Breakout](#74-compression-breakout) | Breakout / Fakeout | Excellent | Excellent | `not-tested` | Intraday |
+| 75 | [False Break Above Range](#75-false-break-above-range) | Breakout / Fakeout | Excellent | Excellent | `not-tested` | Scalping |
+| 76 | [False Break Below Range](#76-false-break-below-range) | Breakout / Fakeout | Excellent | Excellent | `not-tested` | Scalping |
+| 77 | [Break and Retest of KLZ](#77-break-and-retest-of-klz) | Breakout / Fakeout | Excellent | Excellent | `rejected` | Intraday |
+| 78 | [Failed Retest](#78-failed-retest) | Breakout / Fakeout | Very Good | Very Good | `not-tested` | Scalping |
+| 79 | [Volatility Expansion Breakout](#79-volatility-expansion-breakout) | Breakout / Fakeout | Excellent | Very Good | `not-tested` | Intraday |
+| 80 | [News Breakout Continuation](#80-news-breakout-continuation) | Breakout / Fakeout | Good | Medium | `not-tested` | News only |
+| 81 | [Bullish Pin Bar](#81-bullish-pin-bar) | Price Action Candle | Good | Very Good | `not-tested` | Confirmation |
+| 82 | [Bearish Pin Bar](#82-bearish-pin-bar) | Price Action Candle | Good | Very Good | `not-tested` | Confirmation |
+| 83 | [Bullish Engulfing](#83-bullish-engulfing) | Price Action Candle | Very Good | Very Good | `not-tested` | Confirmation |
+| 84 | [Bearish Engulfing](#84-bearish-engulfing) | Price Action Candle | Very Good | Very Good | `not-tested` | Confirmation |
+| 85 | [Inside Bar Breakout](#85-inside-bar-breakout) | Price Action Candle | Good | Very Good | `not-tested` | Intraday |
+| 86 | [Outside Bar Reversal](#86-outside-bar-reversal) | Price Action Candle | Excellent | Very Good | `not-tested` | Scalping |
+| 87 | [Marubozu Continuation](#87-marubozu-continuation) | Price Action Candle | Very Good | Good | `not-tested` | Momentum |
+| 88 | [Doji at Level](#88-doji-at-level) | Price Action Candle | Medium | Medium | `not-tested` | Warning |
+| 89 | [Rejection Wick + BOS](#89-rejection-wick-bos) | Price Action Candle | Excellent | Excellent | `not-tested` | Entry trigger |
+| 90 | [Three Candle Reversal](#90-three-candle-reversal) | Price Action Candle | Very Good | Very Good | `not-tested` | Entry trigger |
+| 91 | [Bullish BOS](#91-bullish-bos) | Trend / Structure | Excellent | Excellent | `not-tested` | Structure |
+| 92 | [Bearish BOS](#92-bearish-bos) | Trend / Structure | Excellent | Excellent | `not-tested` | Structure |
+| 93 | [Bullish CHOCH](#93-bullish-choch) | Trend / Structure | Excellent | Excellent | `not-tested` | Reversal |
+| 94 | [Bearish CHOCH](#94-bearish-choch) | Trend / Structure | Excellent | Excellent | `not-tested` | Reversal |
+| 95 | [Higher High / Higher Low Trend](#95-higher-high-higher-low-trend) | Trend / Structure | Very Good | Excellent | `not-tested` | Intraday |
+| 96 | [Lower Low / Lower High Trend](#96-lower-low-lower-high-trend) | Trend / Structure | Very Good | Excellent | `not-tested` | Intraday |
+| 97 | [Pullback to Higher Low](#97-pullback-to-higher-low) | Trend / Structure | Very Good | Excellent | `not-tested` | Intraday |
+| 98 | [Pullback to Lower High](#98-pullback-to-lower-high) | Trend / Structure | Very Good | Excellent | `not-tested` | Intraday |
+| 99 | [Trend Exhaustion](#99-trend-exhaustion) | Trend / Structure | Excellent | Very Good | `not-tested` | Reversal |
+| 100 | [Market Structure Shift](#100-market-structure-shift) | Trend / Structure | Excellent | Excellent | `not-tested` | Reversal |
 
 # Detailed Execution Instructions
 
