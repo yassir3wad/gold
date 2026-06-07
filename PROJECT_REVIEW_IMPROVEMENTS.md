@@ -26,6 +26,10 @@ Fourth, `scalp_fast.py` now has `family_caps` and `observation_gate`, which addr
 
 Fifth, `docs/signal-roadmap-detailed.md` now correctly says the Confluence Score Guide penalties are implemented in `confidence.py`, which is covered by `test_confidence.py`.
 
+Sixth, `NEGATIVE_RESULTS.md` now centralizes the disproven ideas that should not quietly return to live
+approval: the calibrated approval model, morning day-efficiency gate, break-and-retest, generic momentum
+impulse, and weak ER-only filters.
+
 ## Status Tracker
 
 Legend: `Done` = implemented in current files; `Partial` = started but still incomplete; `Pending` = not implemented; `Keep monitoring` = intentionally not changed yet.
@@ -54,6 +58,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Fix stale roadmap confidence TODO | Done | `docs/signal-roadmap-detailed.md` now says the Confluence Score Guide penalties are implemented in `confidence.py`. |
 | Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
 | Guard legacy multi-day detector | Done | `backtest_multi_day.py` now requires `--allow-legacy-detector` for non-dry runs and labels itself as a simplified detector; canonical scanner replay remains `replay_sim.py` + `score_signals.py`. |
+| Add negative-results file | Done | `NEGATIVE_RESULTS.md` records the rejected approval model, morning day-efficiency gate, break-and-retest, generic momentum impulse, and weak ER-only filters with a reconsideration bar. |
 
 ## Current Strengths
 
@@ -335,7 +340,7 @@ Track:
 
 ### 3. Protect Against Stale Assumptions
 
-Several comments/docs mention ideas that were later disproven. Keep a single `NEGATIVE_RESULTS.md` or add a section to this file for:
+Several ideas were later disproven and are now centralized in `NEGATIVE_RESULTS.md`:
 
 - approval model was anti-calibrated out of sample
 - morning day-efficiency gate was coin-flip
