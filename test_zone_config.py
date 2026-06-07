@@ -63,9 +63,50 @@ def test_defaults_when_no_notifications():
     assert c["notifications_enabled"] is True and c["stale_notifications_enabled"] is True
     print("✓ defaults to notifications-on when object absent")
 
+def test_refresh_job_surfaces_symbol_failure():
+    class Result:
+        def __init__(self, returncode, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    real_load_config = z.load_config
+    real_run = z.subprocess.run
+    try:
+        z.load_config = lambda: {"enabled_instruments": ["XAUUSD"], "notifications_enabled": False}
+
+        def fake_run(*args, **kwargs):
+            return Result(1, stdout="", stderr="boom")
+
+        z.subprocess.run = fake_run
+        ok = z.refresh_zones_job()
+        assert ok is False, "refresh_zones_job must return False when a symbol refresh fails"
+        print("✓ refresh job surfaces symbol failure")
+    finally:
+        z.load_config = real_load_config
+        z.subprocess.run = real_run
+
+def test_health_check_surfaces_parse_errors():
+    tmp = tempfile.TemporaryDirectory()
+    real_expanduser = z.os.path.expanduser
+    real_load_config = z.load_config
+    try:
+        z.os.path.expanduser = lambda path: tmp.name if path == "~/tradingview-mcp" else real_expanduser(path)
+        z.load_config = lambda: {"enabled_instruments": ["XAUUSD"], "stale_threshold_hours": 6, "stale_notifications_enabled": False}
+        with open(os.path.join(tmp.name, "zones_xauusd.json"), "w") as f:
+            f.write("{bad json")
+        out = z.check_zone_health(send_alert=False)
+        assert out["error_count"] == 1 and out["stale_count"] == 0 and out["missing_count"] == 0
+        print("✓ health check surfaces malformed zone files")
+    finally:
+        z.os.path.expanduser = real_expanduser
+        z.load_config = real_load_config
+        tmp.cleanup()
+
 if __name__ == "__main__":
     for fn in (test_notifications_object_honored, test_stale_toggle_independent,
                test_enabled_switch_present, test_session_refresh_toggle_blocks_jobs,
-               test_defaults_when_no_notifications):
+               test_defaults_when_no_notifications, test_refresh_job_surfaces_symbol_failure,
+               test_health_check_surfaces_parse_errors):
         fn()
     print("\n✓ ALL config-fix tests passed")

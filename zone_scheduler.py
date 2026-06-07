@@ -144,10 +144,11 @@ def refresh_zones_job():
         config = load_config()
         instruments = config.get("enabled_instruments", [])
         notifications_enabled = config.get("notifications_enabled", True)
+        had_failure = False
 
         if not instruments:
             logging.warning("No enabled instruments in config, skipping refresh")
-            return
+            return True
 
         logging.info(f"Refreshing zones for instruments: {', '.join(instruments)}")
 
@@ -183,13 +184,14 @@ def refresh_zones_job():
                     logging.error(f"Failed to refresh {symbol} (exit {result.returncode})")
                     if result.stderr:
                         logging.error(f"  Error: {result.stderr.strip()}")
+                    had_failure = True
 
             except subprocess.TimeoutExpired:
                 logging.error(f"Timeout refreshing {symbol} after 120s")
+                had_failure = True
             except Exception as e:
                 logging.error(f"Error refreshing {symbol}: {e}")
-
-        logging.info("Zone refresh cycle completed successfully")
+                had_failure = True
 
         # Send Telegram notification if enabled and we have changes
         if notifications_enabled and changes_by_symbol:
@@ -197,8 +199,15 @@ def refresh_zones_job():
             telegram_notify.send_alert("🔄 Zones Refreshed", summary, dry_run=False)
             logging.info("Telegram notification sent")
 
+        if had_failure:
+            logging.error("Zone refresh cycle completed with failures")
+        else:
+            logging.info("Zone refresh cycle completed successfully")
+        return not had_failure
+
     except Exception as e:
         logging.error(f"Error during zone refresh: {e}", exc_info=True)
+        return False
 
 def _parse_changes_from_output(line):
     """Parse change statistics from refresh output line.
@@ -246,6 +255,7 @@ def check_zone_health(send_alert=False):
             'stale_count': 0,
             'fresh_count': 0,
             'missing_count': 0,
+            'error_count': 0,
             'stale_symbols': []
         }
 
@@ -258,6 +268,7 @@ def check_zone_health(send_alert=False):
     stale_count = 0
     fresh_count = 0
     missing_count = 0
+    error_count = 0
     stale_symbols = []
 
     results = []
@@ -281,6 +292,7 @@ def check_zone_health(send_alert=False):
             zone_ts = zone_data.get("ts")
             if zone_ts is None:
                 logging.warning(f"  ✗ {symbol}: no timestamp field in zone file")
+                error_count += 1
                 results.append({
                     "symbol": symbol,
                     "status": "error",
@@ -311,6 +323,7 @@ def check_zone_health(send_alert=False):
 
         except json.JSONDecodeError as e:
             logging.error(f"  ✗ {symbol}: invalid JSON - {e}")
+            error_count += 1
             results.append({
                 "symbol": symbol,
                 "status": "error",
@@ -318,6 +331,7 @@ def check_zone_health(send_alert=False):
             })
         except Exception as e:
             logging.error(f"  ✗ {symbol}: error - {e}")
+            error_count += 1
             results.append({
                 "symbol": symbol,
                 "status": "error",
@@ -325,10 +339,10 @@ def check_zone_health(send_alert=False):
             })
 
     # Log summary
-    logging.info(f"Health check complete: {fresh_count} fresh, {stale_count} stale, {missing_count} missing")
+    logging.info(f"Health check complete: {fresh_count} fresh, {stale_count} stale, {missing_count} missing, {error_count} error(s)")
 
     # Send alert if stale zones found and notifications enabled
-    if send_alert and notifications_enabled and (stale_count > 0 or missing_count > 0):
+    if send_alert and notifications_enabled and (stale_count > 0 or missing_count > 0 or error_count > 0):
         alert_lines = []
 
         if stale_count > 0:
@@ -343,6 +357,12 @@ def check_zone_health(send_alert=False):
                 if r["status"] == "missing":
                     alert_lines.append(f"  • {r['symbol']}")
 
+        if error_count > 0:
+            alert_lines.append(f"\n✗ {error_count} errored zone file(s):")
+            for r in results:
+                if r["status"] == "error":
+                    alert_lines.append(f"  • {r['symbol']}: {r.get('message', 'unknown error')}")
+
         alert_lines.append("\nRun zone_scheduler.py to refresh zones")
 
         alert_message = "\n".join(alert_lines)
@@ -353,6 +373,7 @@ def check_zone_health(send_alert=False):
         'stale_count': stale_count,
         'fresh_count': fresh_count,
         'missing_count': missing_count,
+        'error_count': error_count,
         'stale_symbols': stale_symbols
     }
 
@@ -474,9 +495,9 @@ class ZoneScheduler:
         # Run immediately if in once mode
         if self.run_once:
             logging.info("Running in --once mode, executing immediate refresh")
-            refresh_zones_job()
+            ok = refresh_zones_job()
             self.stop()
-            return
+            return ok
 
         # Keep running until interrupted
         try:
@@ -575,7 +596,7 @@ Configuration:
         health_status = check_zone_health(send_alert=False)
 
         # Exit with error code if stale or missing zones found
-        if health_status['stale_count'] > 0 or health_status['missing_count'] > 0:
+        if health_status['stale_count'] > 0 or health_status['missing_count'] > 0 or health_status.get('error_count', 0) > 0:
             sys.exit(1)
         else:
             logging.info("✓ All zone files are healthy")
@@ -635,7 +656,9 @@ Configuration:
         run_once=args.once
     )
 
-    scheduler.start()
+    result = scheduler.start()
+    if args.once:
+        sys.exit(0 if result else 1)
 
 if __name__ == "__main__":
     main()

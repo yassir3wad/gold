@@ -41,6 +41,7 @@ def check_zone_health():
     stale_count = 0
     fresh_count = 0
     missing_count = 0
+    error_count = 0
 
     results = []
 
@@ -62,6 +63,7 @@ def check_zone_health():
 
             zone_ts = zone_data.get("ts")
             if zone_ts is None:
+                error_count += 1
                 results.append({
                     "symbol": symbol,
                     "status": "error",
@@ -90,12 +92,14 @@ def check_zone_health():
             })
 
         except json.JSONDecodeError as e:
+            error_count += 1
             results.append({
                 "symbol": symbol,
                 "status": "error",
                 "message": f"Invalid JSON: {e}"
             })
         except Exception as e:
+            error_count += 1
             results.append({
                 "symbol": symbol,
                 "status": "error",
@@ -120,7 +124,7 @@ def check_zone_health():
             print(f"✗ {symbol:7s} - ERROR ({r.get('message', 'unknown')})")
 
     print("=" * 70)
-    print(f"Summary: {fresh_count} fresh, {stale_count} stale, {missing_count} missing")
+    print(f"Summary: {fresh_count} fresh, {stale_count} stale, {missing_count} missing, {error_count} error(s)")
 
     if stale_count > 0:
         print(f"\n⚠ WARNING: {stale_count} zone file(s) are stale (>{MAX_AGE_HOURS}h old)")
@@ -128,6 +132,9 @@ def check_zone_health():
         sys.exit(1)
     elif missing_count > 0:
         print(f"\n⚠ WARNING: {missing_count} zone file(s) are missing")
+        sys.exit(1)
+    elif error_count > 0:
+        print(f"\n⚠ WARNING: {error_count} zone file(s) have errors")
         sys.exit(1)
     else:
         print("\n✓ All zone files are fresh")

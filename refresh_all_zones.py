@@ -61,8 +61,14 @@ def load_zones(symbol):
 
 def compare_zones(old_zones, new_zones):
     """Compare old and new zone files, return {added, removed, modified, unchanged}"""
-    if not old_zones or not new_zones:
+    if not old_zones and not new_zones:
         return {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
+    if not old_zones:
+        new_keys = set(tuple(z[:2]) for z in (new_zones.get("htf_r", []) + new_zones.get("htf_s", [])))
+        return {"added": len(new_keys), "removed": 0, "modified": 0, "unchanged": 0}
+    if not new_zones:
+        old_keys = set(tuple(z[:2]) for z in (old_zones.get("htf_r", []) + old_zones.get("htf_s", [])))
+        return {"added": 0, "removed": len(old_keys), "modified": 0, "unchanged": 0}
     old_r = {tuple(z[:2]): z[2] if len(z) > 2 else "" for z in old_zones.get("htf_r", [])}
     old_s = {tuple(z[:2]): z[2] if len(z) > 2 else "" for z in old_zones.get("htf_s", [])}
     new_r = {tuple(z[:2]): z[2] if len(z) > 2 else "" for z in new_zones.get("htf_r", [])}
@@ -109,6 +115,7 @@ def main():
     logging.info(f"refreshing {len(symbols)} instrument{'s' if len(symbols) != 1 else ''}...")
     total_changes = {"added": 0, "removed": 0, "modified": 0, "unchanged": 0}
     changes_by_symbol = {}
+    had_failure = False
     for idx, sym in enumerate(symbols, 1):
         desc = instruments[sym].get('desc', '')
         logging.info(f"[{idx}/{len(symbols)}] {sym} — {desc}")
@@ -135,10 +142,13 @@ def main():
             else:
                 logging.error(f"  ✗ failed (exit {result.returncode})")
                 if result.stderr: logging.error(f"     {result.stderr.strip()}")
+                had_failure = True
         except subprocess.TimeoutExpired:
             logging.error(f"  ✗ timeout after 60s")
+            had_failure = True
         except Exception as e:
             logging.error(f"  ✗ error: {e}")
+            had_failure = True
     if len(symbols) > 1:
         logging.info(f"completed refresh for {len(symbols)} instruments")
         if total_changes["added"] + total_changes["removed"] + total_changes["modified"] > 0:
@@ -150,6 +160,10 @@ def main():
     if NOTIFY and changes_by_symbol:
         summary = telegram_notify.format_zone_summary(changes_by_symbol)
         telegram_notify.send_alert("🔄 Zones Refreshed", summary, dry_run=False)
+
+    if had_failure:
+        logging.error("refresh completed with failures")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
