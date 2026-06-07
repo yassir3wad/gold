@@ -1196,8 +1196,17 @@ def main():
         if conf_score is not None:
             # explicit steer for the AI judge: confidence aggregates every confluence axis past the A+ ceiling
             print(f"   >> AI: confidence {conf_score}/10 ({conf_lbl}). ≥7 = strong conviction — lean APPROVE if the "
-                  f"discipline holds (with-trend, real room, clean trigger). ≤3 = weak — only approve with a clear, "
-                  f"specific reason; otherwise reject.")
+                  f"checklist holds. ≤3 = weak — only approve with a clear, specific reason; otherwise reject.")
+        # AI approval checklist (from docs/signal-roadmap.md) — APPROVE only if ALL hold; else REJECT/WAIT:
+        print("   >> AI APPROVAL CHECKLIST (all must hold):\n"
+              "      1) at a real level (VAH/VAL/POC/VWAP/bands/PDH-PDL/session H-L/SMC zone) — not open space\n"
+              "      2) structure aligned or shifted (BOS/CHoCH/HH-HL/LL-LH) in the trade direction\n"
+              "      3) R:R ≥ 1:2 with a logical, not-too-wide stop\n"
+              "      4) NOT mid-value / chopping around VWAP\n"
+              "      5) no strong opposing level right before TP1\n"
+              "      6) London/NY session (avoid Asian/NY-lunch unless clean breakout acceptance)\n"
+              "      7) level is FRESH — not Accepted-through / over-tested (check prevVA Level State)\n"
+              "      WAIT if a cleaner entry (retest/sweep-reclaim) is one candle away.")
         print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
         return
     _fire(trade)
