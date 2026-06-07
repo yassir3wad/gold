@@ -12,7 +12,7 @@ Covers:
   (c) concurrent-append safety   — N threads appending distinct ids ⇒ zero lost rows
   (d) analyze_logs parity        — same data via DB vs via CSV yields identical executed/rejected/net
 """
-import os, csv as _csv, tempfile, threading, importlib
+import os, csv as _csv, tempfile, threading, importlib, unittest
 
 import outcome_db
 
@@ -245,6 +245,16 @@ def main():
     test_cost_decision_roundtrip()
     test_old_style_row_backcompat()
     print("\nALL TESTS PASSED")
+
+
+class OutcomeDbUnitTests(unittest.TestCase):
+    def test_upsert_roundtrip_case(self): test_upsert_roundtrip()
+    def test_inplace_update_case(self): test_inplace_update()
+    def test_concurrent_appends_case(self): test_concurrent_appends()
+    def test_analyze_parity_case(self): test_analyze_parity()
+    def test_cost_decision_schema_case(self): test_cost_decision_schema()
+    def test_cost_decision_roundtrip_case(self): test_cost_decision_roundtrip()
+    def test_old_style_row_backcompat_case(self): test_old_style_row_backcompat()
 
 
 if __name__ == "__main__":

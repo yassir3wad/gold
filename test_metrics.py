@@ -2,6 +2,8 @@
 """Test script to verify profit factor, max drawdown, and Sharpe ratio calculations."""
 
 # Import the metric functions from backtest_multi_day
+import unittest
+
 from backtest_multi_day import calculate_profit_factor, calculate_max_drawdown, calculate_sharpe_ratio
 
 def test_metrics():
@@ -76,6 +78,10 @@ def test_metrics():
     print("\n✓ All assertions passed!")
 
     return True
+
+class MetricsUnitTests(unittest.TestCase):
+    def test_metrics_case(self):
+        self.assertTrue(test_metrics())
 
 if __name__ == "__main__":
     try:

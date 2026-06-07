@@ -2,13 +2,14 @@
 """Multi-day walk-forward backtesting framework.
 
 DESCRIPTION:
-    Simulates the scalp_fast.py strategy over historical data by replaying 1-minute bars
-    from TradingView Desktop. Supports sequential backtesting, walk-forward optimization,
-    Monte Carlo simulation, and risk metrics calculation.
+    Legacy multi-day detector harness over historical 1-minute bars from TradingView Desktop.
+    This file does NOT run the full live scalp_fast.py scanner. Use replay_sim.py + score_signals.py
+    for canonical live-scanner replay. Supports sequential backtesting, walk-forward optimization,
+    Monte Carlo simulation, and risk metrics calculation for the simplified detector below.
 
 USAGE:
-    # Basic sequential backtest over date range
-    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15
+    # Basic sequential backtest over date range (legacy detector; explicit acknowledgement required)
+    python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-15 --allow-legacy-detector
 
     # Walk-forward optimization (rolling train/test windows)
     python3 backtest_multi_day.py --start-date 2025-01-01 --end-date 2025-01-31 \\
@@ -41,19 +42,21 @@ CLI FLAGS:
     --dry-run                   Print dates without running backtests (preview mode)
     --export FILE.csv           Export all trades to CSV file
     --report FILE.txt           Export summary report to text file
+    --allow-legacy-detector     Required for non-dry legacy-detector runs; canonical replay is replay_sim.py
 
 OUTPUT FORMAT:
     Per-day results:
         - Bars: number of 1-minute bars processed
         - Signals: total trade setups detected
         - TP1 wins / SL losses / Timeouts: outcome breakdown
-        - Win rate: percentage (excluding timeouts)
+        - TP1-vs-SL win rate: percentage (excluding timeouts)
+        - Net win rate: percentage of trades positive after spread
         - Gross pips, cost pips, and NET after spread for the day
 
     Overall summary:
         - Days tested
         - Total signals, wins, losses, timeouts
-        - Overall win rate (excluding timeouts)
+        - Overall TP1-vs-SL win rate and after-spread net win rate
         - Overall gross pips, costs, and NET after spread
         - Advanced metrics after cost: profit factor, max drawdown, Sharpe ratio
 
@@ -100,6 +103,7 @@ NOTES:
     - Requires TradingView Desktop running with CDP on port 9222
     - Fetches 1m OHLCV data via tradingview-mcp CLI
     - Simulates 10-bar (10-minute) horizon for TP1/SL/timeout resolution
+    - For strategy decisions, prefer replay_sim.py + score_signals.py because they run scalp_fast.py itself
     - One trade at a time (no pyramiding)
     - HTF levels (HTF_R, HTF_S) must be set in scalp_fast.py for grading
 """
@@ -152,7 +156,8 @@ def summarize_trades(trades, spread_pips=None):
     losses = sum(1 for t in trades if trade_net_pips(t, spread) < 0)
     scratch = len(trades) - wins - losses
     return {"gross_pips": gross, "cost_pips": cost, "net_pips": net,
-            "net_wins": wins, "net_losses": losses, "net_scratch": scratch}
+            "net_wins": wins, "net_losses": losses, "net_scratch": scratch,
+            "net_win_rate": (100.0 * wins / len(trades) if trades else 0.0)}
 
 def tv(*a):
     r = subprocess.run(["node","src/cli/index.js",*a], cwd=os.path.dirname(os.path.abspath(__file__)),
@@ -336,7 +341,9 @@ def backtest_day(day, tv_fn=tv, spread_pips=None):
     b = fetch_session_bars(day, tv_fn)
     if len(b) < 30:
         return {"date": day, "bars": len(b), "signals": 0, "wins": 0, "losses": 0, "timeouts": 0,
-                "gross_pips": 0, "cost_pips": 0, "net_pips": 0, "trades": []}
+                "gross_pips": 0, "cost_pips": 0, "net_pips": 0,
+                "net_wins": 0, "net_losses": 0, "net_scratch": 0, "net_win_rate": 0,
+                "trades": []}
 
     trades=[]; i=25
     while i < len(b)-1:
@@ -375,6 +382,10 @@ def backtest_day(day, tv_fn=tv, spread_pips=None):
         "gross_pips": cost["gross_pips"],
         "cost_pips": cost["cost_pips"],
         "net_pips": cost["net_pips"],
+        "net_wins": cost["net_wins"],
+        "net_losses": cost["net_losses"],
+        "net_scratch": cost["net_scratch"],
+        "net_win_rate": cost["net_win_rate"],
         "trades": trades
     }
 
@@ -418,7 +429,11 @@ def backtest_period(start_date, end_date, spread_pips=None):
     total_gross = sum(r['gross_pips'] for r in all_results)
     total_cost = sum(r['cost_pips'] for r in all_results)
     total_net = sum(r['net_pips'] for r in all_results)
+    total_net_wins = sum(r.get('net_wins', 0) for r in all_results)
+    total_net_losses = sum(r.get('net_losses', 0) for r in all_results)
+    total_net_scratch = sum(r.get('net_scratch', 0) for r in all_results)
     win_rate = (total_wins / (total_wins+total_losses)*100) if (total_wins or total_losses) else 0
+    net_win_rate = (total_net_wins / total_signals * 100) if total_signals else 0
 
     return {
         "days": len(days),
@@ -429,6 +444,10 @@ def backtest_period(start_date, end_date, spread_pips=None):
         "gross_pips": total_gross,
         "cost_pips": total_cost,
         "net_pips": total_net,
+        "net_wins": total_net_wins,
+        "net_losses": total_net_losses,
+        "net_scratch": total_net_scratch,
+        "net_win_rate": net_win_rate,
         "win_rate": win_rate,
         "daily_results": all_results
     }
@@ -551,7 +570,10 @@ def export_summary_report(filename, period_stats, all_results, spread_pips=None)
         f.write(f"TP1 wins: {period_stats['wins']}\n")
         f.write(f"SL losses: {period_stats['losses']}\n")
         f.write(f"Timeouts: {period_stats['timeouts']}\n")
-        f.write(f"Win rate (excl timeouts): {period_stats['win_rate']:.1f}%\n")
+        f.write(f"TP1-vs-SL win rate (excl timeouts): {period_stats['win_rate']:.1f}%\n")
+        f.write(f"Net win rate after cost: {period_stats.get('net_win_rate', 0):.1f}% "
+                f"({period_stats.get('net_wins', 0)}W / {period_stats.get('net_losses', 0)}L / "
+                f"{period_stats.get('net_scratch', 0)}=)\n")
         f.write(f"Gross P&L: {period_stats['gross_pips']:+.0f} pips\n")
         f.write(f"Costs: -{period_stats['cost_pips']:.0f} pips ({spread:g}p/trade)\n")
         f.write(f"NET after cost: {period_stats['net_pips']:+.0f} pips\n\n")
@@ -572,7 +594,7 @@ def export_summary_report(filename, period_stats, all_results, spread_pips=None)
         f.write("--- Per-Day Breakdown ---\n")
         for result in all_results:
             wr = (result['wins']/ (result['wins']+result['losses'])*100) if (result['wins'] or result['losses']) else 0
-            f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | WR:{wr:5.1f}% | Gross:{result['gross_pips']:+6.0f}p | NET:{result['net_pips']:+6.0f}p\n")
+            f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | TPWR:{wr:5.1f}% | NetWR:{result.get('net_win_rate', 0):5.1f}% | Gross:{result['gross_pips']:+6.0f}p | NET:{result['net_pips']:+6.0f}p\n")
 
 def main():
     global ENABLE_FILTERS, COST_SPREAD_PIPS
@@ -590,6 +612,8 @@ def main():
     parser.add_argument("--export", type=str, help="Export trades to CSV file")
     parser.add_argument("--report", type=str, help="Export summary report to text file")
     parser.add_argument("--enable-filters", action="store_true", help="Enable chop filter (efficiency ratio) and session filter")
+    parser.add_argument("--allow-legacy-detector", action="store_true",
+                        help="Acknowledge this simplified detector is not canonical scalp_fast.py replay")
     args = parser.parse_args()
 
     # Set global filter flag
@@ -603,6 +627,8 @@ def main():
         parser.error(f"train-days must be at least 1")
     if args.test_days < 1:
         parser.error(f"test-days must be at least 1")
+    if not args.dry_run and not args.allow_legacy_detector:
+        parser.error("backtest_multi_day.py uses a simplified legacy detector. For canonical strategy replay, use replay_sim.py + score_signals.py. Re-run with --allow-legacy-detector to continue.")
 
     # Walk-forward mode
     if args.walk_forward:
@@ -611,6 +637,7 @@ def main():
             parser.error(f"Date range too small for train-days={args.train_days} and test-days={args.test_days}")
 
         print(f"Walk-forward optimization mode")
+        print("Detector: simplified legacy detector (not canonical scalp_fast.py replay)")
         print(f"Date range: {args.start_date} to {args.end_date}")
         print(f"Cost assumption: {COST_SPREAD_PIPS:g}p/trade ({args.symbol.upper()})")
         print(f"Training window: {args.train_days} days")
@@ -636,13 +663,13 @@ def main():
                 print(f"--- Training Period ---")
                 train_results = backtest_period(train_start, train_end, COST_SPREAD_PIPS)
                 print(f"Signals: {train_results['signals']}  |  Wins: {train_results['wins']}  |  Losses: {train_results['losses']}  |  Timeouts: {train_results['timeouts']}")
-                print(f"Win rate: {train_results['win_rate']:.0f}%  |  Gross: {train_results['gross_pips']:+.0f}p  |  Cost: -{train_results['cost_pips']:.0f}p  |  NET: {train_results['net_pips']:+.0f}p")
+                print(f"TP1-vs-SL WR: {train_results['win_rate']:.0f}%  |  NetWR: {train_results['net_win_rate']:.0f}%  |  Gross: {train_results['gross_pips']:+.0f}p  |  Cost: -{train_results['cost_pips']:.0f}p  |  NET: {train_results['net_pips']:+.0f}p")
 
                 # Run testing period
                 print(f"\n--- Testing Period ---")
                 test_results = backtest_period(test_start, test_end, COST_SPREAD_PIPS)
                 print(f"Signals: {test_results['signals']}  |  Wins: {test_results['wins']}  |  Losses: {test_results['losses']}  |  Timeouts: {test_results['timeouts']}")
-                print(f"Win rate: {test_results['win_rate']:.0f}%  |  Gross: {test_results['gross_pips']:+.0f}p  |  Cost: -{test_results['cost_pips']:.0f}p  |  NET: {test_results['net_pips']:+.0f}p")
+                print(f"TP1-vs-SL WR: {test_results['win_rate']:.0f}%  |  NetWR: {test_results['net_win_rate']:.0f}%  |  Gross: {test_results['gross_pips']:+.0f}p  |  Cost: -{test_results['cost_pips']:.0f}p  |  NET: {test_results['net_pips']:+.0f}p")
 
                 window_results.append({
                     "window": i,
@@ -665,7 +692,11 @@ def main():
             total_test_gross = sum(w['test']['gross_pips'] for w in window_results)
             total_test_cost = sum(w['test']['cost_pips'] for w in window_results)
             total_test_net = sum(w['test']['net_pips'] for w in window_results)
+            total_test_net_wins = sum(w['test'].get('net_wins', 0) for w in window_results)
+            total_test_net_losses = sum(w['test'].get('net_losses', 0) for w in window_results)
+            total_test_net_scratch = sum(w['test'].get('net_scratch', 0) for w in window_results)
             overall_test_wr = (total_test_wins / (total_test_wins+total_test_losses)*100) if (total_test_wins or total_test_losses) else 0
+            overall_test_net_wr = (total_test_net_wins / total_test_signals * 100) if total_test_signals else 0
 
             # Collect all test trades for advanced metrics
             all_test_trades = []
@@ -681,7 +712,8 @@ def main():
             print(f"Test period wins: {total_test_wins}")
             print(f"Test period losses: {total_test_losses}")
             print(f"Test period timeouts: {total_test_timeouts}")
-            print(f"Test period win rate: {overall_test_wr:.0f}%")
+            print(f"Test period TP1-vs-SL win rate: {overall_test_wr:.0f}%")
+            print(f"Test period net win rate after cost: {overall_test_net_wr:.0f}% ({total_test_net_wins}W / {total_test_net_losses}L / {total_test_net_scratch}=)")
             print(f"Test period gross: {total_test_gross:+.0f} pips")
             print(f"Test period costs: -{total_test_cost:.0f} pips ({COST_SPREAD_PIPS:g}p/trade)")
             print(f"Test period NET after cost: {total_test_net:+.0f} pips (~${total_test_net:+.0f} @0.1 lot)")
@@ -693,7 +725,7 @@ def main():
 
             print("\nPer-window test results:")
             for w in window_results:
-                print(f"  Window {w['window']}: {w['test']['net_pips']:+.0f} pips (WR: {w['test']['win_rate']:.0f}%)")
+                print(f"  Window {w['window']}: {w['test']['net_pips']:+.0f} pips (TPWR: {w['test']['win_rate']:.0f}% / NetWR: {w['test']['net_win_rate']:.0f}%)")
 
             # Run Monte Carlo simulation on test periods if requested
             if args.monte_carlo:
@@ -720,6 +752,7 @@ def main():
     else:
         days = list(iter_days(args.start_date, args.end_date))
         print(f"Date range: {args.start_date} to {args.end_date} ({len(days)} days)")
+        print("Detector: simplified legacy detector (not canonical scalp_fast.py replay)")
         print(f"Cost assumption: {COST_SPREAD_PIPS:g}p/trade ({args.symbol.upper()})")
 
         if args.dry_run:
@@ -740,7 +773,7 @@ def main():
                 # Print day summary
                 print(f"Bars: {result['bars']}  |  Signals: {result['signals']}  |  TP1 wins: {result['wins']}  |  SL losses: {result['losses']}  |  Timeouts: {result['timeouts']}")
                 wr = (result['wins']/ (result['wins']+result['losses'])*100) if (result['wins'] or result['losses']) else 0
-                print(f"Win rate (excl timeouts): {wr:.0f}%   Gross: {result['gross_pips']:+.0f}p  Cost: -{result['cost_pips']:.0f}p  NET: {result['net_pips']:+.0f}p (~${result['net_pips']:+.0f} @0.1 lot)")
+                print(f"TP1-vs-SL win rate (excl timeouts): {wr:.0f}%   Net win rate: {result['net_win_rate']:.0f}%   Gross: {result['gross_pips']:+.0f}p  Cost: -{result['cost_pips']:.0f}p  NET: {result['net_pips']:+.0f}p (~${result['net_pips']:+.0f} @0.1 lot)")
 
                 # Print trades
                 if result['trades']:
@@ -763,7 +796,11 @@ def main():
             total_gross = sum(r['gross_pips'] for r in all_results)
             total_cost = sum(r['cost_pips'] for r in all_results)
             total_net = sum(r['net_pips'] for r in all_results)
+            total_net_wins = sum(r.get('net_wins', 0) for r in all_results)
+            total_net_losses = sum(r.get('net_losses', 0) for r in all_results)
+            total_net_scratch = sum(r.get('net_scratch', 0) for r in all_results)
             overall_wr = (total_wins / (total_wins+total_losses)*100) if (total_wins or total_losses) else 0
+            overall_net_wr = (total_net_wins / total_signals * 100) if total_signals else 0
 
             # Collect all trades for advanced metrics
             all_trades = [t for r in all_results for t in r['trades']]
@@ -776,7 +813,8 @@ def main():
             print(f"Total TP1 wins: {total_wins}")
             print(f"Total SL losses: {total_losses}")
             print(f"Total timeouts: {total_timeouts}")
-            print(f"Overall win rate (excl timeouts): {overall_wr:.0f}%")
+            print(f"Overall TP1-vs-SL win rate (excl timeouts): {overall_wr:.0f}%")
+            print(f"Overall net win rate after cost: {overall_net_wr:.0f}% ({total_net_wins}W / {total_net_losses}L / {total_net_scratch}=)")
             print(f"Overall gross: {total_gross:+.0f} pips")
             print(f"Overall costs: -{total_cost:.0f} pips ({COST_SPREAD_PIPS:g}p/trade)")
             print(f"Overall NET after cost: {total_net:+.0f} pips (~${total_net:+.0f} @0.1 lot)")
@@ -818,6 +856,10 @@ def main():
                     'gross_pips': total_gross,
                     'cost_pips': total_cost,
                     'net_pips': total_net,
+                    'net_wins': total_net_wins,
+                    'net_losses': total_net_losses,
+                    'net_scratch': total_net_scratch,
+                    'net_win_rate': overall_net_wr,
                     'win_rate': overall_wr
                 }
                 export_summary_report(args.report, period_stats, all_results, COST_SPREAD_PIPS)

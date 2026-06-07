@@ -15,6 +15,7 @@ This manual labels many setups "Excellent" on textbook grounds. **Those labels a
 reference menu, not a validated live allowlist. Every signal below carries an implicit evidence tag:
 
 - **`validated`** — repo-backed cost-adjusted edge in *our* backtest/live logs.
+- **`validated: conditional`** — validated only under the conditions listed in the evidence note.
 - **`experimental`** — plausible, being tried here, not yet proven.
 - **`rejected`** — disproven in our backtest/live logs.
 - **`not-tested`** — default; no evidence either way. **The vast majority of the 100 signals are here.**
@@ -145,8 +146,8 @@ Decision thresholds:
 | 13 | [Trendline Liquidity Sweep](#13-trendline-liquidity-sweep) | Institutional / SMC | Very Good | Very Good | `not-tested` | Scalping |
 | 14 | [Stop Hunt Reversal](#14-stop-hunt-reversal) | Institutional / SMC | Excellent | Very Good | `not-tested` | Scalping |
 | 15 | [Displacement Continuation](#15-displacement-continuation) | Institutional / SMC | Excellent | Excellent | `not-tested` | Intraday |
-| 16 | [Previous VAH Rejection](#16-previous-vah-rejection) | Market Profile | Excellent | Good | `validated` | Intraday |
-| 17 | [Previous VAL Rejection](#17-previous-val-rejection) | Market Profile | Excellent | Good | `validated` | Intraday |
+| 16 | [Previous VAH Rejection](#16-previous-vah-rejection) | Market Profile | Excellent | Good | `validated: conditional` | Intraday |
+| 17 | [Previous VAL Rejection](#17-previous-val-rejection) | Market Profile | Excellent | Good | `validated: conditional` | Intraday |
 | 18 | [VAH Flip Support](#18-vah-flip-support) | Market Profile | Excellent | Good | `not-tested` | Intraday |
 | 19 | [VAL Flip Resistance](#19-val-flip-resistance) | Market Profile | Excellent | Good | `not-tested` | Intraday |
 | 20 | [Failed Auction Above VAH](#20-failed-auction-above-vah) | Market Profile | Excellent | Good | `not-tested` | Intraday |

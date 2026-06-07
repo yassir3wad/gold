@@ -50,10 +50,15 @@ def main():
         gross = sum(s["_p"] for s in group)
         cost = spread_pips * len(group)
         net = sum(s["_np"] for s in group)
+        nw = sum(1 for s in group if s["_np"] > 0)
+        nl = sum(1 for s in group if s["_np"] < 0)
+        ns = len(group) - nw - nl
         tp, sl, to = c["TP1"], c["SL"], c["timeout"]
-        wr = tp / (tp + sl) * 100 if (tp + sl) else 0
+        tp_wr = tp / (tp + sl) * 100 if (tp + sl) else 0
+        net_wr = nw / len(group) * 100 if group else 0
         print(f"  {name:9} n={len(group):3}  TP1={tp:3}  SL={sl:3}  timeout={to:3}  "
-              f"TP1-vs-SL={wr:3.0f}%  gross={gross:+5d}p  cost=-{cost:4.0f}p  NET={net:+5d}p")
+              f"TP1-vs-SL={tp_wr:3.0f}%  NetWR={net_wr:3.0f}% ({nw}W/{nl}L/{ns}=)  "
+              f"gross={gross:+5d}p  cost=-{cost:4.0f}p  NET={net:+5d}p")
 
     print(f"=== outcomes, {a.date}, {a.horizon}-bar horizon (TP1 or SL first) ===")
     print(f"Cost assumption: {spread_pips:g}p/trade ({a.symbol.upper()})")

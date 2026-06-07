@@ -43,16 +43,17 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Add AI approval checklist / APPROVE-REJECT-WAIT | Done | `scalp_fast.py --review` prints the checklist and asks for `APPROVE / REJECT / WAIT`. |
 | Add cost/decision columns to outcome DB | Done | `outcome_db.py` includes spread/slippage/commission/gross/net and decision source/reason columns, with migration. |
 | Keep 100-signal roadmap as reference, not build list | Done | `docs/signal-roadmap.md` and `docs/signal-roadmap-detailed.md` clearly say roadmap/menu, not build list. |
-| Evidence-tag every roadmap signal | Done | `docs/signal-roadmap-detailed.md` has an evidence-status section and an explicit Evidence column in the 100-signal table. Exact known rows are tagged (`validated` VAH/VAL rejection, `rejected` break-and-retest); all other rows default to `not-tested`. |
+| Evidence-tag every roadmap signal | Done | `docs/signal-roadmap-detailed.md` has an evidence-status section and an explicit Evidence column in the 100-signal table. Exact known rows are tagged (`validated: conditional` VAH/VAL rejection, `rejected` break-and-retest); all other rows default to `not-tested`. |
 | Disable or observation-gate `momentum_impulse` | Done | `OBSERVE_FAMILIES = {"momentum_impulse"}` logs it as observation-only and blocks it from normal firing/review unless `observation_gate=false`. |
 | Add setup-family daily caps | Done | `FAMILY_CAPS` and `family_fired_today()` cap fired trades/reviews by strategy family unless `family_caps=false`. |
 | Tighten `zone_bounce` and `liquidity_sweep` | Done | Both now require stacked local confluence or valid prior-VA context before surfacing. The pure context helpers are tested, and strict-reversal suppressions are logged for measurement. |
 | Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
-| Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
-| Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
+| Split static vs live Node tests | Done | `npm test` / `npm run test:unit` are offline-only; TradingView/CDP and Pine server checks live under `npm run test:live` / `npm run test:pine-live`. |
+| Convert import-time Python tests | Done | `test_outcome_db.py`, `test_metrics.py`, and `test_approval_model.py` now expose unittest wrappers while keeping script runners. |
 | Add spread/cost to backtest reports | Done | `analyze_logs.py`, `score_signals.py`, and `backtest_multi_day.py` now report gross, cost, and after-spread NET using `instruments.json` or `--spread-pips`. |
 | Fix stale roadmap confidence TODO | Done | `docs/signal-roadmap-detailed.md` now says the Confluence Score Guide penalties are implemented in `confidence.py`. |
 | Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
+| Guard legacy multi-day detector | Done | `backtest_multi_day.py` now requires `--allow-legacy-detector` for non-dry runs and labels itself as a simplified detector; canonical scanner replay remains `replay_sim.py` + `score_signals.py`. |
 
 ## Current Strengths
 
@@ -73,7 +74,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 Recommended action:
 
 - Keep its current "reference/menu, not a build list" positioning.
-- Add an evidence label to each signal: `validated`, `experimental`, `rejected`, or `not tested`.
+- Maintain the Evidence column for each signal: `validated`, `validated: conditional`, `experimental`, `rejected`, or `not-tested`.
 - Do not let the AI approve a setup only because the manual labels it excellent.
 - Keep the live allowlist small: core setups, selective CRT, and validated value-area rejection.
 - Require every new signal family to pass spread-adjusted backtest and out-of-sample live review before it becomes eligible for live alerts.
@@ -347,10 +348,10 @@ This prevents accidentally reviving rejected ideas.
 
 1. Keep the roadmap Evidence column current as live/backtest results promote rows out of `not-tested`.
 2. Continue treating `docs/signal-roadmap-detailed.md` as a reference menu; its confidence wording is now current with `confidence.py`.
-3. Monitor cost-adjusted backtest output from `score_signals.py` and `backtest_multi_day.py` against live fills; all three analysis paths now report after-spread NET.
-4. Split pure tests from TradingView-dependent integration tests in `package.json`.
-5. Convert script-style Python tests to import-safe test functions.
-6. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
+3. Use `replay_sim.py` + `score_signals.py` for canonical scanner replay; treat `backtest_multi_day.py` as legacy-detector research only.
+4. Monitor cost-adjusted output against live fills and recalibrate `spread_pips` / slippage assumptions from broker executions.
+5. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
+6. Continue shrinking `scalp_fast.py` into pure modules only after behavior stabilizes.
 
 ## Bottom Line
 

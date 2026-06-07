@@ -4,7 +4,7 @@ Pure stdlib. Pins featurization, the smoothed win-rate table, hierarchical backo
 the decision rule (off-session hard veto + calibrated threshold), and JSON persistence.
     python3 test_approval_model.py   (exit 0 = all pass)
 """
-import sys, os, json, tempfile
+import sys, os, json, tempfile, unittest
 import approval_model as am
 
 _results = []
@@ -146,6 +146,25 @@ def main():
         if not ok: print(f"  [FAIL] {n}")
     print(f"\n{'✅' if passed == total else '❌'} {passed}/{total} checks passed")
     sys.exit(0 if passed == total else 1)
+
+
+class ApprovalModelUnitTests(unittest.TestCase):
+    def _run_case(self, fn):
+        global _results
+        _results = []
+        fn()
+        failed = [name for name, ok in _results if not ok]
+        self.assertEqual(failed, [])
+
+    def test_featurize_case(self): self._run_case(test_featurize)
+    def test_score_laplace_case(self): self._run_case(test_score_laplace)
+    def test_backoff_to_family_then_global_case(self): self._run_case(test_backoff_to_family_then_global)
+    def test_decide_offsession_hard_veto_case(self): self._run_case(test_decide_offsession_hard_veto)
+    def test_decide_threshold_case(self): self._run_case(test_decide_threshold)
+    def test_persistence_roundtrip_case(self): self._run_case(test_persistence_roundtrip)
+    def test_day_efficiency_case(self): self._run_case(test_day_efficiency)
+    def test_featurize_dctx_case(self): self._run_case(test_featurize_dctx)
+    def test_recovers_known_boundary_case(self): self._run_case(test_recovers_known_boundary)
 
 
 if __name__ == "__main__":
