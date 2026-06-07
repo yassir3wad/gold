@@ -35,10 +35,14 @@ except Exception: dovr = None
 PIP = 0.10
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
-VOL_MIN_RANGE10 = 40   # last 10 1m bars must span >= this many pips to allow a fast signal
-ATR_REF = 30           # gold's characteristic 1m ATR (pips) — the VS=1 anchor for ATR-normalized sizing.
-                       # All pip-tuned constants below are scaled by VS = atr_base/ATR_REF at runtime so the
-                       # strategies self-fit any instrument & volatility regime (gold at normal vol → VS≈1 → unchanged).
+TIGHT_RANGE_P = 35     # 15-bar range below this (×VS) = a "tight" consolidation (range-breakout trigger)
+DT_EQ_P = 8            # two swing highs/lows within this (×VS) = equal = a double top/bottom
+VOL_MIN_RANGE10 = 40   # last 10 bars must span >= this many pips (×VS) to allow a fast signal
+ATR_REF = 30           # the VS=1 anchor (gold's 1m ATR, pips) for ATR-normalized sizing. All pip-tuned
+                       # constants below are scaled by VS = atr_base/ATR_REF at runtime so the strategies
+                       # self-fit any instrument, regime AND timeframe. On the 5m execution TF the bar ranges
+                       # are ~1.8–2.2× wider, so VS auto-runs ~2 and the whole geometry (chase/room/SL/TP/
+                       # vol-gate/tight/double-top) scales up to match 5m — no per-TF re-tuning needed.
 
 # Higher-TF swing S/R map (matches the 1H/4H/Daily zones drawn on the chart). (lo, hi, label)
 HTF_R = [(4459,4468,"R 4459-68 (15m+1H swing highs)"), (4470,4475,"R 4472 (15m EMA200 + 1H EMA50)"),
@@ -631,8 +635,9 @@ def main():
     rng10 = (max(x['high'] for x in b[-10:]) - min(x['low'] for x in b[-10:])) / PIP
     atr = sum(x['high'] - x['low'] for x in b[-14:]) / 14 / PIP
     # --- ATR-normalized sizing: scale the gold-tuned pip constants by a STABLE volatility factor so every
-    # strategy self-fits the instrument & regime. atr_base = ~2h 1m ATR (instrument character, not the noisy
-    # instant ATR); VS=1 at gold's ~30p reference ATR reproduces the original tuned values. Clamped to avoid extremes. ---
+    # strategy self-fits the instrument, regime AND timeframe. atr_base = avg bar range over the last ≤120
+    # EXECUTION-TF bars (instrument/TF character, not the noisy instant ATR) — on 5m that's ~10h and ~1.8–2.2×
+    # the 1m value, so VS auto-scales the geometry up for 5m. VS=1 at gold's ~30p 1m ref. Clamped to avoid extremes. ---
     _nb = min(len(b), 120)
     atr_base = (sum(x['high'] - x['low'] for x in b[-_nb:]) / _nb / PIP) if _nb else atr
     VS = max(0.5, min(4.0, atr_base / ATR_REF))
@@ -661,10 +666,11 @@ def main():
     # --- consolidation range (last 15 bars) ---
     hi15 = max(x['high'] for x in b[-15:]); lo15 = min(x['low'] for x in b[-15:])
     range15 = (hi15 - lo15) / PIP
-    tight = range15 < 35
+    tight = range15 < TIGHT_RANGE_P * VS               # VS-scaled so it self-fits the execution TF (5m bars are wider)
     # --- double top / bottom (last 3 swing highs/lows) ---
-    dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < 8
-    dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < 8
+    dt_eq = DT_EQ_P * VS                                # "equal highs/lows" tolerance, VS-scaled
+    dtop = len(sh) >= 2 and abs(sh[-1][1] - sh[-2][1]) / PIP < dt_eq
+    dbot = len(sl) >= 2 and abs(sl[-1][1] - sl[-2][1]) / PIP < dt_eq
 
     # --- chart indicators: session VWAP (+bands), EMA 50/100/200, RSI — read not computed (self-heal) ---
     vw, vw_up, vw_lo, em, rsi = read_chart_levels([x['close'] for x in b])
@@ -716,7 +722,7 @@ def main():
     S_refs = [v for lo,hi,_ in HTF_S for v in (lo,hi)] + [p for p,_,lab in ptS if is_wall(lab)]
     nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
     nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
-    print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF=1m  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
+    print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF={BASE_TF}m  VS={VS:.2f}  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  15m-ER={chop_er}{' CHOP' if is_chop else ''}  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
     if prior_vas:   # prior-day value areas + the inputs the AI needs to apply the framework (docs/value-area-framework.md)
@@ -983,7 +989,7 @@ def main():
             # Only re-ping if WATCH_CD_MIN elapsed OR price moved to a genuinely new zone (>WATCH_NEW_ZONE_P away).
             try: w = json.load(open(WATCH_CD_FILE))
             except Exception: w = {}
-            new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P and htf[2] != w.get("label")
+            new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P * VS and htf[2] != w.get("label")
             recent = (time.time() - w.get("t", 0)) < WATCH_CD_MIN*60
             if recent and not new_zone:
                 print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
