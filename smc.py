@@ -58,6 +58,63 @@ def read_smc(chart, tv=None, dedup_tol=0.0, max_labels=600):
             "liquidity": liquidity, "swings": swings}
 
 
+class SMCMissing(RuntimeError):
+    """Raised when the LuxAlgo Smart Money Concepts indicator isn't on the chart (it's mandatory)."""
+
+
+def assert_smc(chart, tv=None):
+    """Validate the SMC indicator IS on the chart; raise SMCMissing if not. Call before reading/using SMC so
+    a missing indicator fails LOUD instead of silently returning empty (which previously read as 'no SMC')."""
+    studies = ((tv or _default_tv)(chart, "state") or {}).get("studies", [])
+    if not _find_tid(studies, SMC_FILTER):
+        raise SMCMissing(f"Smart Money Concepts (LuxAlgo) indicator is NOT on chart '{chart or 'default'}'. "
+                         "Add it before trading/refresh — SMC data comes from the indicator.")
+
+
+def value_zones(swings):
+    """Premium / Equilibrium / Discount from the current swing range (Strong/Weak High/Low). The range is the
+    span of swing prices; premium = upper half (sell zone), discount = lower half (buy zone). None if <2 swings.
+    Returns {hi, lo, eq, premium:[eq,hi], discount:[lo,eq]}. Pure (testable)."""
+    ps = [s.get("price") for s in (swings or []) if s.get("price") is not None]
+    if len(ps) < 2:
+        return None
+    hi, lo = max(ps), min(ps); eq = round((hi + lo) / 2, 2)
+    return {"hi": hi, "lo": lo, "eq": eq, "premium": [eq, hi], "discount": [lo, eq]}
+
+
+def read_smc_mtf(chart, price, tfs=("240", "60", "15"), base_tf="5", band=200.0, tv=None, render_wait=3.0):
+    """Read the SMC indicator across MULTIPLE timeframes (4h/1h/15m) and return a per-TF snapshot, filtered to
+    within `band` price-units of `price` (the far full-history boxes/labels drop out; only near-price ones,
+    which are stable, remain — swings are KEPT regardless since they define the range). Switches TF, restores
+    `base_tf`, hides the indicator after. Raises SMCMissing if absent. tv injectable for tests (returns {}).
+    Per-TF: {boxes:[{high,low,side}], structure, liquidity, swings, premium, discount, equilibrium}."""
+    if tv is not None:
+        return {}
+    assert_smc(chart)
+    sid = _find_tid((_default_tv(chart, "state") or {}).get("studies", []), SMC_FILTER)
+    _default_tv(chart, "indicator", "toggle", sid, "--visible", "true")
+    out = {}
+    for tf in tfs:
+        _default_tv(chart, "timeframe", str(tf))
+        if render_wait:
+            time.sleep(render_wait)
+        m = read_smc(chart)
+        near = lambda xs: [{"text": x["text"], "price": round(x["price"], 2)} for x in xs
+                           if x.get("price") is not None and abs(x["price"] - price) <= band]
+        boxes = [{"high": round(b["high"], 2), "low": round(b["low"], 2),
+                  "side": "demand" if b["high"] <= price else "supply" if b["low"] >= price else "straddle"}
+                 for b in m["boxes"]
+                 if b.get("high") is not None and b["high"] >= price - band and b["low"] <= price + band]
+        vz = value_zones(m["swings"])
+        out[str(tf)] = {"boxes": boxes, "structure": near(m["structure"]), "liquidity": near(m["liquidity"]),
+                        "swings": [{"text": s["text"], "price": round(s["price"], 2)} for s in m["swings"]],
+                        "premium": vz["premium"] if vz else None, "discount": vz["discount"] if vz else None,
+                        "equilibrium": vz["eq"] if vz else None}
+    _default_tv(chart, "indicator", "toggle", sid, "--hidden")
+    _default_tv(chart, "timeframe", str(base_tf))
+    return out
+
+
 TRENDLINE_FILTER = "Auto Trendlines"
 
 

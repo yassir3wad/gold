@@ -194,6 +194,29 @@ def test_read_chart_context_retry_cap():
     check("chart-ctx: retry capped at `attempts`", n["boxes"] == 3)
 
 
+def test_value_zones():
+    vz = S.value_zones([{"text": "Strong High", "price": 4773.5}, {"text": "Weak Low", "price": 4311.65}])
+    check("value_zones: hi/lo", vz["hi"] == 4773.5 and vz["lo"] == 4311.65)
+    check("value_zones: equilibrium = midpoint", vz["eq"] == round((4773.5 + 4311.65) / 2, 2))
+    check("value_zones: discount = lower half [lo,eq]", vz["discount"] == [4311.65, vz["eq"]])
+    check("value_zones: premium = upper half [eq,hi]", vz["premium"] == [vz["eq"], 4773.5])
+    check("value_zones: <2 swings -> None", S.value_zones([{"text": "Strong High", "price": 4500}]) is None)
+
+
+def test_assert_smc():
+    present = lambda c, *a: {"studies": [{"name": "Smart Money Concepts [LuxAlgo]", "id": "X"}]}
+    absent = lambda c, *a: {"studies": [{"name": "Volume", "id": "V"}]}
+    ok = True
+    try: S.assert_smc("X", tv=present)
+    except Exception: ok = False
+    check("assert_smc: passes when present", ok)
+    raised = False
+    try: S.assert_smc("X", tv=absent)
+    except S.SMCMissing: raised = True
+    check("assert_smc: raises SMCMissing when absent", raised)
+    check("read_smc_mtf: tv-injected -> {}", S.read_smc_mtf("X", 4300, tv=absent) == {})
+
+
 def test_assert_trendlines():
     present = lambda c, *a: {"studies": [{"name": "Auto Trendlines", "id": "TL1"}, {"name": "Volume", "id": "V"}]}
     absent = lambda c, *a: {"studies": [{"name": "Volume", "id": "V"}]}
@@ -209,7 +232,8 @@ def test_assert_trendlines():
 
 def main():
     for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence, test_read_trendlines_mtf, test_assert_trendlines,
-               test_read_chart_context_retries_on_empty, test_read_chart_context_retry_cap):
+               test_read_chart_context_retries_on_empty, test_read_chart_context_retry_cap,
+               test_value_zones, test_assert_smc):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
