@@ -32,7 +32,13 @@ def active_pairs():
     return out
 
 def review(sym):
-    subprocess.run(["bash", "aireview.sh", sym], cwd=TVDIR, capture_output=True, text=True, timeout=140)
+    try:
+        result = subprocess.run(["bash", "aireview.sh", sym], cwd=TVDIR,
+                                capture_output=True, text=True, timeout=140)
+    except Exception:
+        return False
+    if result.returncode != 0:
+        return False
     return os.path.exists(_state(sym, "pending"))
 
 def orch_log(line):
