@@ -9,7 +9,8 @@ TVDIR = os.path.expanduser("~/tradingview-mcp")
 sys.path.insert(0, TVDIR)
 try: import smc as smcmod   # LuxAlgo SMC multi-TF read (stored snapshot for trade-check)
 except Exception: smcmod = None
-IS_BACKTEST = ("--out" in sys.argv)   # the isolated date-faithful zone file = the true backtest signal; the replay chart has no SMC. NOTE: key on --out NOT --chart — a live refresh may pin a chart with --chart and must still capture SMC (or fail loud if it's missing), never silently skip.
+IS_BACKTEST = ("--out" in sys.argv)   # the isolated date-faithful zone file = the true backtest signal; the replay chart normally has no SMC. NOTE: key on --out NOT --chart — a live refresh may pin a chart with --chart and must still capture SMC (or fail loud if it's missing), never silently skip.
+WITH_SMC = ("--with-smc" in sys.argv)   # opt IN to date-faithful SMC capture during a backtest (replay chart must have the SMC indicator); read at the replay cursor so the swings/boxes are date-faithful.
 SYMBOL = "XAUUSD"
 if "--symbol" in sys.argv:
     try: SYMBOL = sys.argv[sys.argv.index("--symbol")+1].upper()
@@ -131,7 +132,7 @@ def main():
     # --- multi-TF SMC snapshot (LuxAlgo) — stored so trade-check consumes a STABLE snapshot (zones file),
     # not a flaky per-tick live read. LIVE refresh only: the backtest replay chart has no SMC indicator. ---
     smc_block = {}; smc_failed = False
-    if smcmod and not IS_BACKTEST:
+    if smcmod and (not IS_BACKTEST or WITH_SMC):
         try:
             tf_snap = smcmod.read_smc_mtf(os.environ.get("TV_CHART", ""), price, base_tf="1")
             smc_block = {'ts': time.time(), 'price': price, 'tf': tf_snap}

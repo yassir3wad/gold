@@ -1303,6 +1303,7 @@ def main():
                 return
     _cf = f"  confidence {conf_score}/10 ({conf_lbl})" if conf_score is not None else ""
     print(f"\n>> FAST SIGNAL: {side} [{grade}]{_cf} [{why}]{htf_note}")
+    print(f"   SMC: zone={smc_zone} aligned={smc_aligned} age={smc_age}")   # machine-parseable (replay_sim scrapes this for the SMC bucket report)
     _szt = f" [conf-sized {risk_usd/RISK_USD:.2f}×]" if (FL.get('confidence_sizing', False) and risk_usd != RISK_USD) else ""
     print(f"   Entry {entry} | SL {sl_lvl} ({risk:.0f}p · {lot} lot ≈ ${risk_usd:.0f}{_szt}) | TP1 {tp1} (+{tp1_p:.0f}p) | TP2 {tp2} (+{tp2_p:.0f}p)")
     print(f"   RULE: exit if TP1 not hit within ~10 min (speed thesis failed).")
