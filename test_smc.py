@@ -157,8 +157,29 @@ def test_grade_confluence():
     check("grade-conf: tags the TF in reasons", any("240m" in x for x in r["reasons"]))
 
 
+def test_read_trendlines_mtf():
+    # contract: injected tv short-circuits to [] (the live read is I/O); default TFs are 4h/1h/15m
+    check("mtf trendlines: tv-injected -> []", S.read_trendlines_mtf("X", tv=fake_tv(None)) == [])
+    import inspect
+    check("mtf trendlines: reads 4h/1h/15m by default",
+          inspect.signature(S.read_trendlines_mtf).parameters["tfs"].default == ("240", "60", "15"))
+
+
+def test_assert_trendlines():
+    present = lambda c, *a: {"studies": [{"name": "Auto Trendlines", "id": "TL1"}, {"name": "Volume", "id": "V"}]}
+    absent = lambda c, *a: {"studies": [{"name": "Volume", "id": "V"}]}
+    ok = True
+    try: S.assert_trendlines("X", tv=present)
+    except Exception: ok = False
+    check("assert_trendlines: passes when indicator present", ok)
+    raised = False
+    try: S.assert_trendlines("X", tv=absent)
+    except S.TrendlinesMissing: raised = True
+    check("assert_trendlines: raises TrendlinesMissing when absent", raised)
+
+
 def main():
-    for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence):
+    for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence, test_read_trendlines_mtf, test_assert_trendlines):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

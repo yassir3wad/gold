@@ -73,7 +73,7 @@ BE_TRIGGER_P = 35                  # once a trade runs +this many pips favorable
 RSI_OB, RSI_OS = 78, 22            # RSI exhaustion gates — block continuation longs >OB / shorts <OS (anti blow-off)
 VP_TF, VP_BARS = "30", 48          # volume-profile basis: 30m bars x48 (~1 day) for VPOC / value-area levels
 RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to confirm a grind-bounce off a zone
-BASE_TF = int(os.environ.get("TV_BASE_TF", "1"))   # execution timeframe in minutes (1m default; 5m via TV_BASE_TF=5)
+BASE_TF = int(os.environ.get("TV_BASE_TF", "5"))   # execution timeframe in minutes (5m default everywhere; backtests set TV_BASE_TF explicitly)
 ER_STRIDE = max(1, 15 // BASE_TF)  # bars per 15m step (15 on 1m, 3 on 5m) so the ER stays a 15m-sampled read
 SMC_TTL = 3600        # SMC/trendline HTF context refreshes slowly (4h); cached this long (live). Backtest clears the cache per replay step-refresh, so it stays date-faithful.
 SMC_TOL = 8           # pips: proximity for SMC level/trendline confluence
@@ -598,7 +598,11 @@ def smc_context():
     except Exception:
         pass
     try:
-        ctx = smcmod.read_chart_context(os.environ.get("TV_CHART", ""), dedup_tol=SMC_TOL)
+        chart = os.environ.get("TV_CHART", "")
+        ctx = smcmod.read_chart_context(chart, dedup_tol=SMC_TOL)
+        # Auto Trendlines as MULTI-TF confluence (4h/1h/15m) — the indicator recomputes per TF, so this
+        # switches TF, reads, and restores BASE_TF. Cached (SMC_TTL), so the TF sweep only runs ~hourly.
+        ctx["trendlines"] = smcmod.read_trendlines_mtf(chart, base_tf=str(BASE_TF))
         json.dump({"t": time.time(), "ctx": ctx}, open(f, "w"))
         return ctx
     except Exception:
@@ -617,6 +621,10 @@ def main():
     b = tv("ohlcv", "-n", "180").get("bars", [])
     if price is None or len(b) < 40:
         print("ERR: no data"); return
+    # mandatory indicator: the Auto Trendlines must be enabled on the chart (multi-TF trendline confluence).
+    # Fail LOUD if it's missing rather than silently scoring without it.
+    if FL.get("auto_trendlines", True) and smcmod:
+        smcmod.assert_trendlines(os.environ.get("TV_CHART", ""))
     n = len(b); last = b[-1]
     if not DRY: check_active_trade(price)   # alert TP1/TP2/SL on any live signalled trade
     # --- volatility gate ---
@@ -759,12 +767,10 @@ def main():
             for _k, _lvl in (("VAH", _ova["vah"]), ("VAL", _ova["val"]), ("POC", _ova["poc"])):
                 if _lvl is not None:
                     _ovst[_k] = vastate.level_state(_lvl, b, _k, poc=_ova["poc"], bar_minutes=BASE_TF)["state"]
-        _sctx = smc_context() if smcmod else {}
-        _boxes = (_sctx.get("smc", {}) or {}).get("boxes", [])
-        _tls = _sctx.get("trendlines", []) if FL.get("auto_trendlines", True) else []
+        _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if smcmod else []
         _n = dovr.draw_overlay(os.environ.get("TV_CHART", ""), price, _ova, _ovst, _ov.get("sp"), _boxes,
                                band=OVERLAY_OB_BAND_P * PIP, t0=b[0]["time"], t1=last["time"],
-                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"), trendlines=_tls)
+                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"))
         if _n >= 0:
             print(f"(overlay drawn: {_n} shapes)")
 

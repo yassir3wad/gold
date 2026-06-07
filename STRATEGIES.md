@@ -1,7 +1,8 @@
 # XAUUSD Scalp System — Strategy Reference
 
-Auto-monitor (`scalp_fast.py`) reads the **live 1m chart** every 60s, detects setups, grades them,
-and pushes alerts to Telegram. Conventions: **1 pip = $0.10** (so 50 pips = a $5 move). 0.1 lot ≈ $1/pip.
+Auto-monitor (`scalp_fast.py`) reads the **live chart** every 60s on the **5m execution timeframe**
+(`BASE_TF`, was 1m), detects setups, grades them, and pushes alerts to Telegram. Conventions: **1 pip =
+$0.10** (so 50 pips = a $5 move). 0.1 lot ≈ $1/pip.
 
 ---
 
@@ -83,6 +84,8 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | **Adaptive TP/SL** | `adaptive_tp` | TP caps **8p short of the next horizontal structure** (`TP_BUFFER_P`); trade is **skipped if <25p clean room** (`MIN_ROOM_P`) — no more aiming +50 into a wall. EMAs/VWAP don't count as walls (price flows through them). |
 | **Volume/TPO profile** | `volume_profile` | **Current-day** POC + value-area (VAH/VAL): reads your **Kioseff TPO** on a brief 30m show/hide (cached; falls back to a computed 30m profile). **Prior-day** VAH/POC/VAL come from the **`va_store` DB** (`prior_day_vas()`) — a reliable, immutable cache harvested off the indicator (the live scrape returns orphaned-primitive residue, so we don't use it). Both added as confluence levels (`prevVAH`/`prevPOC`/`prevVAL`); the prior-day ones also drive the Value-Area framework below. |
 | **Confluence** | `confluence` | When **≥2 levels stack** at price (e.g. VWAP+EMA+zone), the grade is strengthened (A→A+, B→A). Lone touches earn less. |
+| **SMC confluence** | `smc_confluence` | +score when entry sits in a LuxAlgo **order-block/FVG**, near BOS/CHoCH/EQH-EQL/strong-weak H/L. Read on the current chart, cached ~1h. |
+| **Auto-Trendline confluence** | `auto_trendlines` | +1 when entry is near an **Auto Trendlines** level read across **4h/1h/15m** (`read_trendlines_mtf`, cached ~1h). A SEPARATE indicator from SMC — scored independently (not gated by SMC). **Mandatory:** the indicator must be on the chart or the scan **throws** (`assert_trendlines`); see `docs/trendlines.md`. |
 | **Cooldown** | (const) | After any signal, **no new signal for 5 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 
@@ -119,7 +122,7 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 
 | File | Purpose |
 |------|---------|
-| `scalp_fast.py` | The live 1m scanner (this doc's logic). Run with `--dry` to test, `--draw` to plot trendlines |
+| `scalp_fast.py` | The live **5m** scanner (this doc's logic). Run with `--dry` to test, `--draw` to plot trendlines |
 | `scalp_scan.py` | Alternative 15m zone-rejection scanner (auto-derives S/R) |
 | `flags.json` | Feature flags (true/false per strategy & filter) |
 | `signals_log.csv` | Every signal + features + outcome (auto-learn dataset) |
@@ -131,6 +134,7 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | `va_state.py` | Rules 6/7: classify a prior VA level vs current-session bars → **Level State** (Untested/Rejected/Accepted/Flipped) |
 | `va_reject.py` | Entry #13: VWAP value-area rejection trigger (the `gold-vwap-strategy.md` setups) |
 | `draw_overlay.py` | Live-chart overlay: prior VAH/VAL/POC (date + Level State) + SP zones + near-price SMC order blocks; loop-refreshed, id-tracked |
+| `docs/trendlines.md` | Auto Trendlines as multi-TF (4h/1h/15m) confluence — decoupled from SMC, mandatory (`assert_trendlines`) |
 | `docs/value-area-system.md` | End-to-end map of the whole prior-day value-area subsystem (harvest → store → state → trade → draw) |
 | `harvest_daily.py` | Self-dating, idempotent daily VA harvest of the most-recent closed session. Replay runs ONLY on the **dedicated backtest tab** (`TV_BACKTEST_CHART`, default `eabXWKAd`) — never the live chart — and pins the pair to PEPPERSTONE:XAUUSD + verifies it before reading. Refuses to store a read unless the replay cursor is confirmed on the target date (no silent mis-dating). |
 | `reharvest_week.py` | One-off: force re-harvest a date range (used to backfill SP zones) |

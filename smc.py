@@ -100,6 +100,51 @@ def read_trendlines(chart, tv=None):
         return []
 
 
+class TrendlinesMissing(RuntimeError):
+    """Raised when the Auto Trendlines indicator isn't enabled on the chart (it's mandatory)."""
+
+
+def assert_trendlines(chart, tv=None):
+    """Validate the Auto Trendlines indicator IS on the chart; raise TrendlinesMissing if not. Call before any
+    charting/trading that relies on trendline confluence so a missing indicator fails LOUD, not silent-empty."""
+    _tv = tv or _default_tv
+    studies = (_tv(chart, "state") or {}).get("studies", [])
+    if not _find_tid(studies, "Auto Trendlines"):
+        raise TrendlinesMissing(
+            f"Auto Trendlines indicator is NOT enabled on chart '{chart or 'default'}'. "
+            "Add it to the chart before charting/trading — trendline confluence is mandatory.")
+
+
+def read_trendlines_mtf(chart, tfs=("240", "60", "15"), base_tf="5", tv=None, render_wait=3.0, dedup_tol=1.0):
+    """Read the Auto Trendlines indicator's projected levels across MULTIPLE timeframes (4h, 1h, 15m) and
+    return them as one deduped list of price levels for confluence. The indicator recomputes per chart TF, so
+    we switch TF, let it render, read, and restore the execution TF (`base_tf`). The indicator must be VISIBLE
+    to read, so we show it for the sweep and hide it after. tv injectable for tests (returns [])."""
+    if tv is not None:
+        return []
+    studies = (_default_tv(chart, "state") or {}).get("studies", [])
+    tl_id = _find_tid(studies, "Auto Trendlines")
+    if not tl_id:                       # mandatory — fail loud, don't silently return []
+        raise TrendlinesMissing(
+            f"Auto Trendlines indicator is NOT enabled on chart '{chart or 'default'}'. Add it before trading.")
+    _default_tv(chart, "indicator", "toggle", tl_id, "--visible", "true")
+    levels = []
+    for tf in tfs:
+        _default_tv(chart, "timeframe", str(tf))
+        if render_wait:
+            time.sleep(render_wait)
+        levels += read_trendlines(chart)
+    if tl_id:
+        _default_tv(chart, "indicator", "toggle", tl_id, "--hidden")
+    _default_tv(chart, "timeframe", str(base_tf))   # restore execution TF
+    # dedup the float levels (near-duplicates across TFs collapse to one)
+    out = []
+    for p in sorted({round(x, 2) for x in levels if x is not None}):
+        if not out or p - out[-1] > dedup_tol:
+            out.append(p)
+    return out
+
+
 def read_htf_context(chart, smc_tfs=("240", "60"), tl_tf="240", base_tf="1", tv=None, render_wait=4.0):
     """Read the structural confluence on the higher TFs: SMC on each of `smc_tfs` (4h major + 1h scalp
     structure) and Auto Trendlines on `tl_tf` (4h). Restores the execution TF. Cached per scan by the engine.
