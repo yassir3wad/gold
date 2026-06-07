@@ -131,9 +131,14 @@ def read_trendlines_mtf(chart, tfs=("240", "60", "15"), base_tf="5", tv=None, re
     levels = []
     for tf in tfs:
         _default_tv(chart, "timeframe", str(tf))
-        if render_wait:
-            time.sleep(render_wait)
-        levels += read_trendlines(chart)
+        lv = []
+        for i in range(2):                          # retry once on empty (render lag after a TF switch)
+            if render_wait:
+                time.sleep(render_wait)
+            lv = read_trendlines(chart)
+            if lv:
+                break
+        levels += lv
     if tl_id:
         _default_tv(chart, "indicator", "toggle", tl_id, "--hidden")
     _default_tv(chart, "timeframe", str(base_tf))   # restore execution TF
@@ -184,11 +189,15 @@ def _find_tid(studies, name_substr):
     return next((s.get("id") for s in studies if name_substr in (s.get("name") or "")), None)
 
 
-def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0, dedup_tol=0.0):
+def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0, dedup_tol=0.0,
+                       attempts=3, retry_wait=2.0):
     """Option A: read SMC + Auto Trendlines on the CURRENT chart (NO TF switch, no extra tabs). Since Pine
     indicators must be VISIBLE to read, we SHOW them → wait to render → read → HIDE — so the chart stays
     clean (we draw our own zones from the stored data) and the indicators don't constantly re-render. Cached
-    by the engine and refreshed ~hourly. Returns {smc, trendlines, present}."""
+    by the engine and refreshed ~hourly. Returns {smc, trendlines, present}.
+
+    Render timing is flaky: right after a show the model can read EMPTY (e.g. 0 boxes) and then 100+ on a
+    re-read. So we RETRY (up to `attempts`) until SMC has data, instead of silently under-scoring confluence."""
     _tv = tv or _default_tv
     live = tv is None
     smc_id = tl_id = None
@@ -197,9 +206,19 @@ def read_chart_context(chart, tv=None, manage_visibility=True, render_wait=4.0, 
         smc_id = _find_tid(studies, "Smart Money"); tl_id = _find_tid(studies, "Auto Trendlines")
         for tid in (smc_id, tl_id):
             if tid: _tv(chart, "indicator", "toggle", tid, "--visible", "true")
-        if live and (smc_id or tl_id) and render_wait: time.sleep(render_wait)   # let them render before reading
-    smc = read_smc(chart, tv=tv, dedup_tol=dedup_tol)
-    trendlines = read_trendlines(chart, tv=tv)
+    smc = {"present": False, "boxes": [], "structure": [], "liquidity": [], "swings": []}
+    trendlines = []
+    for i in range(max(1, attempts)):
+        if live and render_wait:
+            time.sleep(render_wait if i == 0 else retry_wait)   # first wait = render; later = re-render lag
+        s = read_smc(chart, tv=tv, dedup_tol=dedup_tol)
+        t = read_trendlines(chart, tv=tv)
+        if t:
+            trendlines = t
+        if s.get("present") and (s.get("boxes") or s.get("structure")):
+            smc = s
+            break                                                # got data — stop retrying
+        smc = s                                                  # keep the latest (may still be empty)
     if manage_visibility:
         for tid in (smc_id, tl_id):
             if tid: _tv(chart, "indicator", "toggle", tid, "--hidden")   # hide again — store-and-hide

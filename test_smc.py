@@ -165,6 +165,35 @@ def test_read_trendlines_mtf():
           inspect.signature(S.read_trendlines_mtf).parameters["tfs"].default == ("240", "60", "15"))
 
 
+def test_read_chart_context_retries_on_empty():
+    # render lag: SMC reads EMPTY first, then populated -> read_chart_context should retry past the empty read
+    n = {"boxes": 0}
+    def spy(chart, *a):
+        if a and a[0] == "state":
+            return {"studies": [{"name": "Smart Money", "id": "AJ1"}, {"name": "Auto Trendlines", "id": "TL1"}]}
+        if "boxes" in a:
+            n["boxes"] += 1
+            if n["boxes"] == 1:
+                return {"studies": []}                                  # first read empty
+            return {"studies": [{"name": "Smart Money", "zones": [{"high": 4500, "low": 4490}]}]}
+        return {"studies": []}
+    ctx = S.read_chart_context("X", tv=spy, attempts=3)
+    check("chart-ctx: retries past an empty read", n["boxes"] == 2 and len(ctx["smc"]["boxes"]) == 1)
+
+
+def test_read_chart_context_retry_cap():
+    # always-empty -> retries exactly `attempts` times, then gives up (doesn't loop forever)
+    n = {"boxes": 0}
+    def spy(chart, *a):
+        if a and a[0] == "state":
+            return {"studies": [{"name": "Smart Money", "id": "AJ1"}, {"name": "Auto Trendlines", "id": "TL1"}]}
+        if "boxes" in a:
+            n["boxes"] += 1
+        return {"studies": []}
+    S.read_chart_context("X", tv=spy, attempts=3)
+    check("chart-ctx: retry capped at `attempts`", n["boxes"] == 3)
+
+
 def test_assert_trendlines():
     present = lambda c, *a: {"studies": [{"name": "Auto Trendlines", "id": "TL1"}, {"name": "Volume", "id": "V"}]}
     absent = lambda c, *a: {"studies": [{"name": "Volume", "id": "V"}]}
@@ -179,7 +208,8 @@ def test_assert_trendlines():
 
 
 def main():
-    for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence, test_read_trendlines_mtf, test_assert_trendlines):
+    for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence, test_read_trendlines_mtf, test_assert_trendlines,
+               test_read_chart_context_retries_on_empty, test_read_chart_context_retry_cap):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
