@@ -1168,7 +1168,7 @@ def main():
     # indicators scored INDEPENDENTLY: a trendline touch counts even when the SMC indicator isn't present/read
     # (previously the trendline score was gated behind SMC presence, so it silently did nothing). ---
     cf_score = 0; cf_reasons = []   # SMC + Auto-Trendline confluence (hoisted for the confidence calc below)
-    smc_zone = None; smc_aligned = None   # stored multi-TF premium/discount — a SOFT confidence factor, never a hard skip
+    smc_zone = None; smc_aligned = None; smc_age = None   # stored multi-TF premium/discount — a SOFT confidence factor (smc_age = snapshot hours-old, logged for the bucket report)
     if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True) or FL.get("smc_mtf", True)) and smcmod:
         # the live chart read is only needed for the (flaky) per-tick SMC and the trendlines; skip it if neither is on.
         sctx = smc_context() if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True)) else {}
@@ -1183,7 +1183,9 @@ def main():
             if tls and smcmod.near_level(entry, tls, SMC_TOL * VS):
                 cf_score += 1; cf_reasons.append("Auto-Trendline")
         if FL.get("smc_mtf", True):                        # STORED multi-TF SMC snapshot (zones file, hourly cron) — stable
-            sig = smcmod.mtf_signal(entry, side, stored_smc(), SMC_TOL * VS)
+            _smcblk = stored_smc()
+            smc_age = round((time.time() - _smcblk["ts"]) / 3600, 2) if _smcblk.get("ts") else None
+            sig = smcmod.mtf_signal(entry, side, _smcblk, SMC_TOL * VS)
             cf_score += sig["score"]; cf_reasons += sig["reasons"]
             smc_zone, smc_aligned = sig["zone"], sig["aligned"]
         if cf_score:
@@ -1328,7 +1330,8 @@ def main():
              "be_trig": be_trig, "lot": lot, "risk_usd": risk_usd,
              "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
              "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
-             "chop_er": chop_er, "conf": conf, "confidence": conf_score, "conf_lbl": conf_lbl, "room": room_p, "bias": bias}
+             "chop_er": chop_er, "conf": conf, "confidence": conf_score, "conf_lbl": conf_lbl, "room": room_p, "bias": bias,
+             "smc_zone": smc_zone, "smc_aligned": smc_aligned, "smc_age": smc_age}
     if DRY:
         print("   [DRY RUN — no telegram/log/state]"); return
     if REVIEW:   # AI-review gate: hold the trade, don't send. (approve: --approve  ·  reject: --reject)
@@ -1371,6 +1374,7 @@ def _fire(t, note="", source="auto"):
                 "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
                 "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10", ""),
                 "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"), "result": "PENDING", "exit": "", "pips": "",
+                "smc_zone": t.get("smc_zone", ""), "smc_aligned": t.get("smc_aligned", ""), "smc_age": t.get("smc_age", ""),
                 "decision_source": source, "decision_reason_code": f"{flag_for(t['why']) or t['why']}:{t.get('grade','')}:conf{t.get('confidence','')}"})
     set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid, t.get("be_trig", BE_TRIGGER_P))
     try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
@@ -1405,6 +1409,7 @@ if __name__ == "__main__":
                         "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
                         "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""),
                         "body_p": t.get("body_p",""), "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason,
+                        "smc_zone": t.get("smc_zone", ""), "smc_aligned": t.get("smc_aligned", ""), "smc_age": t.get("smc_age", ""),
                         "decision_source": "AI", "decision_reason_code": (reason or "rejected")[:40]})
             try: os.remove(PENDING_FILE)
             except Exception: pass

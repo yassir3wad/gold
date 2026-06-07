@@ -236,6 +236,47 @@ def test_old_style_row_backcompat():
         _cleanup(db)
 
 
+# ---- SMC bucket fields (premium/discount measurement: bucket net-of-cost by alignment) ----
+
+SMC_BUCKET_COLS = ["smc_zone", "smc_aligned", "smc_age"]
+
+
+def test_smc_bucket_schema():
+    """The SMC bucket columns exist in the DB schema so replay/analysis can split net-of-cost by alignment."""
+    db = _mkdb()
+    try:
+        outcome_db.init_db(db)
+        con = outcome_db._connect(db)
+        try:
+            cols = {r[1] for r in con.execute("PRAGMA table_info(signals)").fetchall()}
+        finally:
+            con.close()
+        for c in SMC_BUCKET_COLS:
+            assert c in cols, f"schema missing SMC bucket column {c!r} (have {sorted(cols)})"
+            assert c in outcome_db.ALL_COLS, f"{c!r} not in ALL_COLS"
+        print("PASS (h) SMC bucket columns present in schema")
+    finally:
+        _cleanup(db)
+
+
+def test_smc_bucket_roundtrip():
+    """A row written with the SMC bucket fields round-trips them (incl. the three alignment buckets)."""
+    db = _mkdb()
+    try:
+        for rid, zone, aligned, age in (("7001", "discount", "True", "0.3"),
+                                        ("7002", "premium", "False", "1.2"),
+                                        ("7003", "equilibrium", "None", "")):
+            outcome_db.log_signal({"id": rid, "time": "2026-06-07 09:00", "side": "LONG", "symbol": "XAUUSD",
+                                   "smc_zone": zone, "smc_aligned": aligned, "smc_age": age}, db=db)
+        got = {r["id"]: r for r in outcome_db.rows(db=db)}
+        assert got["7001"]["smc_zone"] == "discount" and got["7001"]["smc_aligned"] == "True"
+        assert got["7002"]["smc_aligned"] == "False" and got["7002"]["smc_age"] == "1.2"
+        assert got["7003"]["smc_zone"] == "equilibrium" and got["7003"]["smc_age"] == ""
+        print("PASS (i) SMC bucket fields round-trip")
+    finally:
+        _cleanup(db)
+
+
 def main():
     test_upsert_roundtrip()
     test_inplace_update()
@@ -244,6 +285,8 @@ def main():
     test_cost_decision_schema()
     test_cost_decision_roundtrip()
     test_old_style_row_backcompat()
+    test_smc_bucket_schema()
+    test_smc_bucket_roundtrip()
     print("\nALL TESTS PASSED")
 
 
@@ -255,6 +298,8 @@ class OutcomeDbUnitTests(unittest.TestCase):
     def test_cost_decision_schema_case(self): test_cost_decision_schema()
     def test_cost_decision_roundtrip_case(self): test_cost_decision_roundtrip()
     def test_old_style_row_backcompat_case(self): test_old_style_row_backcompat()
+    def test_smc_bucket_schema_case(self): test_smc_bucket_schema()
+    def test_smc_bucket_roundtrip_case(self): test_smc_bucket_roundtrip()
 
 
 if __name__ == "__main__":

@@ -27,7 +27,10 @@ SIG_COLS = ["id", "time", "side", "grade", "confidence", "pattern", "entry", "sl
 # structured code for the gate/reviewer rationale (not free text). All TEXT, like every other column.
 CONTEXT_COLS = ["rsi", "er", "regime", "room", "session", "symbol",
                 "spread_pips", "slippage_pips", "commission_pips", "gross_pips", "net_pips",
-                "decision_source", "decision_reason_code"]
+                "decision_source", "decision_reason_code",
+                # SMC bucket fields: stored multi-TF snapshot's range position + alignment + snapshot age,
+                # so replay/analysis can split net-of-cost by smc_aligned (True/False/None). All TEXT.
+                "smc_zone", "smc_aligned", "smc_age"]
 ALL_COLS = SIG_COLS + CONTEXT_COLS
 
 # `exit` is a SQL keyword → must be quoted everywhere it appears as a column name.
