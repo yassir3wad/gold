@@ -45,7 +45,7 @@ def hline(chart, price, label, ov, t):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--date", required=True)
+    ap.add_argument("--date", default=None)   # backtest date (replay). Omit for LIVE mode (draws on the live chart at 'now', no replay).
     ap.add_argument("--chart", default="eFMec2F9")
     ap.add_argument("--display-tf", default="60")
     ap.add_argument("--symbol", default="PEPPERSTONE:XAUUSD")   # PEPPERSTONE has real volume (OANDA gold doesn't) → value areas + TPO work
@@ -69,7 +69,10 @@ def main():
     ORNG = json.dumps({"linecolor": "rgba(255,170,60,0.85)", "linestyle": 1})    # Auto-Trendline (projected to now)
 
     tv(CH, "symbol", a.symbol)
-    tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
+    if a.date:                                              # backtest: date-faithful replay
+        tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
+    else:                                                   # LIVE: draw at 'now' (ensure no replay overlay)
+        tv(CH, "replay", "stop"); time.sleep(1)
     tv(CH, "draw", "clear")
     drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0}
     log = {"date": a.date, "chart": CH, "price": None, "zones": [], "sr": [], "va": [], "smc": {}}
@@ -135,8 +138,9 @@ def main():
             log["smc"] = {"error": str(e)}
 
     log["price"] = cur_price
-    out = f"/tmp/review_{a.date}.json"; json.dump(log, open(out, "w"), indent=1)
-    print(f"drawn on {CH} @ {a.date}: {drawn}\nlog: {out}")
+    _tag = a.date or "live"
+    out = f"/tmp/review_{_tag}.json"; json.dump(log, open(out, "w"), indent=1)
+    print(f"drawn on {CH} @ {_tag}: {drawn}\nlog: {out}")
 
 
 if __name__ == "__main__":
