@@ -332,7 +332,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "momentum_impulse": True, "liquidity_sweep": True, "break_retest": True, "vwap": True,
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
-                 "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": True,
+                 "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": False,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
@@ -824,7 +824,8 @@ def main():
             for _k, _lvl in (("VAH", _ova["vah"]), ("VAL", _ova["val"]), ("POC", _ova["poc"])):
                 if _lvl is not None:
                     _ovst[_k] = vastate.level_state(_lvl, b, _k, poc=_ova["poc"], bar_minutes=BASE_TF)["state"]
-        _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if smcmod else []
+        # SMC OB boxes only if the (noisy, full-history) LuxAlgo read is explicitly enabled — off by default
+        _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if (smcmod and FL.get("smc_confluence", False)) else []
         _n = dovr.draw_overlay(os.environ.get("TV_CHART", ""), price, _ova, _ovst, _ov.get("sp"), _boxes,
                                band=OVERLAY_OB_BAND_P * PIP, t0=b[0]["time"], t1=last["time"],
                                min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"))

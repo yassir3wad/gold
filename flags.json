@@ -25,7 +25,7 @@
   "zone_bounce": true,
   "va_reject": true,
   "draw_overlay": true,
-  "smc_confluence": true,
+  "smc_confluence": false,
   "auto_trendlines": true,
   "confidence_sizing": false,
   "family_caps": true,
