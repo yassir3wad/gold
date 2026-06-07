@@ -50,7 +50,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
 | Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
 | Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
-| Add spread/cost to backtest reports | Partial | `analyze_logs.py` is cost-aware; `backtest_multi_day.py` still mostly reports gross `net_pips`. |
+| Add spread/cost to backtest reports | Done | `analyze_logs.py`, `score_signals.py`, and `backtest_multi_day.py` now report gross, cost, and after-spread NET using `instruments.json` or `--spread-pips`. |
 | Fix stale roadmap confidence TODO | Pending | `docs/signal-roadmap-detailed.md` still calls confidence deductions planned, but `confidence.py` already implements them. |
 | Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
 
@@ -347,7 +347,7 @@ This prevents accidentally reviving rejected ideas.
 
 1. Add an explicit evidence/status column to the big table in `docs/signal-roadmap-detailed.md`.
 2. Fix the stale confidence TODO in `docs/signal-roadmap-detailed.md`; the deductions are already implemented in `confidence.py`.
-3. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
+3. Monitor cost-adjusted backtest output from `score_signals.py` and `backtest_multi_day.py` against live fills; all three analysis paths now report after-spread NET.
 4. Split pure tests from TradingView-dependent integration tests in `package.json`.
 5. Convert script-style Python tests to import-safe test functions.
 6. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.

@@ -3,7 +3,7 @@
 and walk-forward windowing. Pure stdlib; the replay fetch is tested with an injected fake `tv`.
     python3 test_backtest.py    (exit 0 = all pass)
 """
-import sys, random, datetime as dt
+import sys, random, datetime as dt, json, os, tempfile
 import backtest_multi_day as bt
 
 _results = []
@@ -80,6 +80,34 @@ def test_profit_factor():
     check("PF: no losses -> inf", bt.calculate_profit_factor([T(50)]) == float("inf"))
 
 
+def test_cost_helpers():
+    trades = [T(50), T(-35), T(1)]
+    s = bt.summarize_trades(trades, spread_pips=3)
+    check("cost: gross pips preserved", approx(s["gross_pips"], 16))
+    check("cost: total cost", approx(s["cost_pips"], 9))
+    check("cost: net pips after spread", approx(s["net_pips"], 7))
+    check("cost: scratch can become loss after spread", s["net_wins"] == 1 and s["net_losses"] == 2)
+    check("cost: per-trade net helper", approx(bt.trade_net_pips(T(1), spread_pips=3), -2))
+
+    fd, path = tempfile.mkstemp()
+    try:
+        os.close(fd)
+        with open(path, "w") as f:
+            json.dump({"_default": {"spread_pips": 4}, "XAUUSD": {"spread_pips": 2.5}}, f)
+        check("cost: loads symbol spread", approx(bt.load_spread_pips("XAUUSD", path), 2.5))
+        check("cost: falls back to default spread", approx(bt.load_spread_pips("GBPUSD", path), 4))
+    finally:
+        try: os.remove(path)
+        except OSError: pass
+
+
+def test_cost_aware_metrics():
+    trades = [T(5), T(-2)]
+    check("net PF: costs can flip PF", approx(bt.calculate_profit_factor(trades, spread_pips=3), 2 / 5))
+    check("net maxDD: uses after-cost equity", approx(bt.calculate_max_drawdown(trades, spread_pips=3)[0], 5))
+    check("net sharpe: uses after-cost returns", bt.calculate_sharpe_ratio(trades, spread_pips=3) < 0)
+
+
 def test_max_drawdown():
     dd, pct = bt.calculate_max_drawdown([T(50), T(-35), T(-35), T(50)])  # equity 50,15,-20,30; peak 50; maxDD 70
     check("maxDD: pips", approx(dd, 70))
@@ -126,7 +154,8 @@ def test_htf_room():
 
 def main():
     for fn in (test_bars_on_date, test_fetch_session_bars, test_simulate_trade, test_profit_factor,
-               test_max_drawdown, test_sharpe_not_annualized, test_monte_carlo_bootstrap, test_walk_forward_windows,
+               test_cost_helpers, test_cost_aware_metrics, test_max_drawdown, test_sharpe_not_annualized,
+               test_monte_carlo_bootstrap, test_walk_forward_windows,
                test_ema_regime, test_htf_room):
         try: fn()
         except Exception as e:

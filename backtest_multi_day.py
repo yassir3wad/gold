@@ -48,27 +48,27 @@ OUTPUT FORMAT:
         - Signals: total trade setups detected
         - TP1 wins / SL losses / Timeouts: outcome breakdown
         - Win rate: percentage (excluding timeouts)
-        - Net pips: cumulative P&L for the day
+        - Gross pips, cost pips, and NET after spread for the day
 
     Overall summary:
         - Days tested
         - Total signals, wins, losses, timeouts
         - Overall win rate (excluding timeouts)
-        - Overall net pips
-        - Advanced metrics: profit factor, max drawdown, Sharpe ratio
+        - Overall gross pips, costs, and NET after spread
+        - Advanced metrics after cost: profit factor, max drawdown, Sharpe ratio
 
     Trade format (columns):
-        side | grade | pattern | entry | SL | TP1 | result | pips
-        Example: LONG  A   range break   2450.2  2445.7  2455.2  TP1    +50
+        side | grade | pattern | entry | SL | TP1 | result | gross_pips | cost_pips | net_pips
+        Example: LONG  A   range break   2450.2  2445.7  2455.2  TP1    +50  -3  +47
 
     Walk-forward output:
         - Per-window training and testing results
         - Aggregated test period metrics
-        - Per-window test net pips and win rate
+        - Per-window test NET after spread and win rate
 
     Monte Carlo output:
         - Confidence intervals (5th, 50th, 95th percentiles) for:
-          Net P&L, Win rate, Max drawdown, Sharpe ratio
+          NET P&L after spread, win rate after spread, max drawdown, Sharpe ratio
 
 WALK-FORWARD OPTIMIZATION:
     Splits the date range into sliding train/test windows to simulate real-world
@@ -108,6 +108,9 @@ import scalp_fast as S
 
 # Constants
 PIP = 0.10
+DEFAULT_SYMBOL = "XAUUSD"
+DEFAULT_SPREAD_PIPS = 3.0
+INSTRUMENTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instruments.json")
 GATE = 40        # vol gate: last-10-bar range in pips
 HORIZON = 10     # 10-min rule: TP1 must hit within 10 bars
 CHOP_ER = 0.30   # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
@@ -115,6 +118,41 @@ SESSION_UTC = set(range(7, 22))  # London+NY active hours (UTC); outside = quiet
 NEWS_BLACKOUT = []                 # [(h1,m1,h2,m2),...] UTC windows to mute (manual)
 
 ENABLE_FILTERS = False  # global flag controlled by --enable-filters
+COST_SPREAD_PIPS = DEFAULT_SPREAD_PIPS
+
+def _num(x):
+    try: return float(str(x).replace(",", "").strip())
+    except Exception: return None
+
+def load_spread_pips(symbol=DEFAULT_SYMBOL, path=INSTRUMENTS):
+    """Round-trip spread/cost in pips for cost-aware reporting."""
+    try:
+        cfg = json.load(open(path))
+    except Exception:
+        return DEFAULT_SPREAD_PIPS
+    default = _num(cfg.get("_default", {}).get("spread_pips"))
+    default = DEFAULT_SPREAD_PIPS if default is None else default
+    sym_cfg = cfg.get((symbol or "").upper(), {})
+    spread = _num(sym_cfg.get("spread_pips")) if isinstance(sym_cfg, dict) else None
+    return default if spread is None else spread
+
+def trade_gross_pips(trade):
+    return float(trade[7])
+
+def trade_net_pips(trade, spread_pips=None):
+    spread = COST_SPREAD_PIPS if spread_pips is None else spread_pips
+    return trade_gross_pips(trade) - spread
+
+def summarize_trades(trades, spread_pips=None):
+    spread = COST_SPREAD_PIPS if spread_pips is None else spread_pips
+    gross = sum(trade_gross_pips(t) for t in trades)
+    cost = spread * len(trades)
+    net = gross - cost
+    wins = sum(1 for t in trades if trade_net_pips(t, spread) > 0)
+    losses = sum(1 for t in trades if trade_net_pips(t, spread) < 0)
+    scratch = len(trades) - wins - losses
+    return {"gross_pips": gross, "cost_pips": cost, "net_pips": net,
+            "net_wins": wins, "net_losses": losses, "net_scratch": scratch}
 
 def tv(*a):
     r = subprocess.run(["node","src/cli/index.js",*a], cwd=os.path.dirname(os.path.abspath(__file__)),
@@ -292,11 +330,13 @@ def simulate_trade(side, entry, sl, tp1, future_bars, horizon=HORIZON):
         return "timeout", window[-1]["close"], len(window)
     return "timeout", entry, 0
 
-def backtest_day(day, tv_fn=tv):
+def backtest_day(day, tv_fn=tv, spread_pips=None):
     """Backtest a single calendar day using REAL replay-fetched 1m bars (was: the same recent bars every day)."""
+    spread = COST_SPREAD_PIPS if spread_pips is None else spread_pips
     b = fetch_session_bars(day, tv_fn)
     if len(b) < 30:
-        return {"date": day, "bars": len(b), "signals": 0, "wins": 0, "losses": 0, "timeouts": 0, "net_pips": 0, "trades": []}
+        return {"date": day, "bars": len(b), "signals": 0, "wins": 0, "losses": 0, "timeouts": 0,
+                "gross_pips": 0, "cost_pips": 0, "net_pips": 0, "trades": []}
 
     trades=[]; i=25
     while i < len(b)-1:
@@ -324,6 +364,7 @@ def backtest_day(day, tv_fn=tv):
     wins=[t for t in trades if t[6]=="TP1"]
     losses=[t for t in trades if t[6]=="SL"]
     tos=[t for t in trades if t[6]=="timeout"]
+    cost = summarize_trades(trades, spread)
     return {
         "date": day,
         "bars": len(b),
@@ -331,7 +372,9 @@ def backtest_day(day, tv_fn=tv):
         "wins": len(wins),
         "losses": len(losses),
         "timeouts": len(tos),
-        "net_pips": sum(t[7] for t in trades),
+        "gross_pips": cost["gross_pips"],
+        "cost_pips": cost["cost_pips"],
+        "net_pips": cost["net_pips"],
         "trades": trades
     }
 
@@ -358,13 +401,13 @@ def generate_walk_forward_windows(start_date, end_date, train_days, test_days):
 
     return windows
 
-def backtest_period(start_date, end_date):
+def backtest_period(start_date, end_date, spread_pips=None):
     """Run backtest for a date range. Returns aggregated results."""
     days = list(iter_days(start_date, end_date))
     all_results = []
 
     for day in days:
-        result = backtest_day(day)
+        result = backtest_day(day, spread_pips=spread_pips)
         all_results.append(result)
 
     # Aggregate stats
@@ -372,6 +415,8 @@ def backtest_period(start_date, end_date):
     total_wins = sum(r['wins'] for r in all_results)
     total_losses = sum(r['losses'] for r in all_results)
     total_timeouts = sum(r['timeouts'] for r in all_results)
+    total_gross = sum(r['gross_pips'] for r in all_results)
+    total_cost = sum(r['cost_pips'] for r in all_results)
     total_net = sum(r['net_pips'] for r in all_results)
     win_rate = (total_wins / (total_wins+total_losses)*100) if (total_wins or total_losses) else 0
 
@@ -381,46 +426,49 @@ def backtest_period(start_date, end_date):
         "wins": total_wins,
         "losses": total_losses,
         "timeouts": total_timeouts,
+        "gross_pips": total_gross,
+        "cost_pips": total_cost,
         "net_pips": total_net,
         "win_rate": win_rate,
         "daily_results": all_results
     }
 
-def calculate_max_drawdown(trades):
+def calculate_max_drawdown(trades, spread_pips=0):
     """Calculate maximum drawdown from a sequence of trades.
     Returns (max_dd_pips, max_dd_pct) where pct is relative to peak equity."""
     if not trades: return 0, 0
     equity=0; peak=0; max_dd=0
     for t in trades:
-        equity+=t[7]  # pips from trade
+        equity+=trade_net_pips(t, spread_pips)
         if equity>peak: peak=equity
         dd=peak-equity
         if dd>max_dd: max_dd=dd
     max_dd_pct=(max_dd/peak*100) if peak>0 else 0
     return max_dd, max_dd_pct
 
-def calculate_profit_factor(trades):
-    """Calculate profit factor (gross profit / gross loss).
+def calculate_profit_factor(trades, spread_pips=0):
+    """Calculate profit factor on pips after `spread_pips` cost.
     Returns profit factor or 0 if no losing trades."""
     if not trades: return 0
-    gross_profit=sum(t[7] for t in trades if t[7]>0)
-    gross_loss=abs(sum(t[7] for t in trades if t[7]<0))
+    pips = [trade_net_pips(t, spread_pips) for t in trades]
+    gross_profit=sum(p for p in pips if p>0)
+    gross_loss=abs(sum(p for p in pips if p<0))
     if gross_loss==0: return 0 if gross_profit==0 else float('inf')
     return gross_profit/gross_loss
 
-def calculate_sharpe_ratio(trades, risk_free_rate=0):
+def calculate_sharpe_ratio(trades, risk_free_rate=0, spread_pips=0):
     """Per-trade Sharpe = mean(return) / std(return) over trades. NOT annualized — these are intraday
     scalps of irregular frequency, so a sqrt(252) 'annualization' would be meaningless/inflated. Higher
     = steadier per-trade edge."""
     if len(trades)<2: return 0
-    returns=[t[7] for t in trades]  # pips per trade
+    returns=[trade_net_pips(t, spread_pips) for t in trades]
     mean_return=sum(returns)/len(returns)
     variance=sum((r-mean_return)**2 for r in returns)/(len(returns)-1)
     std_dev=variance**0.5
     if std_dev==0: return 0
     return (mean_return-risk_free_rate)/std_dev
 
-def monte_carlo_simulation(all_trades, iterations):
+def monte_carlo_simulation(all_trades, iterations, spread_pips=0):
     """Run Monte Carlo simulation by randomizing trade order.
     Returns dict with percentile results for each metric."""
     if not all_trades: return None
@@ -435,13 +483,13 @@ def monte_carlo_simulation(all_trades, iterations):
         trades=[random.choice(all_trades) for _ in range(n)]
 
         # Calculate metrics for this iteration
-        net_pips=sum(t[7] for t in trades)
-        wins=len([t for t in trades if t[6]=="TP1"])
-        losses=len([t for t in trades if t[6]=="SL"])
+        net_pips=sum(trade_net_pips(t, spread_pips) for t in trades)
+        wins=len([t for t in trades if trade_net_pips(t, spread_pips) > 0])
+        losses=len([t for t in trades if trade_net_pips(t, spread_pips) < 0])
         win_rate=(wins/(wins+losses)*100) if (wins or losses) else 0
-        profit_factor=calculate_profit_factor(trades)
-        max_dd, max_dd_pct=calculate_max_drawdown(trades)
-        sharpe=calculate_sharpe_ratio(trades)
+        profit_factor=calculate_profit_factor(trades, spread_pips)
+        max_dd, max_dd_pct=calculate_max_drawdown(trades, spread_pips)
+        sharpe=calculate_sharpe_ratio(trades, spread_pips=spread_pips)
 
         results['net_pips'].append(net_pips)
         results['win_rate'].append(win_rate)
@@ -468,21 +516,25 @@ def monte_carlo_simulation(all_trades, iterations):
         'sharpe': {'p5': percentiles(results['sharpe'], 5), 'p50': percentiles(results['sharpe'], 50), 'p95': percentiles(results['sharpe'], 95)}
     }
 
-def export_trades_csv(filename, all_results):
+def export_trades_csv(filename, all_results, spread_pips=None):
     """Export all trades to CSV file."""
     import csv
+    spread = COST_SPREAD_PIPS if spread_pips is None else spread_pips
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['date', 'entry_time', 'exit_time', 'side', 'grade', 'pattern', 'entry', 'sl', 'tp1', 'outcome', 'pips'])
+        writer.writerow(['date', 'entry_time', 'exit_time', 'side', 'grade', 'pattern', 'entry', 'sl', 'tp1',
+                         'outcome', 'gross_pips', 'cost_pips', 'net_pips'])
         for result in all_results:
             date = result['date']
             for trade in result['trades']:
                 et = dt.datetime.utcfromtimestamp(trade[8]).strftime('%Y-%m-%d %H:%M') if len(trade) > 8 and trade[8] else ''
                 xt = dt.datetime.utcfromtimestamp(trade[9]).strftime('%Y-%m-%d %H:%M') if len(trade) > 9 and trade[9] else ''
-                writer.writerow([date, et, xt, trade[0], trade[1], trade[2], trade[3], trade[4], trade[5], trade[6], trade[7]])
+                writer.writerow([date, et, xt, trade[0], trade[1], trade[2], trade[3], trade[4], trade[5], trade[6],
+                                 trade_gross_pips(trade), spread, trade_net_pips(trade, spread)])
 
-def export_summary_report(filename, period_stats, all_results):
+def export_summary_report(filename, period_stats, all_results, spread_pips=None):
     """Export summary report to text file."""
+    spread = COST_SPREAD_PIPS if spread_pips is None else spread_pips
     with open(filename, 'w') as f:
         f.write("="*60 + "\n")
         f.write("BACKTEST SUMMARY REPORT\n")
@@ -500,13 +552,15 @@ def export_summary_report(filename, period_stats, all_results):
         f.write(f"SL losses: {period_stats['losses']}\n")
         f.write(f"Timeouts: {period_stats['timeouts']}\n")
         f.write(f"Win rate (excl timeouts): {period_stats['win_rate']:.1f}%\n")
-        f.write(f"Net P&L: {period_stats['net_pips']:+.0f} pips\n\n")
+        f.write(f"Gross P&L: {period_stats['gross_pips']:+.0f} pips\n")
+        f.write(f"Costs: -{period_stats['cost_pips']:.0f} pips ({spread:g}p/trade)\n")
+        f.write(f"NET after cost: {period_stats['net_pips']:+.0f} pips\n\n")
 
         # Advanced metrics
         all_trades = [t for r in all_results for t in r['trades']]
-        profit_factor = calculate_profit_factor(all_trades)
-        max_dd, max_dd_pct = calculate_max_drawdown(all_trades)
-        sharpe = calculate_sharpe_ratio(all_trades)
+        profit_factor = calculate_profit_factor(all_trades, spread)
+        max_dd, max_dd_pct = calculate_max_drawdown(all_trades, spread)
+        sharpe = calculate_sharpe_ratio(all_trades, spread_pips=spread)
 
         f.write("--- Advanced Metrics ---\n")
         pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
@@ -518,13 +572,15 @@ def export_summary_report(filename, period_stats, all_results):
         f.write("--- Per-Day Breakdown ---\n")
         for result in all_results:
             wr = (result['wins']/ (result['wins']+result['losses'])*100) if (result['wins'] or result['losses']) else 0
-            f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | WR:{wr:5.1f}% | Net:{result['net_pips']:+6.0f} pips\n")
+            f.write(f"{result['date']}: {result['signals']:2d} signals | {result['wins']:2d}W {result['losses']:2d}L {result['timeouts']:2d}T | WR:{wr:5.1f}% | Gross:{result['gross_pips']:+6.0f}p | NET:{result['net_pips']:+6.0f}p\n")
 
 def main():
-    global ENABLE_FILTERS
+    global ENABLE_FILTERS, COST_SPREAD_PIPS
     parser = argparse.ArgumentParser(description="Multi-day walk-forward backtesting")
     parser.add_argument("--start-date", required=True, type=parse_date, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end-date", required=True, type=parse_date, help="End date (YYYY-MM-DD)")
+    parser.add_argument("--symbol", default=DEFAULT_SYMBOL, help="Symbol used for cost assumptions (default: XAUUSD)")
+    parser.add_argument("--spread-pips", type=float, help="Override round-trip spread/cost in pips")
     parser.add_argument("--walk-forward", action="store_true", help="Enable walk-forward optimization mode")
     parser.add_argument("--train-days", type=int, default=5, help="Training window size in days (default: 5)")
     parser.add_argument("--test-days", type=int, default=2, help="Testing window size in days (default: 2)")
@@ -538,6 +594,7 @@ def main():
 
     # Set global filter flag
     ENABLE_FILTERS = args.enable_filters
+    COST_SPREAD_PIPS = args.spread_pips if args.spread_pips is not None else load_spread_pips(args.symbol)
 
     if args.start_date > args.end_date:
         parser.error(f"start-date {args.start_date} is after end-date {args.end_date}")
@@ -555,6 +612,7 @@ def main():
 
         print(f"Walk-forward optimization mode")
         print(f"Date range: {args.start_date} to {args.end_date}")
+        print(f"Cost assumption: {COST_SPREAD_PIPS:g}p/trade ({args.symbol.upper()})")
         print(f"Training window: {args.train_days} days")
         print(f"Testing window: {args.test_days} days")
         print(f"Number of windows: {len(windows)}\n")
@@ -576,15 +634,15 @@ def main():
 
                 # Run training period
                 print(f"--- Training Period ---")
-                train_results = backtest_period(train_start, train_end)
+                train_results = backtest_period(train_start, train_end, COST_SPREAD_PIPS)
                 print(f"Signals: {train_results['signals']}  |  Wins: {train_results['wins']}  |  Losses: {train_results['losses']}  |  Timeouts: {train_results['timeouts']}")
-                print(f"Win rate: {train_results['win_rate']:.0f}%  |  Net: {train_results['net_pips']:+.0f} pips")
+                print(f"Win rate: {train_results['win_rate']:.0f}%  |  Gross: {train_results['gross_pips']:+.0f}p  |  Cost: -{train_results['cost_pips']:.0f}p  |  NET: {train_results['net_pips']:+.0f}p")
 
                 # Run testing period
                 print(f"\n--- Testing Period ---")
-                test_results = backtest_period(test_start, test_end)
+                test_results = backtest_period(test_start, test_end, COST_SPREAD_PIPS)
                 print(f"Signals: {test_results['signals']}  |  Wins: {test_results['wins']}  |  Losses: {test_results['losses']}  |  Timeouts: {test_results['timeouts']}")
-                print(f"Win rate: {test_results['win_rate']:.0f}%  |  Net: {test_results['net_pips']:+.0f} pips")
+                print(f"Win rate: {test_results['win_rate']:.0f}%  |  Gross: {test_results['gross_pips']:+.0f}p  |  Cost: -{test_results['cost_pips']:.0f}p  |  NET: {test_results['net_pips']:+.0f}p")
 
                 window_results.append({
                     "window": i,
@@ -604,6 +662,8 @@ def main():
             total_test_wins = sum(w['test']['wins'] for w in window_results)
             total_test_losses = sum(w['test']['losses'] for w in window_results)
             total_test_timeouts = sum(w['test']['timeouts'] for w in window_results)
+            total_test_gross = sum(w['test']['gross_pips'] for w in window_results)
+            total_test_cost = sum(w['test']['cost_pips'] for w in window_results)
             total_test_net = sum(w['test']['net_pips'] for w in window_results)
             overall_test_wr = (total_test_wins / (total_test_wins+total_test_losses)*100) if (total_test_wins or total_test_losses) else 0
 
@@ -612,9 +672,9 @@ def main():
             for w in window_results:
                 for r in w['test']['daily_results']:
                     all_test_trades.extend(r['trades'])
-            test_profit_factor = calculate_profit_factor(all_test_trades)
-            test_max_dd, test_max_dd_pct = calculate_max_drawdown(all_test_trades)
-            test_sharpe = calculate_sharpe_ratio(all_test_trades)
+            test_profit_factor = calculate_profit_factor(all_test_trades, COST_SPREAD_PIPS)
+            test_max_dd, test_max_dd_pct = calculate_max_drawdown(all_test_trades, COST_SPREAD_PIPS)
+            test_sharpe = calculate_sharpe_ratio(all_test_trades, spread_pips=COST_SPREAD_PIPS)
 
             print(f"Windows tested: {len(window_results)}")
             print(f"Test period signals: {total_test_signals}")
@@ -622,8 +682,10 @@ def main():
             print(f"Test period losses: {total_test_losses}")
             print(f"Test period timeouts: {total_test_timeouts}")
             print(f"Test period win rate: {overall_test_wr:.0f}%")
-            print(f"Test period net: {total_test_net:+.0f} pips (~${total_test_net:+.0f} @0.1 lot)")
-            print(f"\n--- Advanced Metrics (Test Periods) ---")
+            print(f"Test period gross: {total_test_gross:+.0f} pips")
+            print(f"Test period costs: -{total_test_cost:.0f} pips ({COST_SPREAD_PIPS:g}p/trade)")
+            print(f"Test period NET after cost: {total_test_net:+.0f} pips (~${total_test_net:+.0f} @0.1 lot)")
+            print(f"\n--- Advanced Metrics (Test Periods, NET After Cost) ---")
             test_pf_str = f"{test_profit_factor:.2f}" if test_profit_factor != float('inf') else "∞"
             print(f"Profit factor: {test_pf_str}")
             print(f"Max drawdown: {test_max_dd:.0f} pips ({test_max_dd_pct:.1f}%)")
@@ -644,9 +706,9 @@ def main():
                     print(f"\n{'='*60}")
                     print(f"MONTE CARLO SIMULATION - TEST PERIODS ({args.iterations} iterations)")
                     print('='*60)
-                    mc_results = monte_carlo_simulation(all_test_trades, args.iterations)
+                    mc_results = monte_carlo_simulation(all_test_trades, args.iterations, COST_SPREAD_PIPS)
                     print(f"Confidence intervals (5th, 50th, 95th percentiles):\n")
-                    print(f"Net P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
+                    print(f"NET P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
                     print(f"Win rate:     {mc_results['win_rate']['p5']:7.1f}%     |  {mc_results['win_rate']['p50']:7.1f}%     |  {mc_results['win_rate']['p95']:7.1f}%")
                     print(f"Max DD:       {mc_results['max_dd']['p5']:7.0f} pips  |  {mc_results['max_dd']['p50']:7.0f} pips  |  {mc_results['max_dd']['p95']:7.0f} pips")
                     print(f"Max DD %:     {mc_results['max_dd_pct']['p5']:7.1f}%     |  {mc_results['max_dd_pct']['p50']:7.1f}%     |  {mc_results['max_dd_pct']['p95']:7.1f}%")
@@ -658,6 +720,7 @@ def main():
     else:
         days = list(iter_days(args.start_date, args.end_date))
         print(f"Date range: {args.start_date} to {args.end_date} ({len(days)} days)")
+        print(f"Cost assumption: {COST_SPREAD_PIPS:g}p/trade ({args.symbol.upper()})")
 
         if args.dry_run:
             print("\nDry-run mode: iterating over dates...")
@@ -671,23 +734,23 @@ def main():
                 print(f"\n{'='*60}")
                 print(f"Backtesting {day}")
                 print('='*60)
-                result = backtest_day(day)
+                result = backtest_day(day, spread_pips=COST_SPREAD_PIPS)
                 all_results.append(result)
 
                 # Print day summary
                 print(f"Bars: {result['bars']}  |  Signals: {result['signals']}  |  TP1 wins: {result['wins']}  |  SL losses: {result['losses']}  |  Timeouts: {result['timeouts']}")
                 wr = (result['wins']/ (result['wins']+result['losses'])*100) if (result['wins'] or result['losses']) else 0
-                print(f"Win rate (excl timeouts): {wr:.0f}%   Net: {result['net_pips']:+.0f} pips (~${result['net_pips']:+.0f} @0.1 lot)")
+                print(f"Win rate (excl timeouts): {wr:.0f}%   Gross: {result['gross_pips']:+.0f}p  Cost: -{result['cost_pips']:.0f}p  NET: {result['net_pips']:+.0f}p (~${result['net_pips']:+.0f} @0.1 lot)")
 
                 # Print trades
                 if result['trades']:
-                    print("\n# entry-exit(local) side pattern        entry   SL     TP1    RSI  ER   sess regime room  | result pips")
+                    print("\n# entry-exit(local) side pattern        entry   SL     TP1    RSI  ER   sess regime room  | result gross cost  NET")
                     for t in result['trades']:
                         tm = f"{_hm(t[8])}-{_hm(t[9])}"
                         rsi = t[10] if len(t) > 10 else None; er = t[11] if len(t) > 11 else None
                         sess = 'ON' if (len(t) > 12 and t[12]) else 'off'; reg = t[13] if len(t) > 13 else '?'
                         room = (f"{t[14]}p" if (len(t) > 14 and t[14] is not None) else "open")
-                        print(f"{tm:13} {t[0]:5} {t[2]:14} {t[3]:7} {t[4]:6} {t[5]:7} {str(rsi):4} {str(er):4} {sess:4} {reg:5} {room:6} | {t[6]:7} {t[7]:+.0f}")
+                        print(f"{tm:13} {t[0]:5} {t[2]:14} {t[3]:7} {t[4]:6} {t[5]:7} {str(rsi):4} {str(er):4} {sess:4} {reg:5} {room:6} | {t[6]:7} {trade_gross_pips(t):+.0f}  -{COST_SPREAD_PIPS:.0f}  {trade_net_pips(t, COST_SPREAD_PIPS):+.0f}")
 
             # Print overall summary
             print(f"\n{'='*60}")
@@ -697,14 +760,16 @@ def main():
             total_wins = sum(r['wins'] for r in all_results)
             total_losses = sum(r['losses'] for r in all_results)
             total_timeouts = sum(r['timeouts'] for r in all_results)
+            total_gross = sum(r['gross_pips'] for r in all_results)
+            total_cost = sum(r['cost_pips'] for r in all_results)
             total_net = sum(r['net_pips'] for r in all_results)
             overall_wr = (total_wins / (total_wins+total_losses)*100) if (total_wins or total_losses) else 0
 
             # Collect all trades for advanced metrics
             all_trades = [t for r in all_results for t in r['trades']]
-            profit_factor = calculate_profit_factor(all_trades)
-            max_dd, max_dd_pct = calculate_max_drawdown(all_trades)
-            sharpe = calculate_sharpe_ratio(all_trades)
+            profit_factor = calculate_profit_factor(all_trades, COST_SPREAD_PIPS)
+            max_dd, max_dd_pct = calculate_max_drawdown(all_trades, COST_SPREAD_PIPS)
+            sharpe = calculate_sharpe_ratio(all_trades, spread_pips=COST_SPREAD_PIPS)
 
             print(f"Days tested: {len(days)}")
             print(f"Total signals: {total_signals}")
@@ -712,8 +777,10 @@ def main():
             print(f"Total SL losses: {total_losses}")
             print(f"Total timeouts: {total_timeouts}")
             print(f"Overall win rate (excl timeouts): {overall_wr:.0f}%")
-            print(f"Overall net: {total_net:+.0f} pips (~${total_net:+.0f} @0.1 lot)")
-            print(f"\n--- Advanced Metrics ---")
+            print(f"Overall gross: {total_gross:+.0f} pips")
+            print(f"Overall costs: -{total_cost:.0f} pips ({COST_SPREAD_PIPS:g}p/trade)")
+            print(f"Overall NET after cost: {total_net:+.0f} pips (~${total_net:+.0f} @0.1 lot)")
+            print(f"\n--- Advanced Metrics (NET After Cost) ---")
             pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
             print(f"Profit factor: {pf_str}")
             print(f"Max drawdown: {max_dd:.0f} pips ({max_dd_pct:.1f}%)")
@@ -726,9 +793,9 @@ def main():
                     print(f"\n{'='*60}")
                     print(f"MONTE CARLO SIMULATION ({args.iterations} iterations)")
                     print('='*60)
-                    mc_results = monte_carlo_simulation(all_trades, args.iterations)
+                    mc_results = monte_carlo_simulation(all_trades, args.iterations, COST_SPREAD_PIPS)
                     print(f"Confidence intervals (5th, 50th, 95th percentiles):\n")
-                    print(f"Net P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
+                    print(f"NET P&L:      {mc_results['net_pips']['p5']:+7.0f} pips  |  {mc_results['net_pips']['p50']:+7.0f} pips  |  {mc_results['net_pips']['p95']:+7.0f} pips")
                     print(f"Win rate:     {mc_results['win_rate']['p5']:7.1f}%     |  {mc_results['win_rate']['p50']:7.1f}%     |  {mc_results['win_rate']['p95']:7.1f}%")
                     print(f"Max DD:       {mc_results['max_dd']['p5']:7.0f} pips  |  {mc_results['max_dd']['p50']:7.0f} pips  |  {mc_results['max_dd']['p95']:7.0f} pips")
                     print(f"Max DD %:     {mc_results['max_dd_pct']['p5']:7.1f}%     |  {mc_results['max_dd_pct']['p50']:7.1f}%     |  {mc_results['max_dd_pct']['p95']:7.1f}%")
@@ -738,7 +805,7 @@ def main():
 
             # Export results if requested
             if args.export:
-                export_trades_csv(args.export, all_results)
+                export_trades_csv(args.export, all_results, COST_SPREAD_PIPS)
                 print(f"\nTrades exported to: {args.export}")
 
             if args.report:
@@ -748,10 +815,12 @@ def main():
                     'wins': total_wins,
                     'losses': total_losses,
                     'timeouts': total_timeouts,
+                    'gross_pips': total_gross,
+                    'cost_pips': total_cost,
                     'net_pips': total_net,
                     'win_rate': overall_wr
                 }
-                export_summary_report(args.report, period_stats, all_results)
+                export_summary_report(args.report, period_stats, all_results, COST_SPREAD_PIPS)
                 print(f"Summary report exported to: {args.report}")
 
 if __name__=="__main__":
