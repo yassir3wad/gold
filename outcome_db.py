@@ -18,7 +18,7 @@ import os, sqlite3
 DEFAULT_DB = os.path.expanduser("~/tradingview-mcp/outcomes.db")
 
 # The CSV schema (kept identical to scalp_fast.SIG_COLS — do NOT reorder/rename).
-SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1",
+SIG_COLS = ["id", "time", "side", "grade", "confidence", "pattern", "entry", "sl", "tp1",
             "rng10", "body_p", "htf", "result", "exit", "pips"]
 # Extra context captured alongside each signal (informational; absent in legacy CSV rows).
 CONTEXT_COLS = ["rsi", "er", "regime", "room", "session", "symbol"]
@@ -50,6 +50,11 @@ def _ensure_schema(con):
         [f"{_q(c)} TEXT" for c in ALL_COLS if c != "id"]
     )
     con.execute(f"CREATE TABLE IF NOT EXISTS signals (\n  {cols_sql}\n)")
+    # migrate older DBs: add any ALL_COLS column missing from the existing table (e.g. `confidence`)
+    existing = {r[1] for r in con.execute("PRAGMA table_info(signals)").fetchall()}
+    for c in ALL_COLS:
+        if c not in existing:
+            con.execute(f"ALTER TABLE signals ADD COLUMN {_q(c)} TEXT")
     # Indexes for the common analyze_logs query paths.
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_result ON signals(result)")

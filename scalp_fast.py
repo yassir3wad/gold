@@ -353,7 +353,7 @@ def _tg_text(text):
         pass
 
 SIGNALS_LOG = os.path.expanduser("~/tradingview-mcp/signals_log.csv")
-SIG_COLS = ["id", "time", "side", "grade", "pattern", "entry", "sl", "tp1", "rng10", "body_p", "htf", "result", "exit", "pips"]
+SIG_COLS = ["id", "time", "side", "grade", "confidence", "pattern", "entry", "sl", "tp1", "rng10", "body_p", "htf", "result", "exit", "pips"]
 
 SYMBOL = "XAUUSD"; TV_SYMBOL = "XAUUSD"; SESSIONS_OK = None; SYMBOL_FLAGS = {}
 RISK_USD = 20.0      # fixed $ risk per trade → lot = RISK_USD / (PIP_VALUE × stop_pips)
@@ -1215,9 +1215,9 @@ def _fire(t, note=""):
     notify_telegram(msg, f"signal|{t['side']}|{round(t['entry'])}|{t['why']}")
     sid = int(time.time())
     log_signal({"id": sid, "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
-                "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"], "sl": t["sl"],
-                "tp1": t["tp1"], "rng10": t.get("rng10", ""), "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"),
-                "result": "PENDING", "exit": "", "pips": ""})
+                "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
+                "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10", ""),
+                "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"), "result": "PENDING", "exit": "", "pips": ""})
     set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid, t.get("be_trig", BE_TRIGGER_P))
     try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
     except Exception: pass
@@ -1248,9 +1248,9 @@ if __name__ == "__main__":
         if t:
             reason = next((a for a in sys.argv[sys.argv.index("--reject")+1:] if not a.startswith("--")), "")
             log_signal({"id": int(time.time()), "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
-                        "side": t["side"], "grade": t["grade"], "pattern": t["why"], "entry": t["entry"],
-                        "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""), "body_p": t.get("body_p",""),
-                        "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason})
+                        "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
+                        "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""),
+                        "body_p": t.get("body_p",""), "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason})
             try: os.remove(PENDING_FILE)
             except Exception: pass
             print(f"🚫 REJECTED & LOGGED: {t['side']} {t['grade']} @ {t['entry']}  ({reason})")
