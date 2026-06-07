@@ -88,6 +88,8 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | **Confluence** | `confluence` | When **≥2 levels stack** at price (e.g. VWAP+EMA+zone), the grade is strengthened (A→A+, B→A). Lone touches earn less. |
 | **SMC confluence** | `smc_confluence` | +score when entry sits in a LuxAlgo **order-block/FVG**, near BOS/CHoCH/EQH-EQL/strong-weak H/L. Read on the current chart, cached ~1h. |
 | **Auto-Trendline confluence** | `auto_trendlines` | +1 when entry is near an **Auto Trendlines** level read across **4h/1h/15m** (`read_trendlines_mtf`, cached ~1h). A SEPARATE indicator from SMC — scored independently (not gated by SMC). **Mandatory:** the indicator must be on the chart or the scan **throws** (`assert_trendlines`); see `docs/trendlines.md`. |
+| **Daily family caps** | `family_caps` | Caps **fired (alerted) trades per setup-family per day** (`FAMILY_CAPS`: trendline 3 · CRT 2 · zone-bounce 1 · momentum 1 · liquidity-sweep 1 · session-sweep 2) — stops noisy families overproducing (counts today's PENDING/executed rows from the outcome DB). Only *reduces* trades. |
+| **Observation gate** | `observation_gate` | Families in `OBSERVE_FAMILIES` (currently **momentum_impulse**) are still detected + **logged** for measurement but **not fired live**, until they prove cost-adjusted edge out of sample (review: momentum is negative net). AI-decide mode still sees them. |
 | **Cooldown** | (const) | After any signal, **no new signal for 5 min** (`COOLDOWN_MIN`) — anti-clustering |
 | **Heads-up cooldown** | (const) | After a 👀 heads-up, **no re-ping for 12 min** (`WATCH_CD_MIN`) unless price moves >15p to a genuinely new zone — stops flip-flop spam when price wiggles across overlapping levels (round#/zone/VWAP band) |
 

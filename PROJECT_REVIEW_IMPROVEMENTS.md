@@ -10,7 +10,7 @@ The system is already more advanced than a simple signal bot: it has live Tradin
 
 The biggest strategic finding is cost-adjusted edge. The backtest notes show the average raw signal is around breakeven before spread, then negative after realistic gold spread. That means the project should optimize for fewer, higher-quality trades, not more alerts or higher signal count.
 
-Current live logs for the last 14 days show 17 executed XAUUSD trades, +169 pips net, 41% win rate, 1.57 profit factor, and +9.9 pips expectancy. This is positive, but it is carried by a few large winners. The losing groups in the live sample are still `momentum impulse`, `zone-bounce rejection`, and `liquidity-sweep reversal`, which matches the earlier cost-aware warning that high-frequency setup families can look attractive gross but fail after cost.
+Current live logs for the last 14 days show 18 executed trades across symbols, +154 gross pips and +101 pips after spread. XAUUSD is still positive after spread (+118 pips, +6.9 pips/trade), but the result is carried by a few large winners. The losing groups in the live sample are still `momentum impulse`, `zone-bounce rejection`, and `liquidity-sweep reversal`, which matches the earlier cost-aware warning that high-frequency setup families can look attractive gross but fail after cost.
 
 ## Second-Pass Findings
 
@@ -18,9 +18,36 @@ This second review adds three important findings.
 
 First, the untracked `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. The remaining risk is that the 100-signal table labels many setups as "Excellent" for gold/forex without repo-backed evidence. That can still push an AI reviewer toward approving attractive textbook setups instead of the few setup families that have demonstrated cost-adjusted edge.
 
-Second, `draw_overlay.py` has a practical throttle bug. `_recent()` reads `(chart + ":ts")` from `~/.tv_overlay_ids.json`, but `_save_ids()` only saves the drawn entity IDs and never writes that timestamp. Result: `min_interval` likely never throttles redraws, so the overlay can remove and redraw shapes every scanner loop. This creates avoidable TradingView/CDP load and chart flicker risk.
+Second, `draw_overlay.py` had a practical throttle bug. `_recent()` reads `(chart + ":ts")` from `~/.tv_overlay_ids.json`, but `_save_ids()` previously saved only the drawn entity IDs. This is now fixed: `_save_ids()` persists the timestamp, `draw_overlay()` accepts an injectable `state_path`, and `test_draw_overlay.py` covers the throttle path.
 
-Third, current all-symbol log analysis over the last 14 days shows 18 executed trades, +154 pips, 39% win rate, 1.50 profit factor, and +8.6 pips/trade. XAUUSD remains positive, while one NAS100 trade is negative. The all-symbol sample still shows the same weak families: `zone-bounce rejection`, `momentum impulse`, and `liquidity-sweep reversal`.
+Third, current all-symbol log analysis over the last 14 days shows 18 executed trades, +154 gross pips, +101 pips after spread, 39% gross win rate, 1.50 gross profit factor, 1.29 net profit factor, and +5.6 net pips/trade. XAUUSD remains positive, while one NAS100 trade is negative. The all-symbol sample still shows the same weak families: `zone-bounce rejection`, `momentum impulse`, and `liquidity-sweep reversal`.
+
+## Status Tracker
+
+Legend: `Done` = implemented in current files; `Partial` = started but still incomplete; `Pending` = not implemented; `Keep monitoring` = intentionally not changed yet.
+
+| Item | Status | Evidence / next step |
+|---|---|---|
+| Fix overlay redraw throttling | Done | `draw_overlay._save_ids()` now writes `:ts`; `test_draw_overlay.py` checks `_recent()` with a temp state file. |
+| Add overlay throttle tests | Done | `python3 test_draw_overlay.py` passes 17/17 checks. |
+| Add spread assumptions per symbol | Done | `instruments.json` includes `spread_pips` for default and each instrument. |
+| Report spread-adjusted expectancy | Done | `analyze_logs.py` now reports gross and after-spread net, Nexp, Nnet, and cost-aware setup ranking. |
+| Track alert/reject/trade opportunity cost | Done | `analyze_logs.py` now prints per-day flow with alerts, rejects, and trades. |
+| Mark approval model as disproven | Done | `approval_model.py` has a prominent negative-result banner and rewrites the in-sample comments. |
+| Add confidence score beyond A+ grade | Done | `confidence.py` exists and `scalp_fast.py` emits confidence in signal/review output. |
+| Add confidence penalties from roadmap guide | Done | `confidence.py` includes mid-value, accepted-through, over-tested, opposing-level, and VWAP-chop penalties. |
+| Add AI approval checklist / APPROVE-REJECT-WAIT | Done | `scalp_fast.py --review` prints the checklist and asks for `APPROVE / REJECT / WAIT`. |
+| Add cost/decision columns to outcome DB | Done | `outcome_db.py` includes spread/slippage/commission/gross/net and decision source/reason columns, with migration. |
+| Keep 100-signal roadmap as reference, not build list | Partial | `docs/signal-roadmap.md` and `docs/signal-roadmap-detailed.md` clearly say roadmap/menu, not build list. Still needs per-signal evidence tags. |
+| Evidence-tag every roadmap signal | Pending | Add `validated / experimental / rejected / not tested` tags to the roadmap tables. |
+| Disable or observation-gate `momentum_impulse` | Pending | `flags.json` still has `"momentum_impulse": true`; live logs remain negative after spread for this family. |
+| Add setup-family daily caps | Pending | No cap mechanism found; rejected/auto-skip volume remains high. |
+| Tighten `zone_bounce` and `liquidity_sweep` | Partial | Existing gates/hard floor help, but both remain enabled and live logs remain negative after spread. |
+| Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
+| Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
+| Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
+| Add spread/cost to backtest reports | Partial | `analyze_logs.py` is cost-aware; `backtest_multi_day.py` still mostly reports gross `net_pips`. |
+| Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
 
 ## Current Strengths
 
@@ -227,8 +254,8 @@ Recommended action:
 Current verification result:
 
 - `python3 analyze_logs.py --symbol XAUUSD --days 14` passed.
-- `python3 analyze_logs.py --days 14` passed and showed 18 executed trades, +154 pips, 1.50 PF, +8.6 pips/trade.
-- `python3 test_draw_overlay.py` passed with 13/13 checks, but it only tests pure overlay specs, not draw throttling or state persistence.
+- `python3 analyze_logs.py --days 14` passed and showed 18 executed trades, +154 gross pips, +101 pips after spread, 1.50 gross PF, 1.29 net PF, and +5.6 net pips/trade.
+- `python3 test_draw_overlay.py` passed with 17/17 checks, including overlay throttle state persistence.
 - `python3 -m pytest -q` failed because `pytest` is not installed.
 - `npm test` partially passed static Pine tests but failed live TradingView/CDP tests because TradingView is not connected on port 9222.
 - `python3 -m unittest discover -p 'test*.py'` failed because `test_stale_zone.py` calls `sys.exit()` during import.
@@ -242,9 +269,11 @@ Recommended action:
 
 ### 4. Add Cost and Slippage to Outcome DB
 
-`outcome_db.py` stores signal/result context, but not spread, slippage, or commission.
+Status: Done for schema support.
 
-Recommended new fields:
+`outcome_db.py` now stores signal/result context plus cost and decision fields.
+
+Completed fields:
 
 - `spread_pips`
 - `slippage_pips`
@@ -258,9 +287,11 @@ This will prevent future analysis from accidentally optimizing gross edge.
 
 ### 5. Fix Overlay Throttling
 
-`draw_overlay.py` intends to throttle redraws through `min_interval`, but `_save_ids()` does not persist the timestamp that `_recent()` checks.
+Status: Done.
 
-Recommended action:
+`draw_overlay.py` now persists the timestamp used by `_recent()`, accepts an injectable state path for tests, and warns on empty draw results.
+
+Completed action:
 
 - Save `d[(chart or "_") + ":ts"] = time.time()` inside `_save_ids()`.
 - Add a pure test that writes a temporary state file and verifies `_recent()` returns true after saving.
@@ -305,16 +336,14 @@ This prevents accidentally reviving rejected ideas.
 
 ## Recommended Next Changes
 
-1. Fix `draw_overlay.py` throttling by persisting the timestamp used by `_recent()`.
-2. Add evidence tags to `docs/signal-roadmap-detailed.md` so the 100-signal roadmap cannot be mistaken for a validated live allowlist.
-3. Disable or observation-gate `momentum_impulse` for live alerts until it proves cost-adjusted edge out of sample.
-4. Keep `break_retest` disabled.
-5. Add spread-adjusted metrics to `analyze_logs.py`, `score_signals.py`, and backtest reports.
-6. Add structured AI decision fields to logs.
-7. Add setup-family daily caps.
-8. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
-9. Mark `approval_model.py` as a disproven artifact.
-10. Split pure tests from TradingView-dependent integration tests.
+1. Add evidence tags to `docs/signal-roadmap-detailed.md` so the 100-signal roadmap cannot be mistaken for a validated live allowlist.
+2. Disable or observation-gate `momentum_impulse` for live alerts until it proves cost-adjusted edge out of sample.
+3. Add setup-family daily caps to reduce alert/reject volume.
+4. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
+5. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
+6. Split pure tests from TradingView-dependent integration tests in `package.json`.
+7. Convert script-style Python tests to import-safe test functions.
+8. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
 
 ## Bottom Line
 

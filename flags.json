@@ -28,5 +28,7 @@
   "smc_confluence": true,
   "auto_trendlines": true,
   "confidence_sizing": false,
+  "family_caps": true,
+  "observation_gate": true,
   "hard_floor": true
 }

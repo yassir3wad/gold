@@ -315,7 +315,8 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": True,
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
-                 "hard_floor": True, "rsi_reset_gate": False}   # rsi_reset_gate OFF until data validates thresholds
+                 "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
+                 "family_caps": True, "observation_gate": True}   # daily per-family caps + observe-only families (review)
 def load_flags():
     f = dict(DEFAULT_FLAGS)
     try: f.update(json.load(open(FLAGS_FILE)))
@@ -326,10 +327,35 @@ PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", 
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
             "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
             "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt"}
+# Daily per-family caps on FIRED (alerted) trades — stop noisy families from overproducing (review Priority 2).
+# Keyed by strategy flag; families not listed are uncapped. Only REDUCES trades (safe). Flag: family_caps.
+FAMILY_CAPS = {"trendline_break": 3, "crt": 2, "zone_bounce": 1, "momentum_impulse": 1,
+               "liquidity_sweep": 1, "session_sweep": 2, "break_retest": 1}
+# Observation-only families: detected + LOGGED (for measurement) but NOT surfaced/fired live, until they
+# prove cost-adjusted edge out of sample (review Next #3: momentum impulse is negative net). Flag: observation_gate.
+OBSERVE_FAMILIES = {"momentum_impulse"}
 def flag_for(why):
     for k, v in PAT_FLAG.items():
         if k in why: return v
     return None
+
+def family_fired_today(symbol):
+    """Count today's FIRED (alerted) trades per strategy-flag, from the outcome DB — for the daily family caps.
+    Counts only rows that became real trades (PENDING/executed), not rejects/auto-skips. {} on any error."""
+    try:
+        import outcome_db
+        today = _dt.datetime.now().astimezone().strftime("%Y-%m-%d")
+        rows = outcome_db.rows(symbol=symbol, since=today)
+    except Exception:
+        return {}
+    fired = ("PENDING", "TP1", "TP2", "SL", "BE", "timeout", "superseded")
+    cnt = {}
+    for r in rows:
+        if r.get("result") in fired:
+            fam = flag_for(r.get("pattern", "") or "")
+            if fam:
+                cnt[fam] = cnt.get(fam, 0) + 1
+    return cnt
 
 def alert_sound(n=3):
     """Audible alert on a fast signal (macOS afplay)."""
@@ -936,6 +962,20 @@ def main():
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
+    # observation gate: families in OBSERVE_FAMILIES are detected + logged (measurable) but NOT fired live,
+    # until they prove cost-adjusted edge out of sample (review Next #3). AI-decide still sees them.
+    if FL.get("observation_gate", True) and setups and not AI:
+        kept = []
+        for s in setups:
+            if flag_for(s[1]) in OBSERVE_FAMILIES:
+                print(f">> OBSERVE-ONLY: {s[0]} [{s[1]}] — family under observation (negative net); logged, not fired.")
+                if not DRY:
+                    _htf = at_S if s[0] == "LONG" else at_R
+                    log_floor_skip(s[0], s[1], s[2], "observe", round(rng10), round(body_pips), _htf[2] if _htf else "open", None, ["observation-only"])
+            else:
+                kept.append(s)
+        setups = kept
+
     # range filter: in 15m chop, suppress BREAKOUT/CONTINUATION setups (false breaks in a range).
     # Reversals (sweep/VWAP/retest/reclaim) stay — fading the range is the right play when chopping.
     if FL.get("range_filter", True) and is_chop and setups and not AI:
@@ -1168,6 +1208,17 @@ def main():
             _htf = at_S if side == "LONG" else at_R
             log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, [_reason])
         return
+    # daily family cap: stop a noisy family from overproducing alerts (review Priority 2). Only reduces trades.
+    if FL.get("family_caps", True) and not AI:
+        _fam = flag_for(why); _cap = FAMILY_CAPS.get(_fam)
+        if _cap is not None:
+            _n = family_fired_today(SYMBOL).get(_fam, 0)
+            if _n >= _cap:
+                print(f">> SKIP DAILY CAP: {side} [{why}] — {_fam} already fired {_n}/{_cap} today.")
+                if not DRY:
+                    _htf = at_S if side == "LONG" else at_R
+                    log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", None, [f"daily cap {_n}/{_cap}"])
+                return
     _cf = f"  confidence {conf_score}/10 ({conf_lbl})" if conf_score is not None else ""
     print(f"\n>> FAST SIGNAL: {side} [{grade}]{_cf} [{why}]{htf_note}")
     _szt = f" [conf-sized {risk_usd/RISK_USD:.2f}×]" if (FL.get('confidence_sizing', False) and risk_usd != RISK_USD) else ""
@@ -1223,9 +1274,10 @@ def main():
         return
     _fire(trade)
 
-def _fire(t, note=""):
+def _fire(t, note="", source="auto"):
     """Send a confirmed trade to Telegram + log it + start TP/SL tracking + cooldown.
-    `note` = Claude's one-line review reasoning, appended so the user sees WHY it was approved."""
+    `note` = Claude's one-line review reasoning, appended so the user sees WHY it was approved.
+    `source` = decision_source for the log: 'AI' (review-approved) or 'auto' (autonomous fire)."""
     alert_sound(3)
     # Telegram photo caption hard-limits at 1024 chars; cap the review note so the send never fails.
     if note:
@@ -1238,7 +1290,8 @@ def _fire(t, note=""):
     log_signal({"id": sid, "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
                 "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
                 "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10", ""),
-                "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"), "result": "PENDING", "exit": "", "pips": ""})
+                "body_p": t.get("body_p", ""), "htf": t.get("htf", "open"), "result": "PENDING", "exit": "", "pips": "",
+                "decision_source": source, "decision_reason_code": f"{flag_for(t['why']) or t['why']}:{t.get('grade','')}:conf{t.get('confidence','')}"})
     set_active_trade(t["side"], t["entry"], t["sl"], t["tp1"], t["tp2"], sid, t.get("be_trig", BE_TRIGGER_P))
     try: json.dump({"t": time.time()}, open(CD_FILE, "w"))   # start cooldown
     except Exception: pass
@@ -1258,7 +1311,7 @@ if __name__ == "__main__":
         t = _read_pending()
         if t:
             note = " ".join(a for a in sys.argv[sys.argv.index("--approve")+1:] if not a.startswith("--"))
-            _fire(t, note)
+            _fire(t, note, source="AI")
             try: os.remove(PENDING_FILE)
             except Exception: pass
             print(f"✅ APPROVED & SENT: {t['side']} {t['grade']} @ {t['entry']}  (note: {note or '—'})")
@@ -1271,7 +1324,8 @@ if __name__ == "__main__":
             log_signal({"id": int(time.time()), "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
                         "side": t["side"], "grade": t["grade"], "confidence": t.get("confidence", ""), "pattern": t["why"],
                         "entry": t["entry"], "sl": t["sl"], "tp1": t["tp1"], "rng10": t.get("rng10",""),
-                        "body_p": t.get("body_p",""), "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason})
+                        "body_p": t.get("body_p",""), "htf": t.get("htf","open"), "result": "rejected", "exit": "", "pips": reason,
+                        "decision_source": "AI", "decision_reason_code": (reason or "rejected")[:40]})
             try: os.remove(PENDING_FILE)
             except Exception: pass
             print(f"🚫 REJECTED & LOGGED: {t['side']} {t['grade']} @ {t['entry']}  ({reason})")
