@@ -21,6 +21,13 @@ import argparse, subprocess, os, json, re, time, datetime as dt
 TVDIR = os.path.expanduser("~/tradingview-mcp")        # node CLI runs here (node_modules lives in main tree)
 SCRIPTDIR = os.path.dirname(os.path.abspath(__file__)) # run THIS checkout's engine (worktree) by absolute path
 SUFFIX = "xauusd_bt"
+# Use the SAME TradingView symbol the live engine uses (instruments.json XAUUSD.tv, e.g. PEPPERSTONE:XAUUSD) —
+# NOT a bare "XAUUSD", which TradingView resolves to a default exchange (OANDA) and silently switches the feed.
+try:
+    _ic = json.load(open(os.path.join(TVDIR, "instruments.json")))
+    TV_SYMBOL = _ic.get("XAUUSD", {}).get("tv", "XAUUSD")
+except Exception:
+    TV_SYMBOL = "XAUUSD"
 BASE_TF = "5"                                                   # execution timeframe (minutes); set from --tf in main
 WITH_SMC = False                                               # --with-smc: capture date-faithful SMC at the replay cursor (replay chart must have the indicator)
 ZONEFILE = os.path.expanduser(f"~/tradingview-mcp/zones_{SUFFIX}.json")   # isolated, date-faithful zone file (never the live one)
@@ -113,7 +120,7 @@ def main():
     vpfile = os.path.expanduser(f"~/.tv_fast_{SUFFIX}_vp.json")
     zone_every = max(1, 60 // int(a.tf))                       # regenerate + redraw zones every ~1h of replay time
 
-    tv(CH, "symbol", "XAUUSD"); tv(CH, "timeframe", a.tf)
+    tv(CH, "symbol", TV_SYMBOL); tv(CH, "timeframe", a.tf)   # TV_SYMBOL = instruments.json XAUUSD.tv (PEPPERSTONE), not bare XAUUSD→OANDA
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     regen_zones(CH)                                            # initial date-faithful zones for this day, drawn on chart
     print(f"replay sim: {a.date}  window {a.start_hour:02d}:00-{a.end_hour:02d}:00 UTC  chart {CH}  TF={a.tf}m  zones/{zone_every} steps\n")

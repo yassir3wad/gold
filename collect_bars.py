@@ -5,6 +5,10 @@ by timestamp). Used to score signal outcomes (TP1 vs SL). Pins to the backtest c
 """
 import argparse, subprocess, os, json, time, datetime as dt
 TVDIR = os.path.expanduser("~/tradingview-mcp")
+try:   # use the live engine's configured gold symbol (PEPPERSTONE:XAUUSD), not bare XAUUSD→OANDA
+    TV_SYMBOL = json.load(open(os.path.join(TVDIR, "instruments.json"))).get("XAUUSD", {}).get("tv", "XAUUSD")
+except Exception:
+    TV_SYMBOL = "XAUUSD"
 
 def tv(chart, *a):
     env = dict(os.environ); env["TV_CHART"] = chart
@@ -20,7 +24,7 @@ def main():
     ap.add_argument("--batch", type=int, default=50); ap.add_argument("--max-steps", type=int, default=1700)
     a = ap.parse_args(); CH = a.chart
     target = dt.datetime.strptime(a.date, "%Y-%m-%d").date()
-    tv(CH, "symbol", "XAUUSD"); tv(CH, "timeframe", "1")
+    tv(CH, "symbol", TV_SYMBOL); tv(CH, "timeframe", "1")
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     bars = {}; steps = 0; out = f"/tmp/bars_{a.date}.json"
     while steps < a.max_steps:
