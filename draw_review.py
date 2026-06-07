@@ -49,7 +49,7 @@ def main():
     ap.add_argument("--chart", default="eFMec2F9")
     ap.add_argument("--display-tf", default="60")
     ap.add_argument("--symbol", default="PEPPERSTONE:XAUUSD")   # PEPPERSTONE has real volume (OANDA gold doesn't) → value areas + TPO work
-    ap.add_argument("--layers", default="zones,sr,va")   # comma-list of layers to draw: zones,sr,va. SMC is NOT drawn — the LuxAlgo indicator draws itself; SMC is consumed as stored JSON (refresh_zones --with-smc) + used in scalp (mtf_signal). Pass --layers zones,sr,va,smc only to debug-overlay SMC.
+    ap.add_argument("--layers", default="zones,sr,va,htf")   # comma-list of layers to draw: zones,sr,va. SMC is NOT drawn — the LuxAlgo indicator draws itself; SMC is consumed as stored JSON (refresh_zones --with-smc) + used in scalp (mtf_signal). Pass --layers zones,sr,va,smc only to debug-overlay SMC.
     a = ap.parse_args(); CH = a.chart
     LAYERS = {x.strip() for x in a.layers.split(",") if x.strip()}
     # KL = bright/solid, normal zone = faint. demand=green, supply=red.
@@ -74,7 +74,7 @@ def main():
     else:                                                   # LIVE: draw at 'now' (ensure no replay overlay)
         tv(CH, "replay", "stop"); time.sleep(1)
     tv(CH, "draw", "clear")
-    drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0}
+    drawn = {"demand": 0, "supply": 0, "KL": 0, "support": 0, "resistance": 0, "va": 0, "smc": 0, "htf": 0}
     log = {"date": a.date, "chart": CH, "price": None, "zones": [], "sr": [], "va": [], "smc": {}}
     cur_price = None
     anchor_t = None   # a recent (cursor) bar time — REQUIRED to anchor horizontal_line draws
@@ -111,6 +111,20 @@ def main():
                  f"{s['role'].capitalize()} {s['tf']}" + (" flip" if s["flip"] else ""), ov)
             log["sr"].append(s)
             drawn[s["role"]] += 1
+
+    if "htf" in LAYERS and anchor_t:   # OLD refresh_zones HTF clusters (pivot/EMA/round/PDH) — the engine TRADES
+        try:                            # these in HTF_R/HTF_S too, so draw them MUTED so review == traded.
+            _z = json.load(open(os.path.join(TVDIR, f"zones_{a.symbol.split(':')[-1].lower()}.json")))
+        except Exception:
+            _z = {}
+        HR = json.dumps({"backgroundColor": "rgba(120,120,120,0.05)", "color": "rgba(230,90,90,0.45)", "linestyle": 2})
+        HS = json.dumps({"backgroundColor": "rgba(120,120,120,0.05)", "color": "rgba(90,200,120,0.45)", "linestyle": 2})
+        left = anchor_t - 100 * int(a.display_tf) * 60; right = anchor_t + 50 * 4 * 3600
+        for entry, ov, tag in ([(e, HR, "R") for e in _z.get("htf_r", [])] + [(e, HS, "S") for e in _z.get("htf_s", [])]):
+            if len(entry) >= 2:
+                lab = entry[2] if len(entry) > 2 else tag
+                rect(CH, left, entry[0], right, entry[1], f"old-{tag} {lab}", ov)
+                drawn["htf"] = drawn.get("htf", 0) + 1
 
     b30 = bars_tf(CH, "30", 400)   # 30m for the TPO indicator read
     va_t = anchor_t or (int(b30[-1]["time"]) if b30 else None)   # time anchor required by horizontal_line
