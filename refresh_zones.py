@@ -6,6 +6,10 @@ scalp_fast.py (which rebuilds this automatically when it goes stale). Run standa
 """
 import subprocess, json, os, time, sys, math
 TVDIR = os.path.expanduser("~/tradingview-mcp")
+sys.path.insert(0, TVDIR)
+try: import smc as smcmod   # LuxAlgo SMC multi-TF read (stored snapshot for trade-check)
+except Exception: smcmod = None
+IS_BACKTEST = ("--out" in sys.argv)   # the isolated date-faithful zone file = the true backtest signal; the replay chart has no SMC. NOTE: key on --out NOT --chart — a live refresh may pin a chart with --chart and must still capture SMC (or fail loud if it's missing), never silently skip.
 SYMBOL = "XAUUSD"
 if "--symbol" in sys.argv:
     try: SYMBOL = sys.argv[sys.argv.index("--symbol")+1].upper()
@@ -124,12 +128,29 @@ def main():
     asia_h, asia_l, asia_end = sess.get('asia') or fb(0, 7)
     london_h, london_l, london_end = sess.get('london') or fb(7, 16)
     ny_h, ny_l, ny_end = sess.get('ny') or fb(13, 22)
+    # --- multi-TF SMC snapshot (LuxAlgo) — stored so trade-check consumes a STABLE snapshot (zones file),
+    # not a flaky per-tick live read. LIVE refresh only: the backtest replay chart has no SMC indicator. ---
+    smc_block = {}; smc_failed = False
+    if smcmod and not IS_BACKTEST:
+        try:
+            tf_snap = smcmod.read_smc_mtf(os.environ.get("TV_CHART", ""), price, base_tf="1")
+            smc_block = {'ts': time.time(), 'price': price, 'tf': tf_snap}
+            tfsum = {k: f"box{len(v['boxes'])}/sw{len(v['swings'])}" for k, v in tf_snap.items()}
+            print(f"  SMC: {tfsum}")
+        except smcmod.SMCMissing as e:
+            print(f"!! SMC MISSING — {e}", file=sys.stderr); smc_failed = True
+        except Exception as e:
+            print(f"!! SMC read failed: {e}", file=sys.stderr)
+        tv('timeframe', '1')   # restore (read_smc_mtf restores base_tf, but be explicit for the session/zone convention)
     out = {'ts': time.time(), 'price': price, 'pdh': pdh, 'pdl': pdl,
            'asia_h': asia_h, 'asia_l': asia_l, 'london_h': london_h, 'london_l': london_l, 'ny_h': ny_h, 'ny_l': ny_l,
            'asia_end': asia_end, 'london_end': london_end, 'ny_end': ny_end,
-           'htf_r': [[z[0], z[1], z[2]] for z in R], 'htf_s': [[z[0], z[1], z[2]] for z in S]}
+           'htf_r': [[z[0], z[1], z[2]] for z in R], 'htf_s': [[z[0], z[1], z[2]] for z in S],
+           'smc': smc_block}
     json.dump(out, open(ZONES_FILE, 'w'), indent=1)
     print(f"wrote zones.json  asia={asia_h}/{asia_l}(end{asia_end}) london={london_h}/{london_l}(end{london_end}) ny={ny_h}/{ny_l}(end{ny_end})  src={'indicator' if sess else 'fallback-UTC'}")
+    if smc_failed:   # fail LOUD (visible in cron logs) — but zones were still written so the engine keeps running
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

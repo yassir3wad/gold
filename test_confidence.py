@@ -96,6 +96,14 @@ def test_score_backward_compat():
     check("original args identical to legacy scoring", ok)
 
 
+def test_score_smc_aligned():
+    # premium/discount alignment is a SOFT factor mirroring with_trend: +1 aligned, -1 misaligned, 0 neutral.
+    base = C.score("A", conf=1, smc_tl=1)
+    check("smc_aligned True adds +1", C.score("A", conf=1, smc_tl=1, smc_aligned=True) == base + 1)
+    check("smc_aligned False subtracts 1", C.score("A", conf=1, smc_tl=1, smc_aligned=False) == base - 1)
+    check("smc_aligned None is neutral (default)", C.score("A", conf=1, smc_tl=1, smc_aligned=None) == base)
+
+
 def test_size_multiplier():
     check("mid confidence -> 1.0x", C.size_multiplier(5.0) == 1.0)
     check("max confidence -> hi (1.5x)", C.size_multiplier(10.0) == 1.5)
@@ -113,7 +121,7 @@ def main():
                test_score_monotonic_in_confluence, test_score_clamped,
                test_score_each_penalty_lowers, test_score_penalty_weights, test_score_penalties_stack,
                test_score_penalties_never_below_zero, test_score_backward_compat,
-               test_size_multiplier, test_label):
+               test_score_smc_aligned, test_size_multiplier, test_label):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

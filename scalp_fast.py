@@ -100,6 +100,7 @@ ZONE_WICK_P = 15                   # zone-bounce: min rejection-wick (pips) for 
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
 ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
+SMC_SNAP_MAX_AGE = 6*3600          # stored multi-TF SMC snapshot: ignore for confluence if older than this (hourly cron tolerates a few missed cycles; a stale snapshot must contribute nothing, not mislead the grade)
 
 def _num(x):
     try: return float(str(x).replace(",", ""))
@@ -333,6 +334,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "session_breakout": True, "extended_levels": True, "ema_levels": True,
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
                  "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": False,
+                 "smc_mtf": True,   # consider the STORED multi-TF SMC snapshot (zones file, hourly cron): HTF-weighted OB/swing confluence + soft premium/discount alignment. Stable read (not the flaky per-tick live read smc_confluence).
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
@@ -661,6 +663,23 @@ def smc_context():
         return ctx
     except Exception:
         return {}
+
+def stored_smc():
+    """The STORED multi-TF SMC snapshot (zones_<sym>.json 'smc' block, refreshed by the hourly cron).
+    Trade-check consumes THIS stable snapshot — not a fresh per-tick chart read (the live LuxAlgo read is
+    flaky/unstable). Returns the smc block dict ({ts, price, tf:{...}}) or {} if absent/empty/STALE — a
+    delayed or broken refresh must contribute nothing to scoring, never feed old SMC into the grade."""
+    try:
+        blk = json.load(open(ZONES_FILE)).get("smc") or {}
+    except Exception:
+        return {}
+    if not blk:
+        return {}
+    age = time.time() - blk.get("ts", 0)
+    if age > SMC_SNAP_MAX_AGE:
+        print(f">> WARN: stored SMC snapshot is stale ({age/3600:.1f}h old > {SMC_SNAP_MAX_AGE//3600}h) — ignoring it for confluence.")
+        return {}
+    return blk
 
 def main():
     draw = "--draw" in sys.argv
@@ -1148,10 +1167,11 @@ def main():
     # --- HTF confluence — a '+' on top of our zones. SMC (LuxAlgo) and Auto-Trendlines are SEPARATE
     # indicators scored INDEPENDENTLY: a trendline touch counts even when the SMC indicator isn't present/read
     # (previously the trendline score was gated behind SMC presence, so it silently did nothing). ---
-    cf_score = 0   # SMC + Auto-Trendline confluence score (hoisted for the confidence calc below)
-    if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True)) and smcmod:
-        sctx = smc_context()
-        cf_reasons = []
+    cf_score = 0; cf_reasons = []   # SMC + Auto-Trendline confluence (hoisted for the confidence calc below)
+    smc_zone = None; smc_aligned = None   # stored multi-TF premium/discount — a SOFT confidence factor, never a hard skip
+    if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True) or FL.get("smc_mtf", True)) and smcmod:
+        # the live chart read is only needed for the (flaky) per-tick SMC and the trendlines; skip it if neither is on.
+        sctx = smc_context() if (FL.get("smc_confluence", True) or FL.get("auto_trendlines", True)) else {}
         if FL.get("smc_confluence", True):
             if not sctx.get("present"):
                 print(">> WARN: LuxAlgo SMC indicator not on chart — SMC confluence missing.")
@@ -1162,12 +1182,18 @@ def main():
             tls = sctx.get("trendlines", [])
             if tls and smcmod.near_level(entry, tls, SMC_TOL * VS):
                 cf_score += 1; cf_reasons.append("Auto-Trendline")
+        if FL.get("smc_mtf", True):                        # STORED multi-TF SMC snapshot (zones file, hourly cron) — stable
+            sig = smcmod.mtf_signal(entry, side, stored_smc(), SMC_TOL * VS)
+            cf_score += sig["score"]; cf_reasons += sig["reasons"]
+            smc_zone, smc_aligned = sig["zone"], sig["aligned"]
         if cf_score:
             htf_note += f" | +{cf_score} HTF ({', '.join(cf_reasons[:3])})"
             if cf_score >= 2:                              # 2+ aligned HTF elements = a real grade boost
                 grade = "A+" if grade.startswith("A") else ("A" if grade.startswith("B") else grade)
             elif grade.startswith("B"):                    # a single '+' nudges open-space up
                 grade = "A"
+        if smc_zone:                                       # surface the range position for the AI judge regardless of score
+            htf_note += f" | SMC {smc_zone}{' ✓aligned' if smc_aligned else (' ✗misaligned' if smc_aligned is False else '')}"
 
     # --- #1 adaptive TP/SL: cap targets just short of the next structure; skip cramped trades ---
     # Zone-rejection stops sit BEYOND the rejection zone's far edge (+buffer) with a WIDER cap, so ordinary
@@ -1223,7 +1249,8 @@ def main():
     conf_score = confmod.score(grade, conf=conf_now, smc_tl=cf_score, rsi_div=_rsidiv, with_trend=_trend,
                                rr=(tp1_p / risk if risk > 0 else None), level_valid=_lvl_valid,
                                mid_value=_mid_value, accepted_through=_accepted,
-                               into_opposing=_into_opposing, vwap_chop=bool(is_chop)) if confmod else None
+                               into_opposing=_into_opposing, vwap_chop=bool(is_chop),
+                               smc_aligned=smc_aligned) if confmod else None
     conf_lbl = confmod.label(conf_score) if confmod and conf_score is not None else ""
     # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), rounded to broker step + clamped
     risk_usd = RISK_USD

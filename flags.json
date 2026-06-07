@@ -26,6 +26,7 @@
   "va_reject": true,
   "draw_overlay": true,
   "smc_confluence": false,
+  "smc_mtf": true,
   "auto_trendlines": true,
   "confidence_sizing": false,
   "family_caps": true,

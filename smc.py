@@ -115,6 +115,36 @@ def read_smc_mtf(chart, price, tfs=("240", "60", "15"), base_tf="5", band=200.0,
     return out
 
 
+def mtf_signal(price, side, smc_block, tol, weights=(("240", 3), ("60", 2), ("15", 1))):
+    """Consider the STORED multi-TF SMC snapshot (zones_xauusd.json 'smc' block) for a `side` trade at `price`.
+    Pure (testable). Returns {score, reasons, zone, aligned}:
+      - box confluence: + weight[tf] if price is in a box on the FAVOURABLE side (demand for LONG / supply for
+        SHORT) on that TF — HTF weighted (4h>1h>15m).
+      - swing confluence: + a smaller weight if price is near a Strong/Weak swing on that TF.
+      - zone: premium / discount / equilibrium from the HIGHEST TF range present (eq band = ±tol).
+      - aligned: True if the trade is on the right side of the range (LONG in discount / SHORT in premium)."""
+    tf = (smc_block or {}).get("tf", {}) or {}
+    score = 0; reasons = []
+    want = "demand" if side == "LONG" else "supply"
+    for tfk, w in weights:
+        d = tf.get(tfk)
+        if not d:
+            continue
+        if any(b.get("side") == want and (b["low"] - tol) <= price <= (b["high"] + tol) for b in d.get("boxes", [])):
+            score += w; reasons.append(f"{tfk}m OB {want}")
+        if any(abs(price - s.get("price", 0)) <= tol for s in d.get("swings", [])):
+            score += max(1, w // 2); reasons.append(f"{tfk}m swing")
+    zone = None; aligned = None
+    for tfk, _ in weights:                               # premium/discount from the highest TF that has a range
+        d = tf.get(tfk)
+        if d and d.get("equilibrium") is not None:
+            eq = d["equilibrium"]
+            zone = "equilibrium" if abs(price - eq) <= tol else ("discount" if price < eq else "premium")
+            aligned = (side == "LONG" and zone == "discount") or (side == "SHORT" and zone == "premium")
+            break
+    return {"score": score, "reasons": reasons, "zone": zone, "aligned": aligned}
+
+
 TRENDLINE_FILTER = "Auto Trendlines"
 
 

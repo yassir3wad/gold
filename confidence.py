@@ -36,15 +36,20 @@ def _grade_pts(grade):
 
 
 def score(grade, conf=0, smc_tl=0, rsi_div=False, with_trend=None, rr=None, level_valid=False,
-          mid_value=False, accepted_through=False, over_tested=False, into_opposing=False, vwap_chop=False):
+          mid_value=False, accepted_through=False, over_tested=False, into_opposing=False, vwap_chop=False,
+          smc_aligned=None):
     """0–10 confidence. `with_trend`: True (with trend), False (counter-trend), None (neutral/flat).
-    The `mid_value`/`accepted_through`/`over_tested`/`into_opposing`/`vwap_chop` flags are penalties for bad
+    `smc_aligned`: SOFT premium/discount alignment from the stored multi-TF SMC snapshot — True (LONG in
+    discount / SHORT in premium) +1, False (wrong side of the range) -1, None (at equilibrium / no range) 0.
+    Soft by design: it nudges confidence, never blocks a trade. The
+    `mid_value`/`accepted_through`/`over_tested`/`into_opposing`/`vwap_chop` flags are penalties for bad
     contexts (all default False, so omitting them is identical to the additive-only scoring)."""
     s = _grade_pts(grade)
     s += min(max(conf, 0), 2)
     s += min(max(smc_tl, 0), 2)
     s += 1 if rsi_div else 0
     s += 1 if with_trend is True else (-1 if with_trend is False else 0)
+    s += 1 if smc_aligned is True else (-1 if smc_aligned is False else 0)
     s += 1 if (rr is not None and rr >= 2) else 0
     s += 1 if level_valid else 0
     # Penalties — worst contexts (mid-value, accepted-through) weighted heavier.

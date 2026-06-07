@@ -217,6 +217,51 @@ def test_assert_smc():
     check("read_smc_mtf: tv-injected -> {}", S.read_smc_mtf("X", 4300, tv=absent) == {})
 
 
+def _smc_block():
+    """A stored zones_xauusd.json 'smc' block shaped like the validated read (price ~4327 in DISCOUNT on all TFs)."""
+    return {"price": 4327.73, "tf": {
+        "240": {"boxes": [{"high": 4330, "low": 4310, "side": "demand"},
+                          {"high": 4600, "low": 4580, "side": "supply"}],
+                "swings": [{"text": "Strong High", "price": 4773.53}, {"text": "Weak Low", "price": 4311.65}],
+                "equilibrium": 4542.59, "premium": [4542.59, 4773.53], "discount": [4311.65, 4542.59]},
+        "60": {"boxes": [{"high": 4340, "low": 4325, "side": "demand"}],
+               "swings": [{"text": "Weak Low", "price": 4311.65}],
+               "equilibrium": 4453.32, "premium": [4453.32, 4595], "discount": [4311.65, 4453.32]},
+        "15": {"boxes": [{"high": 4500, "low": 4490, "side": "supply"}],
+               "swings": [], "equilibrium": 4413.56, "premium": [4413.56, 4515.48], "discount": [4311.65, 4413.56]}}}
+
+
+def test_mtf_signal():
+    b = _smc_block(); tol = 3.0
+    r = S.mtf_signal(4327.73, "LONG", b, tol)
+    # box confluence on the FAVOURABLE side, HTF weighted: 240 demand (3) + 60 demand (2) = 5; 15m supply box doesn't count for a LONG
+    check("mtf_signal: LONG demand-box confluence is HTF weighted", any("240m OB demand" in x for x in r["reasons"]) and any("60m OB demand" in x for x in r["reasons"]))
+    check("mtf_signal: LONG ignores supply boxes", not any("OB supply" in x for x in r["reasons"]))
+    # swing confluence: 4327.73 is near 60m Weak Low 4311.65? |16| > tol -> no. None near within tol here.
+    check("mtf_signal: score sums box weights (3+2)", r["score"] == 5)
+    # zone from highest TF present (240): price 4327.73 < eq 4542.59 -> discount; LONG in discount -> aligned
+    check("mtf_signal: zone = discount from highest TF", r["zone"] == "discount")
+    check("mtf_signal: LONG in discount is aligned", r["aligned"] is True)
+
+    # SHORT at a premium price aligns; demand boxes don't count, supply does
+    r2 = S.mtf_signal(4595.0, "SHORT", b, tol)
+    check("mtf_signal: SHORT in premium is aligned", r2["zone"] == "premium" and r2["aligned"] is True)
+    check("mtf_signal: SHORT ignores demand boxes", not any("OB demand" in x for x in r2["reasons"]))
+
+    # equilibrium band: price within tol of 240 eq -> 'equilibrium', not aligned for either side
+    r3 = S.mtf_signal(4542.59, "LONG", b, tol)
+    check("mtf_signal: price at eq -> equilibrium zone", r3["zone"] == "equilibrium")
+    check("mtf_signal: equilibrium is not aligned", r3["aligned"] is False)
+
+    # swing confluence: price right on the 240 Weak Low 4311.65 -> +max(1, 3//2)=1 and a swing reason
+    r4 = S.mtf_signal(4311.65, "LONG", b, tol)
+    check("mtf_signal: near-swing adds a swing reason", any("240m swing" in x for x in r4["reasons"]))
+
+    # empty / missing block is safe
+    r5 = S.mtf_signal(4327.0, "LONG", {}, tol)
+    check("mtf_signal: empty block -> score 0, zone/aligned None", r5["score"] == 0 and r5["zone"] is None and r5["aligned"] is None)
+
+
 def test_assert_trendlines():
     present = lambda c, *a: {"studies": [{"name": "Auto Trendlines", "id": "TL1"}, {"name": "Volume", "id": "V"}]}
     absent = lambda c, *a: {"studies": [{"name": "Volume", "id": "V"}]}
@@ -233,7 +278,7 @@ def test_assert_trendlines():
 def main():
     for fn in (test_read_smc, test_read_smc_lifts_label_cap, test_filter_near, test_dedup_levels, test_case_insensitive_and_dedup, test_in_box, test_confluence, test_read_chart_context, test_htf_context, test_grade_confluence, test_read_trendlines_mtf, test_assert_trendlines,
                test_read_chart_context_retries_on_empty, test_read_chart_context_retry_cap,
-               test_value_zones, test_assert_smc):
+               test_value_zones, test_assert_smc, test_mtf_signal):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
