@@ -138,7 +138,8 @@ as the acceptance/rejection proxy. Invalidation/test-counts (Rules 6/7) are eyeb
 | `draw_overlay.py` | Live-chart overlay: prior VAH/VAL/POC (date + Level State) + SP zones + near-price SMC order blocks; loop-refreshed, id-tracked |
 | `confidence.py` | 0–10 confidence score (aggregates grade + confluence + SMC/TL + RSI-div + trend + R:R + Level-State) → optional `confidence_sizing` risk multiplier. Full doc: `docs/confidence.md` |
 | `docs/trendlines.md` | Auto Trendlines as multi-TF (4h/1h/15m) confluence — decoupled from SMC, mandatory (`assert_trendlines`) |
-| `docs/signal-roadmap.md` | 100-signal taxonomy + crosswalk to our 13 strategies; roadmap/menu for future signals (not a build list). AI approval checklist merged into `--review` |
+| `docs/signal-roadmap.md` | 100-signal taxonomy + crosswalk to our 13 strategies; roadmap/menu (not a build list). AI approval checklist + APPROVE/REJECT/WAIT merged into `--review` |
+| `docs/signal-roadmap-detailed.md` | Detailed companion: per-signal execution + Python detection hints, Confluence Score Guide, AI Review JSON schema |
 | `docs/value-area-system.md` | End-to-end map of the whole prior-day value-area subsystem (harvest → store → state → trade → draw) |
 | `harvest_daily.py` | Self-dating, idempotent daily VA harvest of the most-recent closed session. Replay runs ONLY on the **dedicated backtest tab** (`TV_BACKTEST_CHART`, default `eabXWKAd`) — never the live chart — and pins the pair to PEPPERSTONE:XAUUSD + verifies it before reading. Refuses to store a read unless the replay cursor is confirmed on the target date (no silent mis-dating). |
 | `reharvest_week.py` | One-off: force re-harvest a date range (used to backfill SP zones) |

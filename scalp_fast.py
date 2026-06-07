@@ -1207,6 +1207,8 @@ def main():
               "      6) London/NY session (avoid Asian/NY-lunch unless clean breakout acceptance)\n"
               "      7) level is FRESH — not Accepted-through / over-tested (check prevVA Level State)\n"
               "      WAIT if a cleaner entry (retest/sweep-reclaim) is one candle away.")
+        print("   >> AI DECISION: reply APPROVE / REJECT / WAIT + a one-line reason citing the checklist + "
+              "confidence (WAIT = don't force it; let the pending expire if a cleaner entry is forming).")
         print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
         return
     _fire(trade)

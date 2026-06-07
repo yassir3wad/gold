@@ -11,6 +11,11 @@ Axes (max 10 after clamp):
   with_trend   with the 30m trend → +1 · counter-trend → −1 · neutral → 0
   rr           R:R ≥ 2 → +1
   level_valid  entry at a VALID prior-VA level (Rejected/Flipped, not Accepted) → +1
+
+TODO (pending the 5m backtest) — the roadmap's Confluence Score Guide (docs/signal-roadmap-detailed.md) also
+PENALISES bad contexts (−30 mid-value · −25 accepted-through · −20 over-tested · −20 into opposing level · −20
+VWAP chop). Most are already hard filters upstream, but folding them here as score deductions would let
+confidence reflect near-misses that slip through. Hold the reweight until the backtest justifies it.
 """
 
 

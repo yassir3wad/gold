@@ -32,6 +32,22 @@ trigger (half-there via `va_reject` flipped states) · 100 Market Structure Shif
 **Skip for now — data we don't reliably have:** 26 Single Prints (harvest disabled) · 27/28 LVN/HVN ·
 25 Poor High/Low · 36/37 Anchored/Weekly VWAP · anything needing footprint/delta/DOM.
 
+## Companion: detailed execution reference
+[`signal-roadmap-detailed.md`](signal-roadmap-detailed.md) — per-signal setup/trigger/execution/invalidation +
+Python detection hints for all 100, plus the **Confluence Score Guide** and the **AI Review JSON** schema.
+
+**Adopted from it:**
+- **AI approval checklist** — live in `scalp_fast --review` output (every held trade).
+- **APPROVE / REJECT / WAIT** decision vocabulary — the review now asks the AI for one of the three + a
+  one-line reason citing the checklist & confidence (WAIT = let it expire if a cleaner entry is one candle away).
+- **AI Review JSON** (canonical decision schema): `{decision, direction, bias, entry, stop_loss, target_1,
+  target_2, risk_reward, confidence, reason}`.
+
+**TODO (pending 5m backtest) — Confluence Score Guide penalties into `confidence.py`:** today `confidence.py`
+only *adds*; the guide also *subtracts* (−30 mid-value · −25 accepted-through · −20 over-tested · −20 into
+opposing level · −20 VWAP chop). Most are already hard filters, but folding them as score deductions would let
+confidence reflect near-misses that pass the filters. Hold the reweight until the backtest justifies it.
+
 ---
 
 > Original spec below (reference appendix).

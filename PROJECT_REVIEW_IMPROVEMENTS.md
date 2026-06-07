@@ -12,6 +12,16 @@ The biggest strategic finding is cost-adjusted edge. The backtest notes show the
 
 Current live logs for the last 14 days show 17 executed XAUUSD trades, +169 pips net, 41% win rate, 1.57 profit factor, and +9.9 pips expectancy. This is positive, but it is carried by a few large winners. The losing groups in the live sample are still `momentum impulse`, `zone-bounce rejection`, and `liquidity-sweep reversal`, which matches the earlier cost-aware warning that high-frequency setup families can look attractive gross but fail after cost.
 
+## Second-Pass Findings
+
+This second review adds three important findings.
+
+First, the untracked `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. The remaining risk is that the 100-signal table labels many setups as "Excellent" for gold/forex without repo-backed evidence. That can still push an AI reviewer toward approving attractive textbook setups instead of the few setup families that have demonstrated cost-adjusted edge.
+
+Second, `draw_overlay.py` has a practical throttle bug. `_recent()` reads `(chart + ":ts")` from `~/.tv_overlay_ids.json`, but `_save_ids()` only saves the drawn entity IDs and never writes that timestamp. Result: `min_interval` likely never throttles redraws, so the overlay can remove and redraw shapes every scanner loop. This creates avoidable TradingView/CDP load and chart flicker risk.
+
+Third, current all-symbol log analysis over the last 14 days shows 18 executed trades, +154 pips, 39% win rate, 1.50 profit factor, and +8.6 pips/trade. XAUUSD remains positive, while one NAS100 trade is negative. The all-symbol sample still shows the same weak families: `zone-bounce rejection`, `momentum impulse`, and `liquidity-sweep reversal`.
+
 ## Current Strengths
 
 - `scalp_fast.py` is a single canonical live scanner, which keeps strategy drift under control.
@@ -23,6 +33,18 @@ Current live logs for the last 14 days show 17 executed XAUUSD trades, +169 pips
 - The strategy docs preserve negative results, especially the disproven approval model and day-type gate. This is good research discipline.
 
 ## Main Problems
+
+### 0. The New 100-Signal Roadmap Can Reintroduce Overtrading
+
+`docs/signal-roadmap-detailed.md` is useful as a pattern glossary and detailed appendix, but it should not become an execution allowlist. The project has already learned that "more valid-looking setups" is not the path to profitability. A roadmap that marks many categories as excellent can dilute the cost-aware discipline unless those labels are separated from project-validated edge.
+
+Recommended action:
+
+- Keep its current "reference/menu, not a build list" positioning.
+- Add an evidence label to each signal: `validated`, `experimental`, `rejected`, or `not tested`.
+- Do not let the AI approve a setup only because the manual labels it excellent.
+- Keep the live allowlist small: core setups, selective CRT, and validated value-area rejection.
+- Require every new signal family to pass spread-adjusted backtest and out-of-sample live review before it becomes eligible for live alerts.
 
 ### 1. The System Still Produces Too Many Low-Edge Families
 
@@ -205,6 +227,8 @@ Recommended action:
 Current verification result:
 
 - `python3 analyze_logs.py --symbol XAUUSD --days 14` passed.
+- `python3 analyze_logs.py --days 14` passed and showed 18 executed trades, +154 pips, 1.50 PF, +8.6 pips/trade.
+- `python3 test_draw_overlay.py` passed with 13/13 checks, but it only tests pure overlay specs, not draw throttling or state persistence.
 - `python3 -m pytest -q` failed because `pytest` is not installed.
 - `npm test` partially passed static Pine tests but failed live TradingView/CDP tests because TradingView is not connected on port 9222.
 - `python3 -m unittest discover -p 'test*.py'` failed because `test_stale_zone.py` calls `sys.exit()` during import.
@@ -231,6 +255,17 @@ Recommended new fields:
 - `decision_reason_code`
 
 This will prevent future analysis from accidentally optimizing gross edge.
+
+### 5. Fix Overlay Throttling
+
+`draw_overlay.py` intends to throttle redraws through `min_interval`, but `_save_ids()` does not persist the timestamp that `_recent()` checks.
+
+Recommended action:
+
+- Save `d[(chart or "_") + ":ts"] = time.time()` inside `_save_ids()`.
+- Add a pure test that writes a temporary state file and verifies `_recent()` returns true after saving.
+- Consider injecting the state path into the functions so tests do not touch the real `~/.tv_overlay_ids.json`.
+- Log draw failures when `_tv()` returns an empty object, otherwise TradingView/CDP failures are silent.
 
 ## Operational Improvements
 
@@ -270,14 +305,16 @@ This prevents accidentally reviving rejected ideas.
 
 ## Recommended Next Changes
 
-1. Disable or observation-gate `momentum_impulse` for live alerts until it proves cost-adjusted edge out of sample.
-2. Keep `break_retest` disabled.
-3. Add spread-adjusted metrics to `analyze_logs.py`, `score_signals.py`, and backtest reports.
-4. Add structured AI decision fields to logs.
-5. Add setup-family daily caps.
-6. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
-7. Mark `approval_model.py` as a disproven artifact.
-8. Split pure tests from TradingView-dependent integration tests.
+1. Fix `draw_overlay.py` throttling by persisting the timestamp used by `_recent()`.
+2. Add evidence tags to `docs/signal-roadmap-detailed.md` so the 100-signal roadmap cannot be mistaken for a validated live allowlist.
+3. Disable or observation-gate `momentum_impulse` for live alerts until it proves cost-adjusted edge out of sample.
+4. Keep `break_retest` disabled.
+5. Add spread-adjusted metrics to `analyze_logs.py`, `score_signals.py`, and backtest reports.
+6. Add structured AI decision fields to logs.
+7. Add setup-family daily caps.
+8. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
+9. Mark `approval_model.py` as a disproven artifact.
+10. Split pure tests from TradingView-dependent integration tests.
 
 ## Bottom Line
 
