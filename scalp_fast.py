@@ -1179,20 +1179,25 @@ def main():
            f"{ctx}\n\n"
            f"Entry: {entry}\n"
            f"SL: {sl_lvl} ({risk:.0f}p)\n"
-           f"Lot: {lot}  (risk ≈ ${RISK_USD:.0f})\n"
+           f"Lot: {lot}  (risk ≈ ${risk_usd:.0f}{_szt})\n"
            f"TP1: {tp1} (+{tp1_p:.0f}p)\n"
            f"TP2: {tp2} (+{tp2_p:.0f}p)\n\n"
            f"Rule: exit if TP1 not hit in ~10 min.")
     trade = {"side": side, "entry": entry, "sl": sl_lvl, "tp1": tp1, "tp2": tp2, "tp1_p": tp1_p, "tp2_p": tp2_p,
-             "be_trig": be_trig, "lot": lot, "risk_usd": RISK_USD,
+             "be_trig": be_trig, "lot": lot, "risk_usd": risk_usd,
              "grade": grade, "why": why, "htf_note": htf_note, "msg": msg, "rng10": round(rng10),
              "body_p": round(body_pips), "htf": hz[2] if hz else "open", "regime": regime, "rsi": rsi,
-             "chop_er": chop_er, "conf": conf, "room": room_p, "bias": bias}
+             "chop_er": chop_er, "conf": conf, "confidence": conf_score, "conf_lbl": conf_lbl, "room": room_p, "bias": bias}
     if DRY:
         print("   [DRY RUN — no telegram/log/state]"); return
     if REVIEW:   # AI-review gate: hold the trade, don't send. (approve: --approve  ·  reject: --reject)
         try: json.dump({**trade, "t": time.time()}, open(PENDING_FILE, "w"))
         except Exception: pass
+        if conf_score is not None:
+            # explicit steer for the AI judge: confidence aggregates every confluence axis past the A+ ceiling
+            print(f"   >> AI: confidence {conf_score}/10 ({conf_lbl}). ≥7 = strong conviction — lean APPROVE if the "
+                  f"discipline holds (with-trend, real room, clean trigger). ≤3 = weak — only approve with a clear, "
+                  f"specific reason; otherwise reject.")
         print("   ⏸ HELD FOR REVIEW — not sent to Telegram yet.")
         return
     _fire(trade)
