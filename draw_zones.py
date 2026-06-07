@@ -5,6 +5,7 @@ Green = support, red = resistance. Pins to the symbol's window via TV_CHART (so 
 import subprocess, json, os, sys
 TVDIR = os.path.expanduser("~/tradingview-mcp")
 SYM = "XAUUSD"
+TAG = "AUTO-ZONE"
 if "--symbol" in sys.argv:
     try: SYM = sys.argv[sys.argv.index("--symbol")+1].upper()
     except Exception: pass
@@ -21,14 +22,33 @@ def tv(*a):
 
 def lab_of(raw, side):
     inner = raw.split("(")[-1].rstrip(")") if "(" in raw else side
-    return ("🟥 R " if side == "R" else "🟩 S ") + inner.replace(", ", " ")
+    return ("🟥 R " if side == "R" else "🟩 S ") + inner.replace(", ", " ") + f" [{TAG}]"
+
+def clear_zones(chart=None):
+    env = dict(os.environ)
+    if chart:
+        env["TV_CHART"] = chart
+    try:
+        r = subprocess.run(["node", "src/cli/index.js", "draw", "list"], cwd=TVDIR, capture_output=True, text=True, timeout=30, env=env)
+        items = json.loads(r.stdout).get("drawings", []) if r.stdout.strip() else []
+        n = 0
+        for it in items:
+            if TAG in json.dumps(it):
+                eid = it.get("id") or it.get("entity_id")
+                if eid:
+                    subprocess.run(["node", "src/cli/index.js", "draw", "remove", "--id", str(eid)],
+                                   cwd=TVDIR, env=env, timeout=20)
+                    n += 1
+        return n
+    except Exception as e:
+        return {"error": str(e)}
 
 def main():
     z = json.load(open(os.path.join(TVDIR, f"zones_{SYM.lower()}.json")))
     b = tv("ohlcv", "-n", "240").get("bars", [])
     if not b: print("no bars"); return
     t0 = b[0]["time"]; t1 = b[-1]["time"] + 3600*2; tl = b[int(len(b)*0.15)]["time"]
-    tv("draw", "clear")
+    clear_zones()
     def box(lo, hi, lab, col):
         tv("draw", "shape", "--type", "rectangle", "--price", str(hi), "--time", str(t0),
            "--price2", str(lo), "--time2", str(t1),
