@@ -60,23 +60,33 @@ def regen_zones(chart):
     draw_zones(chart)
 
 def draw_zones(chart):
-    """Draw the current zone file as labeled horizontal lines (clears prior drawings on this backtest chart first)."""
+    """Draw the isolated zone file's CLASSIC zones (sd_zones + sd_sr) as BOXES on the backtest chart — the
+    same zones the engine grades against (drawn==traded), date-faithful, refreshed each regen for review.
+    Clears first. (Boxes need a time anchor; the old horizontal_line draws had none and silently failed.)"""
     try:
         z = json.load(open(ZONEFILE))
     except Exception:
         return
+    bars = tv(chart, "ohlcv", "-n", "2").get("bars", [])
+    t1 = int(bars[-1]["time"]) if bars else None
+    if t1 is None:
+        return
     tv(chart, "draw", "clear")                                  # backtest chart is ours — safe to clear+redraw
-    lines = []
-    for entry in z.get("htf_r", []) + z.get("htf_s", []):       # HTF S/R zones -> mid-line
-        if len(entry) >= 2:
-            lo, hi = entry[0], entry[1]; lab = entry[2] if len(entry) > 2 else "zone"
-            lines.append(((lo + hi) / 2, lab))
-    for key, lab in [("pdh", "PDH"), ("pdl", "PDL"), ("asia_h", "Asia H"), ("asia_l", "Asia L")]:
-        v = z.get(key)
-        if v:
-            lines.append((v, lab))
-    for price, lab in lines:
-        tv(chart, "draw", "shape", "--type", "horizontal_line", "--price", f"{price}", "--text", f"{lab} [BT-ZONE]")
+    G  = json.dumps({"backgroundColor": "rgba(0,200,80,0.10)", "color": "rgba(0,210,90,0.6)"})
+    GK = json.dumps({"backgroundColor": "rgba(0,210,90,0.28)", "color": "rgba(0,230,100,0.95)"})
+    R  = json.dumps({"backgroundColor": "rgba(230,60,60,0.10)", "color": "rgba(230,60,60,0.6)"})
+    RK = json.dumps({"backgroundColor": "rgba(240,60,60,0.28)", "color": "rgba(255,70,70,0.95)"})
+    right = str(t1 + 50 * 4 * 3600)
+    def box(lo, hi, t0, text, ov):
+        tv(chart, "draw", "shape", "--type", "rectangle", "--price", f"{lo}", "--time", str(int(t0)),
+           "--price2", f"{hi}", "--time2", right, "--overrides", ov, "--text", text)
+    for zz in z.get("sd_zones", []):
+        buy = zz["role"] in ("buy zone", "support"); kl = zz.get("kl")
+        box(zz["lo"], zz["hi"], zz.get("time") or t1, f"{zz['tf']} {zz['role']}{' KL' if kl else ''} [BT]",
+            (GK if kl else G) if buy else (RK if kl else R))
+    for s in z.get("sd_sr", []):
+        box(s["lo"], s["hi"], s.get("time") or t1, f"{s['role'].capitalize()} {s['tf']} [BT]",
+            G if s["role"] == "support" else R)
 
 def cursor_unix(chart):
     return tv(chart, "replay", "status").get("current_date")
