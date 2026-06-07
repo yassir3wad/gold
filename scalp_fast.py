@@ -74,7 +74,7 @@ WATCH_CD_MIN = 12                  # heads-up cooldown: don't re-ping the same z
 WATCH_NEW_ZONE_P = 15              # ...unless price moved >this many pips to a genuinely new zone
 CHASE_LOOKBACK = 6                 # bars used as the "base" for the anti-chase extension check
 MAX_CHASE_P = 60                   # skip a continuation entry if price already ran >this many pips off the base
-DYN_TOL = 1.5                      # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) = ±15 pips
+DYN_TOL = 15                       # "at level" halo for dynamic POINT levels (VWAP/EMA/round/PDH/Asian) in PIPS — ×PIP×VS, so ±15 pips on every pair (gold $1.5, EURUSD 0.0015)
 OVERLAY_OB_BAND_P = 150            # live overlay: only draw SMC order blocks within this many pips of price
 OVERLAY_MIN_INTERVAL = 300         # live overlay: redraw at most every N seconds (avoid per-tick chart flicker)
 CONF_SIZE_LO, CONF_SIZE_HI = 0.75, 1.5   # confidence-sizing: risk multiplier at confidence 0 / 10 (only if confidence_sizing on)
@@ -87,7 +87,7 @@ RECLAIM_MIN_P = 12                 # zone-reclaim: min net 3-bar move (pips) to 
 BASE_TF = int(os.environ.get("TV_BASE_TF", "5"))   # execution timeframe in minutes (5m default everywhere; backtests set TV_BASE_TF explicitly)
 ER_STRIDE = max(1, 15 // BASE_TF)  # bars per 15m step (15 on 1m, 3 on 5m) so the ER stays a 15m-sampled read
 SMC_TTL = 3600        # SMC/trendline HTF context refreshes slowly (4h); cached this long (live). Backtest clears the cache per replay step-refresh, so it stays date-faithful.
-SMC_TOL = 8           # pips: proximity for SMC level/trendline confluence
+SMC_TOL = 80          # SMC proximity in PIPS (gold $8) — ×PIP makes it pair-correct (EURUSD 0.008)
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
 RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
                                    # is structurally un-tradeable (no room / negative R:R) and is auto-skipped
@@ -182,7 +182,7 @@ def _calc_vp(bars, bins=60):
         if right >= left and z < bins-1: z += 1; acc += vol[z]
         elif a > 0: a -= 1; acc += vol[a]
         else: break
-    at = lambda i: round(lo + (i+0.5)*w, 1)
+    at = lambda i: round(lo + (i+0.5)*w, PXD)   # PXD = per-symbol decimals (gold 2, EURUSD 5) — round(…,1) collapsed FX prices to 1.2
     return (at(poc), at(z), at(a))   # vpoc, vah (value-area high), val (value-area low)
 
 def _tpo_levels():
@@ -544,7 +544,7 @@ def set_active_trade(side, entry, sl, tp1, tp2, sid, be_trig=BE_TRIGGER_P):
         if old.get("active") and old.get("id") and old.get("id") != sid:
             if old.get("tp1_hit"):   # already banked +50 — keep the win, don't downgrade to 'superseded'
                 ot1 = old["tp1"]; tp = round((old["entry"]-ot1)/PIP if old["side"]=="SHORT" else (ot1-old["entry"])/PIP)
-                log_signal({"id": old["id"], "result": "TP1", "exit": round(ot1, 1), "pips": tp})
+                log_signal({"id": old["id"], "result": "TP1", "exit": round(ot1, PXD), "pips": tp})
             else:
                 oe = old["entry"]; pips = round((oe-entry)/PIP if old["side"] == "SHORT" else (entry-oe)/PIP)
                 log_signal({"id": old["id"], "result": "superseded", "exit": round(entry, PXD), "pips": pips})
@@ -594,11 +594,11 @@ def check_active_trade(price):
         elif res == "TP1":         extra = "  → take partial, SL to breakeven."
         else:                      extra = "  → trade closed."
         _tg_text(f"{label} — {SYMBOL} {side} hit {lvl} (entry {e}, now {price}).{extra}")
-        if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, 1), "pips": PP(lvl)})
+        if sid: log_signal({"id": sid, "result": res, "exit": round(lvl, PXD), "pips": PP(lvl)})
     elif time.time() - t.get("t0", time.time()) > 720:   # 12-min timeout
         t["active"] = False
         res, exit_px = ("TP1", tp1) if tp1_hit else ("timeout", price)   # tp1 already banked -> keep the win
-        if sid: log_signal({"id": sid, "result": res, "exit": round(exit_px, 1), "pips": PP(exit_px)})
+        if sid: log_signal({"id": sid, "result": res, "exit": round(exit_px, PXD), "pips": PP(exit_px)})
     try: json.dump(t, open(TRADE_STATE, "w"))
     except Exception: pass
 
@@ -702,7 +702,7 @@ def smc_context():
         pass
     try:
         chart = os.environ.get("TV_CHART", "")
-        ctx = smcmod.read_chart_context(chart, dedup_tol=SMC_TOL)
+        ctx = smcmod.read_chart_context(chart, dedup_tol=SMC_TOL * PIP)
         # Auto Trendlines as MULTI-TF confluence (4h/1h/15m) — the indicator recomputes per TF, so this
         # switches TF, reads, and restores BASE_TF. Cached (SMC_TTL), so the TF sweep only runs ~hourly.
         ctx["trendlines"] = smcmod.read_trendlines_mtf(chart, base_tf=str(BASE_TF))
@@ -768,7 +768,7 @@ def main():
     room_min = MIN_ROOM_P * VS            # min clean room to next structure (R:R floor)
     tp_buf   = TP_BUFFER_P * VS           # adaptive-TP buffer short of the wall
     be_trig  = round(BE_TRIGGER_P * VS)   # pre-TP1 breakeven trigger (stored per-trade for the tracker)
-    dyn_tolp = DYN_TOL * VS               # dynamic-level "at level" halo (price units)
+    dyn_tolp = DYN_TOL * PIP * VS         # dynamic-level "at level" halo (price units, pip-normalised)
     sl_lo_p, sl_hi_p = 30*VS, 35*VS       # SL cap band (pips)
     tp1_cap, tp2_cap = 50*VS, 100*VS      # TP target caps (pips)
     vol_min  = VOL_MIN_RANGE10 * VS       # volatility gate (10-bar range floor)
@@ -1229,16 +1229,16 @@ def main():
             if not sctx.get("present"):
                 print(">> WARN: LuxAlgo SMC indicator not on chart — SMC confluence missing.")
             else:
-                c = smcmod.confluence(entry, side, sctx.get("smc", {}), SMC_TOL * VS)   # pure SMC (no trendlines)
+                c = smcmod.confluence(entry, side, sctx.get("smc", {}), SMC_TOL * PIP * VS)   # pure SMC (no trendlines)
                 cf_score += c["score"]; cf_reasons += c["reasons"]
         if FL.get("auto_trendlines", True):                # Auto Trendlines — independent of SMC
             tls = sctx.get("trendlines", [])
-            if tls and smcmod.near_level(entry, tls, SMC_TOL * VS):
+            if tls and smcmod.near_level(entry, tls, SMC_TOL * PIP * VS):
                 cf_score += 1; cf_reasons.append("Auto-Trendline")
         if FL.get("smc_mtf", True):                        # STORED multi-TF SMC snapshot (zones file, hourly cron) — stable
             _smcblk = stored_smc()
             smc_age = round((time.time() - _smcblk["ts"]) / 3600, 2) if _smcblk.get("ts") else None
-            sig = smcmod.mtf_signal(entry, side, _smcblk, SMC_TOL * VS)
+            sig = smcmod.mtf_signal(entry, side, _smcblk, SMC_TOL * PIP * VS)
             cf_score += sig["score"]; cf_reasons += sig["reasons"]
             smc_zone, smc_aligned = sig["zone"], sig["aligned"]
     # CLASSIC key-level zone — the TOP-probability tier (BOS + impulse + never wicked through). A KL S/D zone
@@ -1247,7 +1247,7 @@ def main():
     if FL.get("classic_zones", True):
         _want = ("buy zone", "support") if side == "LONG" else ("sell zone", "resistance")
         _klz = next((zz for zz in CLASSIC.get("zones", []) if zz.get("kl") and zz.get("role") in _want
-                     and zz["lo"] - (SMC_TOL * VS) <= entry <= zz["hi"] + (SMC_TOL * VS)), None)
+                     and zz["lo"] - (SMC_TOL * PIP * VS) <= entry <= zz["hi"] + (SMC_TOL * PIP * VS)), None)
         if _klz:
             cf_score += 2; cf_reasons.append(f"KL {_klz['tf']} {_klz['role']}")
             htf_note += f" | ⭐KL {_klz['tf']} {_klz['role']}"
