@@ -160,10 +160,23 @@ def test_build_classic_zones():
     check("classic: 1h zone covered by 4h is dropped", out2["zones"] and all(z["tf"] == "4H" for z in out2["zones"]))
 
 
+def test_build_classic_position_aware():
+    # A zone's role follows POSITION, not candle color: above price = sell-side, below price = buy-side.
+    bars = [C(100,105,99,104,10), C(104,112,103,108,10), C(108,109,102,103,10),
+            C(103,104,96,97,10),  C(97,101,94,100,100),  C(100,107,99,106,10), C(106,116,105,115,10)]
+    out = Z.build_classic_zones([("4H", bars)], 90.0)   # price BELOW the demand zone → it's overhead
+    above = [z for z in out["zones"] if z["lo"] > 90]
+    check("position: every zone above price is sell-side", above and all(z["role"] in ("sell zone", "resistance") for z in above))
+    check("position: NOTHING above price is labeled support/buy zone", not any(z["role"] in ("support", "buy zone") for z in above))
+    out2 = Z.build_classic_zones([("4H", bars)], 200.0)   # price ABOVE → zone is below
+    below = [z for z in out2["zones"] if z["hi"] < 200]
+    check("position: every zone below price is buy-side", below and all(z["role"] in ("buy zone", "support") for z in below))
+
+
 def main():
     for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
                test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip,
-               test_build_classic_zones):
+               test_build_classic_zones, test_build_classic_position_aware):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

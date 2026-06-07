@@ -382,28 +382,39 @@ def build_classic_zones(tf_bars, cur_price):
         mid = zmid(z)
         if any(abs(mid - q) < 15 for q in seen):
             continue
+        # ROLE BY POSITION, not by candle color: a zone BELOW price is buy-side (support / buy zone), a zone
+        # ABOVE price is sell-side (resistance / sell zone). So a green-origin support that price has fallen
+        # below is correctly overhead (former support → now resistance, flipped) — NOT immediate support.
         buy = z["hi"] < cur_price if (z["hi"] < cur_price or z["lo"] > cur_price) else (z["kind"] == "demand")
-        role = ("support" if z["green"] else "resistance") if z.get("strong_lvl") else ("buy zone" if buy else "sell zone")
-        if (buy and nbuy >= 5) or (not buy and nsell >= 5):
+        if z.get("strong_lvl"):
+            role = "support" if buy else "resistance"
+            flipped = (buy and not z["green"]) or (not buy and z["green"])   # origin polarity disagrees with position
+        else:
+            role = "buy zone" if buy else "sell zone"
+            flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
+        if (buy and nbuy >= 3) or (not buy and nsell >= 3):   # cap 3/side — nearest active + next + deeper (a clean read, not a wall of boxes)
             continue
-        flipped = (buy and z["kind"] == "supply") or (not buy and z["kind"] == "demand")
         kl = bool(z["key_level"] and not flipped and not z.get("strong_lvl"))
         out_zones.append({"tf": z["tf"], "role": role, "lo": round(z["lo"], 2), "hi": round(z["hi"], 2),
                           "mid": round(mid, 2), "kl": kl, "flip": bool(flipped), "score": round(z.get("score", 0.0), 3),
                           "time": z.get("otime"), "t1": z.get("t1")})
         seen.append(mid); nbuy += buy; nsell += (not buy)
     out_sr = []
+    zone_bands = [(z["lo"], z["hi"]) for z in out_zones]
+    def _covered_by_zone(lo, hi):   # a buy/sell or S/R ZONE already covers this area → the S/R level is redundant
+        return any(not (hi < zlo - 5 or lo > zhi + 5) for zlo, zhi in zone_bands)
     for role, below in (("support", True), ("resistance", False)):
+        # position filter: support only BELOW price, resistance only ABOVE — a level on the wrong side is stale.
         cand = sorted([s for s in sr if s["role"] == role and ((s["price"] < cur_price) == below)],
                       key=lambda s: abs(s["price"] - cur_price))
         sseen = []
         for s in cand:
             p = s["price"]
-            if any(abs(p - q) < 15 for q in sseen):
+            if any(abs(p - q) < 15 for q in sseen) or _covered_by_zone(s["lo"], s["hi"]):
                 continue
             sseen.append(p)
             out_sr.append({"role": role, "price": round(p, 2), "lo": s["lo"], "hi": s["hi"], "tf": s["tf"],
                            "flip": bool(s["flip"]), "time": s.get("time"), "t1": s.get("t1")})
-            if len(sseen) >= 4:
+            if len(sseen) >= 3:   # nearest 3/side — clean read, prioritised by proximity
                 break
     return {"zones": out_zones, "sr": out_sr}
