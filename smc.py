@@ -88,7 +88,7 @@ def value_zones(swings):
     ps = [s.get("price") for s in (swings or []) if s.get("price") is not None]
     if len(ps) < 2:
         return None
-    hi, lo = max(ps), min(ps); eq = round((hi + lo) / 2, 2)
+    hi, lo = max(ps), min(ps); eq = round((hi + lo) / 2, 5)
     return {"hi": hi, "lo": lo, "eq": eq, "premium": [eq, hi], "discount": [lo, eq]}
 
 
@@ -109,15 +109,15 @@ def read_smc_mtf(chart, price, tfs=("240", "60", "15"), base_tf="5", band=200.0,
         if live and render_wait:
             time.sleep(render_wait)
         m = read_smc(chart, tv=tv)
-        near = lambda xs: [{"text": x["text"], "price": round(x["price"], 2)} for x in xs
+        near = lambda xs: [{"text": x["text"], "price": round(x["price"], 5)} for x in xs
                            if x.get("price") is not None and abs(x["price"] - price) <= band]
-        boxes = [{"high": round(b["high"], 2), "low": round(b["low"], 2),
+        boxes = [{"high": round(b["high"], 5), "low": round(b["low"], 5),
                   "side": "demand" if b["high"] <= price else "supply" if b["low"] >= price else "straddle"}
                  for b in m["boxes"]
                  if b.get("high") is not None and b["high"] >= price - band and b["low"] <= price + band]
         vz = value_zones(m["swings"])
         out[str(tf)] = {"boxes": boxes, "structure": near(m["structure"]), "liquidity": near(m["liquidity"]),
-                        "swings": [{"text": s["text"], "price": round(s["price"], 2)} for s in m["swings"]],
+                        "swings": [{"text": s["text"], "price": round(s["price"], 5)} for s in m["swings"]],
                         "premium": vz["premium"] if vz else None, "discount": vz["discount"] if vz else None,
                         "equilibrium": vz["eq"] if vz else None}
     _tv(chart, "indicator", "toggle", sid, "--hidden")
@@ -245,7 +245,7 @@ def read_trendlines_mtf(chart, tfs=("240", "60", "15"), base_tf="5", tv=None, re
     _tv(chart, "timeframe", str(base_tf))   # restore execution TF
     # dedup the float levels (near-duplicates across TFs collapse to one)
     out = []
-    for p in sorted({round(x, 2) for x in levels if x is not None}):
+    for p in sorted({round(x, 5) for x in levels if x is not None}):
         if not out or p - out[-1] > dedup_tol:
             out.append(p)
     return out

@@ -296,7 +296,7 @@ def sr_levels(bars, lookback=20, level=0.5):
             if origin == "resistance" and b["close"] > px:
                 flipped = True; break
         role = ("resistance" if origin == "support" else "support") if flipped else origin
-        out.append({"price": round(px, 2), "lo": round(lo, 2), "hi": round(hi, 2), "origin": origin,
+        out.append({"price": round(px, 5), "lo": round(lo, 5), "hi": round(hi, 5), "origin": origin,
                     "role": role, "flipped": flipped, "i": i, "time": c.get("time")})
     return out
 
@@ -403,8 +403,8 @@ def build_classic_zones(tf_bars, cur_price, pip=0.10):
         if (buy and nbuy >= 3) or (not buy and nsell >= 3):   # cap 3/side — nearest active + next + deeper (a clean read, not a wall of boxes)
             continue
         kl = bool(z["key_level"] and not flipped and not z.get("strong_lvl"))
-        out_zones.append({"tf": z["tf"], "role": role, "lo": round(z["lo"], 2), "hi": round(z["hi"], 2),
-                          "mid": round(mid, 2), "kl": kl, "flip": bool(flipped), "score": round(z.get("score", 0.0), 3),
+        out_zones.append({"tf": z["tf"], "role": role, "lo": round(z["lo"], 5), "hi": round(z["hi"], 5),
+                          "mid": round(mid, 5), "kl": kl, "flip": bool(flipped), "score": round(z.get("score", 0.0), 3),
                           "time": z.get("otime"), "t1": z.get("t1")})
         seen.append(mid); nbuy += buy; nsell += (not buy)
     out_sr = []
@@ -421,7 +421,7 @@ def build_classic_zones(tf_bars, cur_price, pip=0.10):
             if any(abs(p - q) < DEDUP for q in sseen) or _covered_by_zone(s["lo"], s["hi"]):
                 continue
             sseen.append(p)
-            out_sr.append({"role": role, "price": round(p, 2), "lo": s["lo"], "hi": s["hi"], "tf": s["tf"],
+            out_sr.append({"role": role, "price": round(p, 5), "lo": s["lo"], "hi": s["hi"], "tf": s["tf"],
                            "flip": bool(s["flip"]), "time": s.get("time"), "t1": s.get("t1")})
             if len(sseen) >= 3:   # nearest 3/side — clean read, prioritised by proximity
                 break

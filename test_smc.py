@@ -221,7 +221,7 @@ def test_read_chart_context_retry_cap():
 def test_value_zones():
     vz = S.value_zones([{"text": "Strong High", "price": 4773.5}, {"text": "Weak Low", "price": 4311.65}])
     check("value_zones: hi/lo", vz["hi"] == 4773.5 and vz["lo"] == 4311.65)
-    check("value_zones: equilibrium = midpoint", vz["eq"] == round((4773.5 + 4311.65) / 2, 2))
+    check("value_zones: equilibrium = midpoint", vz["eq"] == round((4773.5 + 4311.65) / 2, 5))
     check("value_zones: discount = lower half [lo,eq]", vz["discount"] == [4311.65, vz["eq"]])
     check("value_zones: premium = upper half [eq,hi]", vz["premium"] == [vz["eq"], 4773.5])
     check("value_zones: <2 swings -> None", S.value_zones([{"text": "Strong High", "price": 4500}]) is None)
