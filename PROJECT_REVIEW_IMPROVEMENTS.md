@@ -46,7 +46,7 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Evidence-tag every roadmap signal | Partial | `docs/signal-roadmap-detailed.md` has an evidence-status section and defaults all unlisted signals to `not-tested`; still lacks an explicit per-row status column in the big table. |
 | Disable or observation-gate `momentum_impulse` | Done | `OBSERVE_FAMILIES = {"momentum_impulse"}` logs it as observation-only and blocks it from normal firing/review unless `observation_gate=false`. |
 | Add setup-family daily caps | Done | `FAMILY_CAPS` and `family_fired_today()` cap fired trades/reviews by strategy family unless `family_caps=false`. |
-| Tighten `zone_bounce` and `liquidity_sweep` | Partial | Existing gates/hard floor help, but both remain enabled and live logs remain negative after spread. |
+| Tighten `zone_bounce` and `liquidity_sweep` | Done | Both now require stacked local confluence or valid prior-VA context before surfacing. Continue monitoring live expectancy after spread. |
 | Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
 | Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
 | Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
@@ -347,11 +347,10 @@ This prevents accidentally reviving rejected ideas.
 
 1. Add an explicit evidence/status column to the big table in `docs/signal-roadmap-detailed.md`.
 2. Fix the stale confidence TODO in `docs/signal-roadmap-detailed.md`; the deductions are already implemented in `confidence.py`.
-3. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
-4. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
-5. Split pure tests from TradingView-dependent integration tests in `package.json`.
-6. Convert script-style Python tests to import-safe test functions.
-7. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
+3. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
+4. Split pure tests from TradingView-dependent integration tests in `package.json`.
+5. Convert script-style Python tests to import-safe test functions.
+6. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
 
 ## Bottom Line
 

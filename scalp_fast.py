@@ -752,6 +752,26 @@ def main():
     S_refs = [v for lo,hi,_ in HTF_S for v in (lo,hi)] + [p for p,_,lab in ptS if is_wall(lab)]
     nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
     nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
+
+    def valid_prior_va_near(level):
+        """True when `level` sits on a prior VA level that is still tradable.
+        Accepted-through levels are intentionally not valid context for reversals."""
+        if vastate is None or not prior_vas or level is None:
+            return False
+        p = prior_vas[0]
+        for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
+            if lvl is None or abs(lvl - level) > dyn_tolp:
+                continue
+            st = vastate.level_state(lvl, b, role, poc=p.get("poc"), bar_minutes=BASE_TF)
+            return st["state"] in ("Rejected", "Flipped") and st["evidence"].get("confidence") != "weak"
+        return False
+
+    def reversal_context_ok(side, probe_level):
+        """Quality floor for noisy reversal families: require either stacked local confluence
+        or a valid prior-value-area level. This keeps generic wicks/sweeps out of live review."""
+        conf = conf_S if side == "LONG" else conf_R
+        return conf >= 2 or valid_prior_va_near(probe_level)
+
     print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF={BASE_TF}m  VS={VS:.2f}  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
     print(f"RSI={rsi}  regime={regime}({VP_TF}m EMA stack)  15m-ER={chop_er}{' CHOP' if is_chop else ''}  VPOC/VAH/VAL={vpoc}/{vah}/{val}  confluence R{conf_R}/S{conf_S}  nextR={nextR} nextS={nextS}")
@@ -856,9 +876,11 @@ def main():
     if look:
         sw_hi = max(x['high'] for x in look); sw_lo = min(x['low'] for x in look)
         rcl = rcl_p * PIP   # must close >=rcl_p back INSIDE the swept level (genuine rejection, not a breakout run)
-        if strong and not bull and last['high'] > sw_hi and last['close'] < sw_hi - rcl and near_htf(sw_hi, HTF_R):
+        if (strong and not bull and last['high'] > sw_hi and last['close'] < sw_hi - rcl
+                and near_htf(sw_hi, HTF_R) and reversal_context_ok("SHORT", sw_hi)):
             setups.append(("SHORT", "liquidity-sweep reversal", last['close'], last['high']))
-        if strong and bull and last['low'] < sw_lo and last['close'] > sw_lo + rcl and near_htf(sw_lo, HTF_S):
+        if (strong and bull and last['low'] < sw_lo and last['close'] > sw_lo + rcl
+                and near_htf(sw_lo, HTF_S) and reversal_context_ok("LONG", sw_lo)):
             setups.append(("LONG", "liquidity-sweep reversal", last['close'], last['low']))
     # 6) Break-and-retest (broken swing level retested from the other side, rejected)
     if len(sh) >= 1:
@@ -923,11 +945,11 @@ def main():
         # LONG: wick dipped anywhere INTO the support band (floor OR upper edge of a wide zone) and closed back
         # above the floor with a real (>=ZONE_WICK_P) rejection wick. Widened 06-04 from floor-pierce-only so it
         # also catches upper-edge reclaims of wide zones (the ~4500 bounce inside 4486-4503 it used to miss).
-        if (at_S and at_S[1] > at_S[0]                                  # a structural zone (not a clingy EMA/point)
+        if (at_S and at_S[1] > at_S[0] and reversal_context_ok("LONG", last['low'])  # structural zone + confluence/valid VA
                 and last['low'] <= at_S[1] and last['close'] >= at_S[0]  # wick into the band, close didn't lose the floor
                 and (last['close'] - last['low']) >= wick_p*PIP and last['close'] > last['open']):
             setups.append(("LONG", "zone-bounce rejection", last['close'], round(last['low'] - buf_p*PIP, PXD)))
-        if (at_R and at_R[1] > at_R[0]
+        if (at_R and at_R[1] > at_R[0] and reversal_context_ok("SHORT", last['high'])
                 and last['high'] >= at_R[0] and last['close'] <= at_R[1]  # wick into the band, close didn't break the top
                 and (last['high'] - last['close']) >= wick_p*PIP and last['close'] < last['open']):
             setups.append(("SHORT", "zone-bounce rejection", last['close'], round(last['high'] + buf_p*PIP, PXD)))
