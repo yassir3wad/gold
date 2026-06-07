@@ -86,7 +86,10 @@ def main():
         cur_price = b1[-1]["close"]; anchor_t = b1[-1]["time"]
     elif b4:
         cur_price = b4[-1]["close"]; anchor_t = b4[-1]["time"]
-    classic = Z.build_classic_zones([("4H", b4), ("1H", b1)], cur_price) if cur_price else {"zones": [], "sr": []}
+    _base = a.symbol.split(":")[-1]   # "PEPPERSTONE:XAUUSD" → "XAUUSD" (instruments.json key)
+    try: _pip = json.load(open(os.path.join(TVDIR, "instruments.json"))).get(_base, {}).get("pip", 0.10)
+    except Exception: _pip = 0.10
+    classic = Z.build_classic_zones([("4H", b4), ("1H", b1)], cur_price, pip=_pip) if cur_price else {"zones": [], "sr": []}
 
     if "zones" in LAYERS:
         for z in classic["zones"]:

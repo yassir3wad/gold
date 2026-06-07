@@ -345,16 +345,19 @@ def prior_day_vas(bars, ref_ts, n=3, cache=None, bin_size=1.0):
     return out
 
 
-def build_classic_zones(tf_bars, cur_price):
+def build_classic_zones(tf_bars, cur_price, pip=0.10):
     """SHARED classic-zone builder — the single source of truth so DRAWN (draw_review) == TRADED
     (refresh_zones → engine). `tf_bars` = [(tf_label, bars), ...] e.g. [("4H", bars4h), ("1H", bars1h)],
-    highest TF first. Returns {"zones": [...], "sr": [...]} (pure; no chart I/O):
-      zones[] = buy/sell + strong-level boxes, nearest-first, KL-prioritised, deduped (<15) and capped 5/side:
+    highest TF first. `pip` = the instrument's pip size (gold 0.10, EURUSD 0.0001, …) — all price tolerances
+    are PIP-NORMALISED off it so the builder works on any pair, not just gold. Returns {"zones": [...],
+    "sr": [...]} (pure; no chart I/O):
+      zones[] = buy/sell + strong-level boxes, nearest-first, KL-prioritised, deduped (150 pips) capped 3/side:
                 {tf, role(buy zone|sell zone|support|resistance), lo, hi, mid, kl, flip, score}
-      sr[]    = ACTIVE support/resistance LEVELS (support below price / resistance above), nearest 4/side:
-                {role, price, tf, flip}
+      sr[]    = ACTIVE support/resistance LEVELS (support below price / resistance above), nearest 3/side.
     Mirrors draw_review.py's classification exactly (origin-candle S/D zones; a strong level candle →
     support/resistance ZONE not a generic buy/sell zone; KL = key_level and not flipped and not strong)."""
+    DEDUP = 150 * pip   # zones/levels within ~150 pips are the same wall (was hardcoded 15 = 150 gold-pips)
+    COVER = 50 * pip    # an S/R level within ~50 pips of a zone band is redundant
     zones = []; sr = []
     for tf, b in tf_bars:
         if not b:
@@ -380,7 +383,7 @@ def build_classic_zones(tf_bars, cur_price):
     out_zones = []; seen = []; nbuy = nsell = 0
     for z in zones:
         mid = zmid(z)
-        if any(abs(mid - q) < 15 for q in seen):
+        if any(abs(mid - q) < DEDUP for q in seen):
             continue
         # A buy/sell ZONE is NOT every swing low/high — it must be a QUALIFIED demand/supply origin: a clear
         # impulse move away (is_impulse_kl) AND never wicked through. (z["valid"] already drops consumed zones.)
@@ -407,7 +410,7 @@ def build_classic_zones(tf_bars, cur_price):
     out_sr = []
     zone_bands = [(z["lo"], z["hi"]) for z in out_zones]
     def _covered_by_zone(lo, hi):   # a buy/sell or S/R ZONE already covers this area → the S/R level is redundant
-        return any(not (hi < zlo - 5 or lo > zhi + 5) for zlo, zhi in zone_bands)
+        return any(not (hi < zlo - COVER or lo > zhi + COVER) for zlo, zhi in zone_bands)
     for role, below in (("support", True), ("resistance", False)):
         # position filter: support only BELOW price, resistance only ABOVE — a level on the wrong side is stale.
         cand = sorted([s for s in sr if s["role"] == role and ((s["price"] < cur_price) == below)],
@@ -415,7 +418,7 @@ def build_classic_zones(tf_bars, cur_price):
         sseen = []
         for s in cand:
             p = s["price"]
-            if any(abs(p - q) < 15 for q in sseen) or _covered_by_zone(s["lo"], s["hi"]):
+            if any(abs(p - q) < DEDUP for q in sseen) or _covered_by_zone(s["lo"], s["hi"]):
                 continue
             sseen.append(p)
             out_sr.append({"role": role, "price": round(p, 2), "lo": s["lo"], "hi": s["hi"], "tf": s["tf"],

@@ -136,14 +136,16 @@ def main():
     smc_block = {}; smc_failed = False
     if smcmod and (not IS_BACKTEST or WITH_SMC):
         try:
-            tf_snap = smcmod.read_smc_mtf(os.environ.get("TV_CHART", ""), price, base_tf="1")
+            tf_snap = smcmod.read_smc_mtf(os.environ.get("TV_CHART", ""), price, base_tf="1", band=2000 * PIP)   # near-price window pip-normalised (gold ±200, EURUSD ±0.02, …)
+            if not tf_snap:
+                raise RuntimeError("SMC MTF snapshot is empty")
             smc_block = {'ts': time.time(), 'price': price, 'tf': tf_snap}
             tfsum = {k: f"box{len(v['boxes'])}/sw{len(v['swings'])}" for k, v in tf_snap.items()}
             print(f"  SMC: {tfsum}")
         except smcmod.SMCMissing as e:
             print(f"!! SMC MISSING — {e}", file=sys.stderr); smc_failed = True
         except Exception as e:
-            print(f"!! SMC read failed: {e}", file=sys.stderr)
+            print(f"!! SMC read failed: {e}", file=sys.stderr); smc_failed = True
         tv('timeframe', '1')   # restore (read_smc_mtf restores base_tf, but be explicit for the session/zone convention)
     # --- CLASSIC zones (zones_sd) — origin-candle supply/demand boxes + S/R levels, the SAME computation
     # draw_review draws, so the engine GRADES AGAINST exactly what's drawn. 4h + 1h, bar counts match draw_review. ---

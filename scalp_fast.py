@@ -36,6 +36,7 @@ try:
     import confidence as confmod   # 0-10 confidence score (aggregates all confluence) + opt-in size scaling
 except Exception: confmod = None
 PIP = 0.10
+ZHALO_P = 40   # zone-proximity halo in PIPS (gold 40p = $4). near_htf/count_distinct_at use ZHALO_P*PIP so the halo is pip-normalised per instrument (was hardcoded 4 = 40 gold-pips).
 PXD = 2              # price-rounding decimals (per-symbol, derived from PIP in init_symbol): gold 2, EURUSD 5, USDJPY 3, indices 1
 MIN_TP = 50      # pips
 TIGHT_RANGE_P = 35     # 15-bar range below this (×VS) = a "tight" consolidation (range-breakout trigger)
@@ -55,7 +56,8 @@ HTF_S = [(4446,4449,"S 4447 (15m EMA50 + 1H/4H lows)"), (4433,4439,"S 4433-39 (1
          (4423,4427,"S 4424-26 (PDL + today-low multi-touch)"), (4398,4406,"S 4400 (4H swing low)"),
          (4375,4385,"BUY ZONE Daily EMA200 (~4380)"), (4360,4368,"S 4366 (4H/Daily low)")]
 CLASSIC = {"zones": [], "sr": []}   # classic supply/demand boxes + S/R levels (zones_sd), loaded by load_zones() — the same zones draw_review draws (drawn==traded)
-def near_htf(price, levels, tol=4):
+def near_htf(price, levels, tol=None):
+    if tol is None: tol = ZHALO_P * PIP   # pip-normalised zone halo (gold $4, EURUSD 0.004, …)
     for lo, hi, lab in levels:
         if lo - tol <= price <= hi + tol: return (lo, hi, lab)
     return None
@@ -292,11 +294,13 @@ def merge_classic_zones(htf_r, htf_s, classic):
     return R, S
 
 
-def count_distinct_at(levels, price, edge=4):
+def count_distinct_at(levels, price, edge=None):
     """Count DISTINCT price clusters in `levels` [(lo,hi,lab)…] that bracket `price` (within `edge`), merging
     overlapping/adjacent brackets so the SAME wall covered by several sources (e.g. an old HTF cluster + a
     coinciding classic zone) counts ONCE, not N times. This is where drawn-zone overlaps are de-duplicated
-    for the confluence count, instead of dropping zones from the level map. Pure (testable)."""
+    for the confluence count, instead of dropping zones from the level map. `edge` defaults to the
+    pip-normalised zone halo (ZHALO_P*PIP). Pure (testable)."""
+    if edge is None: edge = ZHALO_P * PIP
     hit = sorted((lo, hi) for lo, hi, _ in levels if lo - edge <= price <= hi + edge)
     n = 0; cur_hi = None
     for lo, hi in hit:
@@ -347,12 +351,13 @@ def valid_prior_va_near(level, prior_vas, bars, dyn_tolp, bar_minutes, state_mod
     state_mod = state_mod or vastate
     if state_mod is None or not prior_vas or level is None:
         return False
-    p = prior_vas[0]
-    for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
-        if lvl is None or abs(lvl - level) > dyn_tolp:
-            continue
-        st = state_mod.level_state(lvl, bars, role, poc=p.get("poc"), bar_minutes=bar_minutes)
-        return st["state"] in ("Rejected", "Flipped") and st["evidence"].get("confidence") != "weak"
+    for p in prior_vas:
+        for role, lvl in (("VAH", p.get("vah")), ("POC", p.get("poc")), ("VAL", p.get("val"))):
+            if lvl is None or abs(lvl - level) > dyn_tolp:
+                continue
+            st = state_mod.level_state(lvl, bars, role, poc=p.get("poc"), bar_minutes=bar_minutes)
+            if st["state"] in ("Rejected", "Flipped") and st["evidence"].get("confidence") != "weak":
+                return True
     return False
 
 def reversal_context_ok(side, probe_level, conf_s, conf_r, prior_vas, bars, dyn_tolp, bar_minutes, state_mod=None):

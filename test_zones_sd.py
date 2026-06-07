@@ -186,10 +186,23 @@ def test_buy_zone_requires_impulse():
           not any(z["role"] in ("buy zone", "sell zone") for z in out2["zones"]))
 
 
+def test_build_classic_pip_scales():
+    # EURUSD-scale prices with EURUSD pip — the builder runs (tolerances pip-normalised, not gold-hardcoded).
+    eur = [C(1.080,1.082,1.079,1.081,10), C(1.081,1.085,1.080,1.084,10), C(1.084,1.085,1.078,1.079,10),
+           C(1.079,1.080,1.070,1.071,100), C(1.071,1.078,1.070,1.077,10), C(1.077,1.083,1.076,1.082,10),
+           C(1.082,1.090,1.081,1.089,10)]
+    out = Z.build_classic_zones([("4H", eur)], 1.072, pip=0.0001)
+    check("pip-scale: builds on EURUSD-scale prices", isinstance(out.get("zones"), list) and isinstance(out.get("sr"), list))
+    # a GIANT pip makes the dedup window swallow everything → no more zones than the fine-pip read
+    out_big = Z.build_classic_zones([("4H", eur)], 1.072, pip=10.0)
+    check("pip-scale: huge pip merges (≤ fine-pip count)", len(out_big["zones"]) <= max(1, len(out["zones"])))
+
+
 def main():
     for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
                test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip,
-               test_build_classic_zones, test_build_classic_position_aware, test_buy_zone_requires_impulse):
+               test_build_classic_zones, test_build_classic_position_aware, test_buy_zone_requires_impulse,
+               test_build_classic_pip_scales):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

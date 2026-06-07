@@ -20,17 +20,22 @@ docs/zones-and-confluence.md.
 import argparse, subprocess, os, json, re, time, datetime as dt
 TVDIR = os.path.expanduser("~/tradingview-mcp")        # node CLI runs here (node_modules lives in main tree)
 SCRIPTDIR = os.path.dirname(os.path.abspath(__file__)) # run THIS checkout's engine (worktree) by absolute path
-SUFFIX = "xauusd_bt"
-# Use the SAME TradingView symbol the live engine uses (instruments.json XAUUSD.tv, e.g. PEPPERSTONE:XAUUSD) —
-# NOT a bare "XAUUSD", which TradingView resolves to a default exchange (OANDA) and silently switches the feed.
-try:
-    _ic = json.load(open(os.path.join(TVDIR, "instruments.json")))
-    TV_SYMBOL = _ic.get("XAUUSD", {}).get("tv", "XAUUSD")
-except Exception:
-    TV_SYMBOL = "XAUUSD"
+SYMBOL = "XAUUSD"   # the instrument (set from --symbol in main); drives SUFFIX/TV_SYMBOL/ZONEFILE below
+def _cfg_for(sym):
+    try: return json.load(open(os.path.join(TVDIR, "instruments.json"))).get(sym.upper(), {})
+    except Exception: return {}
+def _apply_symbol(sym):
+    """Point every per-symbol global at `sym` so replay_sim works on ANY pair, not just gold. Uses the SAME
+    TradingView symbol the live engine uses (instruments.json <sym>.tv, e.g. PEPPERSTONE:XAUUSD) — NOT a bare
+    ticker, which TradingView resolves to a default exchange and silently switches the feed."""
+    global SYMBOL, SUFFIX, TV_SYMBOL, ZONEFILE
+    SYMBOL = sym.upper()
+    SUFFIX = f"{SYMBOL.lower()}_bt"
+    TV_SYMBOL = _cfg_for(SYMBOL).get("tv", SYMBOL)
+    ZONEFILE = os.path.expanduser(f"~/tradingview-mcp/zones_{SUFFIX}.json")   # isolated, date-faithful zone file (never the live one)
+_apply_symbol(SYMBOL)
 BASE_TF = "5"                                                   # execution timeframe (minutes); set from --tf in main
 WITH_SMC = False                                               # --with-smc: capture date-faithful SMC at the replay cursor (replay chart must have the indicator)
-ZONEFILE = os.path.expanduser(f"~/tradingview-mcp/zones_{SUFFIX}.json")   # isolated, date-faithful zone file (never the live one)
 
 def tv(chart, *a):
     env = dict(os.environ); env["TV_CHART"] = chart
@@ -42,12 +47,15 @@ def tv(chart, *a):
 
 def regen_zones(chart):
     """Rebuild the isolated zone file from the replay chart (date-faithful) and redraw it on the chart."""
-    try:
-        cmd = ["python3", os.path.join(SCRIPTDIR, "refresh_zones.py"), "--symbol", "XAUUSD", "--chart", chart, "--out", ZONEFILE]
-        if WITH_SMC: cmd.append("--with-smc")   # date-faithful SMC snapshot from the replay cursor into the isolated zone file
-        subprocess.run(cmd, cwd=TVDIR, capture_output=True, text=True, timeout=180)
-    except Exception:
-        pass
+    cmd = ["python3", os.path.join(SCRIPTDIR, "refresh_zones.py"), "--symbol", SYMBOL, "--chart", chart, "--out", ZONEFILE]
+    if WITH_SMC:
+        cmd.append("--with-smc")   # date-faithful SMC snapshot from the replay cursor into the isolated zone file
+    res = subprocess.run(cmd, cwd=TVDIR, capture_output=True, text=True, timeout=180)
+    if res.returncode != 0:
+        raise RuntimeError(
+            f"refresh_zones failed (code {res.returncode}) while rebuilding replay zones.\n"
+            f"stdout:\n{res.stdout}\nstderr:\n{res.stderr}"
+        )
     tv(chart, "timeframe", BASE_TF)   # refresh_zones switches TF (and leaves it on 1m) — restore the 5m execution TF
     draw_zones(chart)
 
@@ -76,7 +84,7 @@ def cursor_unix(chart):
 def run_scanner(chart):
     env = dict(os.environ); env["TV_CHART_OVERRIDE"] = chart; env["STATE_SUFFIX"] = SUFFIX; env["TV_BASE_TF"] = BASE_TF
     try:
-        r = subprocess.run(["python3", os.path.join(SCRIPTDIR, "scalp_fast.py"), "--symbol", "XAUUSD", "--dry"],
+        r = subprocess.run(["python3", os.path.join(SCRIPTDIR, "scalp_fast.py"), "--symbol", SYMBOL, "--dry"],
                            cwd=TVDIR, capture_output=True, text=True, timeout=90, env=env)
         return r.stdout
     except Exception:
@@ -106,6 +114,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", required=True)
     ap.add_argument("--chart", required=True)
+    ap.add_argument("--symbol", default="XAUUSD")   # any pair in instruments.json (drives the zone file, TV symbol, scanner/refresh calls)
     ap.add_argument("--start-hour", type=int, default=0)   # UTC
     ap.add_argument("--end-hour", type=int, default=24)    # UTC
     ap.add_argument("--regime-refresh", type=int, default=15)  # clear VP/regime cache every N analyzed steps
@@ -114,6 +123,7 @@ def main():
     ap.add_argument("--with-smc", action="store_true", help="capture date-faithful SMC at the replay cursor (replay chart MUST have the LuxAlgo SMC indicator)")
     a = ap.parse_args()
     global BASE_TF, WITH_SMC; BASE_TF = a.tf; WITH_SMC = a.with_smc
+    _apply_symbol(a.symbol)   # repoint SUFFIX/TV_SYMBOL/ZONEFILE before anything reads them
     if WITH_SMC: print(">> --with-smc: capturing date-faithful SMC snapshot per zone-refresh (replay chart must have the indicator)")
     CH = a.chart
     target = dt.datetime.strptime(a.date, "%Y-%m-%d").date()
