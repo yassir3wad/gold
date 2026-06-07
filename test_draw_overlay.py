@@ -3,7 +3,7 @@
 VAH/VAL/POC lines (labeled with Level State), SP zones, and SMC order-block boxes near price (colored by
 side). Pure stdlib.  python3 test_draw_overlay.py
 """
-import sys
+import sys, os, json, tempfile
 import draw_overlay as D
 
 _r = []
@@ -57,8 +57,20 @@ def test_no_va_no_lines():
     check("no VA -> no VA hlines, still draws nearby OBs", all(x["kind"] not in ("POC","VAH","VAL") for x in s) and any(x["kind"].startswith("OB") for x in s))
 
 
+def test_throttle_state():
+    # use a TEMP state file (NOT ~/.tv_overlay_ids.json) so live state is untouched
+    tmp = os.path.join(tempfile.mkdtemp(), "ids.json")
+    chart, ids = "XAUUSD", [101, 102, 103]
+    D._save_ids(chart, ids, state_path=tmp)
+    check("save persists the throttle timestamp", (chart + ":ts") in json.load(open(tmp)))
+    check("_recent True within min_interval after save", D._recent(chart, min_interval=300, state_path=tmp) is True)
+    check("_recent False when min_interval=0", D._recent(chart, min_interval=0, state_path=tmp) is False)
+    # _clear_ours reads the same ids back (drives _tv per id; here just confirm the ids round-trip)
+    check("ids retrievable for _clear_ours", json.load(open(tmp)).get(chart) == ids)
+
+
 def main():
-    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_no_va_no_lines):
+    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_no_va_no_lines, test_throttle_state):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

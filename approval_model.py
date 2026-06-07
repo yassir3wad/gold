@@ -1,4 +1,19 @@
 #!/usr/bin/env python3
+# =============================================================================
+# !! NEGATIVE-RESULT RESEARCH ARTIFACT — DO NOT WIRE INTO LIVE TRADING !!
+# -----------------------------------------------------------------------------
+# The morning "day-efficiency" / day-type gate described and implemented in this
+# module (see `day_efficiency()` and the `dctx` feature) was DISPROVEN
+# out-of-sample. On held-out data it was a coin-flip at best and in places
+# anti-calibrated (predicted "directional/trend" days resolved no better, and
+# sometimes worse, than chance). It is NOT validated and MUST NOT be used as a
+# live trading gate or to drive any execution decision.
+#
+# This file is retained ONLY as a documented negative result so the failed
+# hypothesis is not silently re-tried. The in-sample "empirical motivation"
+# notes below reflect the original (over-fit, in-sample) reasoning that the
+# out-of-sample test refuted — treat them as historical context, not evidence.
+# =============================================================================
 """Outcome-calibrated approval — a transparent, stdlib-only win-rate table that learns which
 signals actually resolve TP1-first and scores new ones accordingly. Drops in at the ai_decide
 step to replace hand-coded vetoes that the backtest showed were anti-predictive.
@@ -13,23 +28,31 @@ Design (deliberately simple + inspectable):
   - Model.decide(signal, threshold) keeps the ONE veto the data supported (off-session is a
     hard reject) and otherwise approves on calibrated confidence.
 
-Empirical motivation (06-01/02/04 backtest, 152 resolved signals): the live discipline approved
-at 33% win / net-negative while its rejects ran 42% / net-positive — it was sorting backwards.
-The dominant real signal is setup family (momentum impulse 30%/-160p vs CRT +137p); RSI is
-U-shaped (extremes win, mid-zone loses); counter-trend is not a disqualifier. This table learns
-exactly that instead of vetoing it.
+Empirical motivation (IN-SAMPLE ONLY — subsequently NOT confirmed out-of-sample; see banner above):
+on the 06-01/02/04 backtest (152 resolved signals) the live discipline appeared to approve
+at 33% win / net-negative while its rejects ran 42% / net-positive — i.e. it looked like it was
+sorting backwards. The in-sample read was that setup family dominated (momentum impulse 30%/-160p
+vs CRT +137p), RSI was U-shaped (extremes win, mid-zone loses), and counter-trend was not a
+disqualifier. WARNING: the day-type (`dctx` / day_efficiency) portion of this story DID NOT hold
+out-of-sample, so none of these in-sample relationships should be assumed predictive. This table
+remains a research scaffold, not a validated live gate.
 """
 import json, datetime as dt
 
 RSI_BUCKETS = ((30, "<30"), (45, "30-45"), (55, "45-55"), (70, "55-70"))   # upper-exclusive; else ">70"
-DCTX_DIRECTIONAL = 0.5   # morning displacement/range >= this => "directional" (trend) day, else "choppy"
+DCTX_DIRECTIONAL = 0.5   # morning displacement/range >= this => "directional" (trend) day, else "choppy".
+                         # NOTE: this directional/choppy split was DISPROVEN out-of-sample (see banner);
+                         # the threshold is unvalidated and the `dctx` feature is not a live signal.
 
 
 def day_efficiency(bars, start_hour=6, end_hour=9):
     """Morning directional efficiency = |net displacement| / total range over the [start,end) UTC window.
     ~1.0 => price went straight somewhere (trend day); ~0 => round-trip (chop). None if too few bars.
-    This is the day-type read the backtest flagged as the dominant P&L driver — and it's measurable
-    EARLY (morning only), so it can gate the day before most signals fire."""
+
+    DISPROVEN / UNVALIDATED: the in-sample backtest *appeared* to flag this day-type read as the
+    dominant P&L driver, but it FAILED to replicate out-of-sample (coin-flip / anti-calibrated).
+    It was hoped this could gate the day early (morning only) before most signals fire — it CANNOT.
+    Do NOT use this as a live gate; it is kept only as a negative-result research artifact."""
     w = [b for b in bars if start_hour <= dt.datetime.utcfromtimestamp(b["time"]).hour < end_hour]
     if len(w) < 2:
         return None

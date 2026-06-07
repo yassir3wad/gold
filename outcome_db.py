@@ -21,7 +21,13 @@ DEFAULT_DB = os.path.expanduser("~/tradingview-mcp/outcomes.db")
 SIG_COLS = ["id", "time", "side", "grade", "confidence", "pattern", "entry", "sl", "tp1",
             "rng10", "body_p", "htf", "result", "exit", "pips"]
 # Extra context captured alongside each signal (informational; absent in legacy CSV rows).
-CONTEXT_COLS = ["rsi", "er", "regime", "room", "session", "symbol"]
+# Cost/decision fields (PROJECT_REVIEW_IMPROVEMENTS.md Engineering #4): execution cost is recorded
+# explicitly so downstream analysis ranks on NET (after spread/slippage/commission) and can never
+# accidentally optimize gross edge. `decision_source` is auto/AI/manual; `decision_reason_code` is a
+# structured code for the gate/reviewer rationale (not free text). All TEXT, like every other column.
+CONTEXT_COLS = ["rsi", "er", "regime", "room", "session", "symbol",
+                "spread_pips", "slippage_pips", "commission_pips", "gross_pips", "net_pips",
+                "decision_source", "decision_reason_code"]
 ALL_COLS = SIG_COLS + CONTEXT_COLS
 
 # `exit` is a SQL keyword → must be quoted everywhere it appears as a column name.

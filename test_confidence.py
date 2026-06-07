@@ -38,6 +38,64 @@ def test_score_clamped():
     check("never above 10", C.score("A+", conf=9, smc_tl=9, rsi_div=True, with_trend=True, rr=5, level_valid=True) == 10)
 
 
+def test_score_each_penalty_lowers():
+    # Start from a mid-stack score with headroom so no penalty clamps to 0/10.
+    base = C.score("A+", conf=2, smc_tl=2)  # 3+2+2 = 7
+    check("base has headroom", 0 < base < 10)
+    for kw in ("mid_value", "accepted_through", "over_tested", "into_opposing", "vwap_chop"):
+        check(f"{kw} lowers score", C.score("A+", conf=2, smc_tl=2, **{kw: True}) < base)
+
+
+def test_score_penalty_weights():
+    base = C.score("A+", conf=2, smc_tl=2)  # 7
+    check("mid_value -2", C.score("A+", conf=2, smc_tl=2, mid_value=True) == base - 2)
+    check("accepted_through -2", C.score("A+", conf=2, smc_tl=2, accepted_through=True) == base - 2)
+    check("over_tested -1", C.score("A+", conf=2, smc_tl=2, over_tested=True) == base - 1)
+    check("into_opposing -1", C.score("A+", conf=2, smc_tl=2, into_opposing=True) == base - 1)
+    check("vwap_chop -1", C.score("A+", conf=2, smc_tl=2, vwap_chop=True) == base - 1)
+
+
+def test_score_penalties_stack():
+    base = C.score("A+", conf=2, smc_tl=2)  # 7
+    two = C.score("A+", conf=2, smc_tl=2, mid_value=True, over_tested=True)  # -2 -1
+    check("two penalties stack", two == base - 3)
+    check("stacked below single", two < C.score("A+", conf=2, smc_tl=2, mid_value=True))
+
+
+def test_score_penalties_never_below_zero():
+    # Every penalty on, weak base -> would be negative without the clamp.
+    s = C.score("B", with_trend=False, mid_value=True, accepted_through=True,
+                over_tested=True, into_opposing=True, vwap_chop=True)
+    check("all penalties never below 0", s == 0)
+
+
+def test_score_backward_compat():
+    # Calling score() with only the original args must equal the pre-penalty behaviour:
+    # additive axes only, then clamp to [0,10]. Recomputed here independently of the penalty code.
+    def legacy(grade, conf=0, smc_tl=0, rsi_div=False, with_trend=None, rr=None, level_valid=False):
+        s = C._grade_pts(grade)
+        s += min(max(conf, 0), 2)
+        s += min(max(smc_tl, 0), 2)
+        s += 1 if rsi_div else 0
+        s += 1 if with_trend is True else (-1 if with_trend is False else 0)
+        s += 1 if (rr is not None and rr >= 2) else 0
+        s += 1 if level_valid else 0
+        return max(0, min(10, s))
+    cases = [
+        ("A+", 3, 2, True, True, 3.0, True),
+        ("A", 2, 1, False, False, 1.0, False),
+        ("B (open space)", 0, 0, False, None, None, False),
+        ("C", 9, 9, True, False, 5, True),
+        ("A", 0, 0, False, True, None, True),
+    ]
+    ok = True
+    for g, cf, st, rd, wt, r, lv in cases:
+        if C.score(g, conf=cf, smc_tl=st, rsi_div=rd, with_trend=wt, rr=r, level_valid=lv) != \
+           legacy(g, conf=cf, smc_tl=st, rsi_div=rd, with_trend=wt, rr=r, level_valid=lv):
+            ok = False
+    check("original args identical to legacy scoring", ok)
+
+
 def test_size_multiplier():
     check("mid confidence -> 1.0x", C.size_multiplier(5.0) == 1.0)
     check("max confidence -> hi (1.5x)", C.size_multiplier(10.0) == 1.5)
@@ -52,7 +110,10 @@ def test_label():
 
 def main():
     for fn in (test_score_full_stack, test_score_bare_b, test_score_counter_trend_penalty,
-               test_score_monotonic_in_confluence, test_score_clamped, test_size_multiplier, test_label):
+               test_score_monotonic_in_confluence, test_score_clamped,
+               test_score_each_penalty_lowers, test_score_penalty_weights, test_score_penalties_stack,
+               test_score_penalties_never_below_zero, test_score_backward_compat,
+               test_size_multiplier, test_label):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

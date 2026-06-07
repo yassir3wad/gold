@@ -165,11 +165,85 @@ def test_analyze_parity():
         shutil.rmtree(tvdir, ignore_errors=True)
 
 
+# ---- cost/decision fields (PROJECT_REVIEW_IMPROVEMENTS.md Engineering #4) ----
+
+COST_DECISION_COLS = ["spread_pips", "slippage_pips", "commission_pips", "gross_pips", "net_pips",
+                      "decision_source", "decision_reason_code"]
+
+
+def test_cost_decision_schema():
+    """The new cost/decision columns exist in the DB schema (so analysis can rank on NET, not gross)."""
+    db = _mkdb()
+    try:
+        outcome_db.init_db(db)
+        con = outcome_db._connect(db)
+        try:
+            cols = {r[1] for r in con.execute("PRAGMA table_info(signals)").fetchall()}
+        finally:
+            con.close()
+        for c in COST_DECISION_COLS:
+            assert c in cols, f"schema missing cost/decision column {c!r} (have {sorted(cols)})"
+            assert c in outcome_db.ALL_COLS, f"{c!r} not in ALL_COLS"
+        print("PASS (e) cost/decision columns present in schema")
+    finally:
+        _cleanup(db)
+
+
+def test_cost_decision_roundtrip():
+    """A row written with the cost/decision fields round-trips them back through the read path."""
+    db = _mkdb()
+    try:
+        row = {"id": "5005", "time": "2026-06-05 13:00", "side": "LONG", "grade": "A",
+               "pattern": "resistance-trendline break", "entry": "4500.0", "sl": "4485.0",
+               "tp1": "4515.0", "result": "TP1", "exit": "4515.0", "pips": "150",
+               "symbol": "XAUUSD",
+               "spread_pips": "3.0", "slippage_pips": "0.5", "commission_pips": "0.2",
+               "gross_pips": "150.0", "net_pips": "146.3",
+               "decision_source": "AI", "decision_reason_code": "core_setup_room_ok"}
+        outcome_db.log_signal(row, db=db)
+        got = outcome_db.rows(db=db)
+        assert len(got) == 1, f"expected 1 row, got {len(got)}"
+        r = got[0]
+        for k in COST_DECISION_COLS:
+            assert r[k] == row[k], f"cost/decision col {k}: expected {row[k]!r}, got {r[k]!r}"
+        print("PASS (f) cost/decision fields round-trip")
+    finally:
+        _cleanup(db)
+
+
+def test_old_style_row_backcompat():
+    """An OLD-style row with NONE of the new fields still inserts fine and reads back with the new
+    columns present but empty (migration / back-compat must not break legacy writers)."""
+    db = _mkdb()
+    try:
+        old_row = {"id": "6006", "time": "2026-06-05 14:00", "side": "SHORT", "grade": "B",
+                   "pattern": "VWAP rejection", "entry": "4500.0", "sl": "4515.0", "tp1": "4485.0",
+                   "rng10": "55", "body_p": "10", "htf": "open", "result": "PENDING", "exit": "",
+                   "pips": "", "rsi": "45", "er": "0.5", "regime": "DOWN", "room": "30",
+                   "session": "ON", "symbol": "XAUUSD"}
+        outcome_db.log_signal(old_row, db=db)
+        got = outcome_db.rows(db=db)
+        assert len(got) == 1, f"old-style row failed to insert: got {len(got)} rows"
+        r = got[0]
+        # original fields preserved
+        for k, v in old_row.items():
+            assert r[k] == v, f"col {k}: expected {v!r}, got {r[k]!r}"
+        # new cost/decision columns present but empty (not supplied → "")
+        for c in COST_DECISION_COLS:
+            assert r[c] == "", f"new col {c!r} on old-style row should be empty, got {r[c]!r}"
+        print("PASS (g) old-style row (no new fields) inserts + back-compat")
+    finally:
+        _cleanup(db)
+
+
 def main():
     test_upsert_roundtrip()
     test_inplace_update()
     test_concurrent_appends()
     test_analyze_parity()
+    test_cost_decision_schema()
+    test_cost_decision_roundtrip()
+    test_old_style_row_backcompat()
     print("\nALL TESTS PASSED")
 
 

@@ -9,6 +9,32 @@
 > --review`), the **APPROVE/REJECT/WAIT decision format + AI Review JSON** (below), and the **Confluence Score
 > Guide** (a planned refinement to `confidence.py` — TODO, pending the 5m backtest).
 
+## Evidence status
+
+This manual labels many setups "Excellent" on textbook grounds. **Those labels are not evidence.** This file is a
+reference menu, not a validated live allowlist. Every signal below carries an implicit evidence tag:
+
+- **`validated`** — repo-backed cost-adjusted edge in *our* backtest/live logs.
+- **`experimental`** — plausible, being tried here, not yet proven.
+- **`rejected`** — disproven in our backtest/live logs.
+- **`not-tested`** — default; no evidence either way. **The vast majority of the 100 signals are here.**
+
+**An AI reviewer must NOT approve a setup just because this manual calls it "Excellent."** Only `validated`
+families are eligible for normal live alerts. Everything else (`experimental`, `not-tested`) is
+observation/experimental only, and `rejected` must not be alerted. The few families with current evidence
+(per `PROJECT_REVIEW_IMPROVEMENTS.md`):
+
+| Signal / family | Tag | Note |
+|---|---|---|
+| Resistance-trendline break | `validated` | Only family that clearly cleared the 3-pip spread in the June backtest; current core setup. |
+| Highly-selective CRT | `validated` | Only with a clean room + valid value-area context (large clean target, no immediate wall). Generic/high-volume CRT is not validated. |
+| Value-area rejection (`va_reject`) | `validated` | Only when level state is valid (and VWAP bias agrees). |
+| Break-and-retest | `rejected` | Uniformly bad in the tested sample. |
+| Generic momentum impulse | `rejected` | Negative after spread; observation/disabled for live alerts. |
+| Morning day-efficiency gate | `rejected` | Coin-flip in backtest; do not use to gate the day. |
+
+All other signals in this file default to **`not-tested`** until our own backtest/live logs say otherwise.
+
 Purpose: this manual gives the Python signal engine and AI review agent a shared rulebook. Python detects
 possible trade signals mechanically; the AI reviews context and approves only high-quality setups.
 

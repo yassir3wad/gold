@@ -73,46 +73,47 @@ def _tv(chart, *a):
         return {}
 
 
-def _clear_ours(chart):
+def _clear_ours(chart, state_path=STATE):
     """Remove only the entity ids we drew last time (recorded in STATE) — leaves the user's drawings."""
     try:
-        ids = json.load(open(STATE)).get(chart or "_", [])
+        ids = json.load(open(state_path)).get(chart or "_", [])
     except Exception:
         ids = []
     for eid in ids:
         _tv(chart, "draw", "remove", "--id", str(eid))
 
 
-def _save_ids(chart, ids):
+def _save_ids(chart, ids, state_path=STATE):
     try:
-        d = json.load(open(STATE))
+        d = json.load(open(state_path))
     except Exception:
         d = {}
     d[chart or "_"] = ids
+    d[(chart or "_") + ":ts"] = time.time()   # so _recent() can throttle the next refresh
     try:
-        json.dump(d, open(STATE, "w"))
+        json.dump(d, open(state_path, "w"))
     except Exception:
         pass
 
 
-def _recent(chart, min_interval):
+def _recent(chart, min_interval, state_path=STATE):
     if min_interval <= 0:
         return False
     try:
-        ts = json.load(open(STATE)).get((chart or "_") + ":ts", 0)
+        ts = json.load(open(state_path)).get((chart or "_") + ":ts", 0)
     except Exception:
         ts = 0
     return (time.time() - ts) < min_interval
 
 
-def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None):
+def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None, state_path=STATE):
     """Refresh the overlay on `chart`: remove our previous shapes, draw the current specs, record new ids.
     `t0`/`t1` = bar-time anchors (hlines/rects need a time); pass the visible range's start/end.
     `min_interval` (s) throttles redraws so the live loop doesn't flicker the chart every tick; returns -1
     when skipped for throttle."""
-    if _recent(chart, min_interval):
+    if _recent(chart, min_interval, state_path=state_path):
         return -1
-    _clear_ours(chart)
+    _clear_ours(chart, state_path=state_path)
     specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date)
     new_ids = []
     for s in specs:
@@ -125,8 +126,10 @@ def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None
             r = _tv(chart, "draw", "shape", "--type", "rectangle", "--price", f"{s['price']}", "--time", str(int(t0 or 0)),
                     "--price2", f"{s['price2']}", "--time2", str(int(t1 or t0 or 0)), "--text", lab,
                     "--overrides", json.dumps({"color": s["color"], "backgroundColor": s["color"], "transparency": 88, "linewidth": 1}))
+        if not r:   # silent CDP failure — surface it so we notice missing shapes
+            print(f"draw_overlay: WARN empty result drawing {s['kind']} @ {s['price']}")
         eid = (r or {}).get("id") or (r or {}).get("entity_id")
         if eid:
             new_ids.append(eid)
-    _save_ids(chart, new_ids)
+    _save_ids(chart, new_ids, state_path=state_path)
     return len(new_ids)

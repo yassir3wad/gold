@@ -12,10 +12,15 @@ Axes (max 10 after clamp):
   rr           R:R ≥ 2 → +1
   level_valid  entry at a VALID prior-VA level (Rejected/Flipped, not Accepted) → +1
 
-TODO (pending the 5m backtest) — the roadmap's Confluence Score Guide (docs/signal-roadmap-detailed.md) also
-PENALISES bad contexts (−30 mid-value · −25 accepted-through · −20 over-tested · −20 into opposing level · −20
-VWAP chop). Most are already hard filters upstream, but folding them here as score deductions would let
-confidence reflect near-misses that slip through. Hold the reweight until the backtest justifies it.
+Penalties (subtract for bad contexts — the roadmap's Confluence Score Guide, docs/signal-roadmap-detailed.md;
+scaled from the guide's 0–100 deductions down to this 0–10 model, worst contexts weighted heavier):
+  mid_value        in the middle of value (guide −30)             → −2
+  accepted_through level accepted through, not rejected (−25)     → −2
+  into_opposing    fired directly into a strong opposite level (−20) → −1
+  over_tested      level tested more than twice (−20)             → −1
+  vwap_chop        VWAP chop / no clean directional bias (−20)    → −1
+All deductions are optional (default False) and the result stays clamped to [0, 10]. Most of these are already
+hard filters upstream, so folding them here lets confidence reflect near-misses that slip through.
 """
 
 
@@ -30,8 +35,11 @@ def _grade_pts(grade):
     return 0
 
 
-def score(grade, conf=0, smc_tl=0, rsi_div=False, with_trend=None, rr=None, level_valid=False):
-    """0–10 confidence. `with_trend`: True (with trend), False (counter-trend), None (neutral/flat)."""
+def score(grade, conf=0, smc_tl=0, rsi_div=False, with_trend=None, rr=None, level_valid=False,
+          mid_value=False, accepted_through=False, over_tested=False, into_opposing=False, vwap_chop=False):
+    """0–10 confidence. `with_trend`: True (with trend), False (counter-trend), None (neutral/flat).
+    The `mid_value`/`accepted_through`/`over_tested`/`into_opposing`/`vwap_chop` flags are penalties for bad
+    contexts (all default False, so omitting them is identical to the additive-only scoring)."""
     s = _grade_pts(grade)
     s += min(max(conf, 0), 2)
     s += min(max(smc_tl, 0), 2)
@@ -39,6 +47,12 @@ def score(grade, conf=0, smc_tl=0, rsi_div=False, with_trend=None, rr=None, leve
     s += 1 if with_trend is True else (-1 if with_trend is False else 0)
     s += 1 if (rr is not None and rr >= 2) else 0
     s += 1 if level_valid else 0
+    # Penalties — worst contexts (mid-value, accepted-through) weighted heavier.
+    s -= 2 if mid_value else 0
+    s -= 2 if accepted_through else 0
+    s -= 1 if over_tested else 0
+    s -= 1 if into_opposing else 0
+    s -= 1 if vwap_chop else 0
     return max(0, min(10, s))
 
 

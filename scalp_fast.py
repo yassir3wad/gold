@@ -1114,15 +1114,25 @@ def main():
     _ct = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
     _trend = True if _wt else (False if _ct else None)
     _rsidiv = bool(rsi is not None and rsi_divergence(b, side))
-    _lvl_valid = False
+    # level-validity + penalty context (Confluence Score Guide deductions, docs/signal-roadmap-detailed.md)
+    _lvl_valid = False; _accepted = False; _mid_value = False
     if vastate is not None and prior_vas:
-        _pv0 = prior_vas[0]
-        for _k, _lv in (("VAH", _pv0.get("vah")), ("VAL", _pv0.get("val")), ("POC", _pv0.get("poc"))):
-            if _lv is not None and abs(_lv - entry) <= dyn_tolp and \
-               vastate.level_state(_lv, b, _k, poc=_pv0.get("poc"), bar_minutes=BASE_TF)["state"] in ("Rejected", "Flipped"):
-                _lvl_valid = True; break
+        _pv0 = prior_vas[0]; _vah0, _val0 = _pv0.get("vah"), _pv0.get("val")
+        for _k, _lv in (("VAH", _vah0), ("VAL", _val0), ("POC", _pv0.get("poc"))):
+            if _lv is None or abs(_lv - entry) > dyn_tolp:
+                continue
+            _st = vastate.level_state(_lv, b, _k, poc=_pv0.get("poc"), bar_minutes=BASE_TF)["state"]
+            if _st in ("Rejected", "Flipped"): _lvl_valid = True
+            elif _st == "Accepted": _accepted = True
+        # mid-value: strictly inside prior value AND not at either edge (the chop the guide penalises)
+        if _vah0 and _val0 and _val0 < entry < _vah0 and abs(entry - _vah0) > dyn_tolp and abs(entry - _val0) > dyn_tolp:
+            _mid_value = True
+    _opp = nextR if side == "LONG" else nextS                        # opposing structure before TP1?
+    _into_opposing = _opp is not None and (abs(_opp - entry) / PIP) < tp1_p
     conf_score = confmod.score(grade, conf=conf_now, smc_tl=cf_score, rsi_div=_rsidiv, with_trend=_trend,
-                               rr=(tp1_p / risk if risk > 0 else None), level_valid=_lvl_valid) if confmod else None
+                               rr=(tp1_p / risk if risk > 0 else None), level_valid=_lvl_valid,
+                               mid_value=_mid_value, accepted_through=_accepted,
+                               into_opposing=_into_opposing, vwap_chop=bool(is_chop)) if confmod else None
     conf_lbl = confmod.label(conf_score) if confmod and conf_score is not None else ""
     # position sizing from fixed $ risk: lot = RISK_USD / ($/pip/lot × stop_pips), rounded to broker step + clamped
     risk_usd = RISK_USD

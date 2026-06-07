@@ -1,12 +1,12 @@
 {
-  "_comment": "Per-instrument config for the multi-pair scanner. pip = price value of 1 'pip' (the unit everything is measured in). atr_ref = the instrument's characteristic 1m ATR in pips = the VS=1 anchor for ATR-normalized sizing (STARTING ESTIMATES — calibrate from logs/<sym>/ over time). tv = exact TradingView ticker if it differs from the key. sessions = which sessions this pair is worth trading. flags = per-symbol strategy/flag overrides merged on top of flags.json.",
-  "_default": { "pip": 0.10, "atr_ref": 30, "sessions": ["london", "ny"], "risk_usd": 20, "pip_value": 10.0, "lot_min": 0.01, "lot_max": 100, "lot_step": 0.01 },
+  "_comment": "Per-instrument config for the multi-pair scanner. pip = price value of 1 'pip' (the unit everything is measured in). atr_ref = the instrument's characteristic 1m ATR in pips = the VS=1 anchor for ATR-normalized sizing (STARTING ESTIMATES — calibrate from logs/<sym>/ over time). spread_pips = typical round-trip cost in pips, subtracted from each trade's gross pips to get NET (used by analyze_logs.py for cost-adjusted reporting — calibrate from broker fills over time). tv = exact TradingView ticker if it differs from the key. sessions = which sessions this pair is worth trading. flags = per-symbol strategy/flag overrides merged on top of flags.json.",
+  "_default": { "pip": 0.10, "atr_ref": 30, "spread_pips": 3, "sessions": ["london", "ny"], "risk_usd": 20, "pip_value": 10.0, "lot_min": 0.01, "lot_max": 100, "lot_step": 0.01 },
 
-  "XAUUSD": { "pip": 0.10,   "atr_ref": 30, "pip_value": 10.0, "use_tpo": true, "tv": "XAUUSD", "chart": "eabXWKAd", "sessions": ["london", "ny"], "flags": { "rsi_filter": false }, "desc": "Gold (1.0 lot=100oz, $10/pip) — RSI off (informational only); structure-traded" },
-  "GBPUSD": { "pip": 0.0001, "atr_ref": 8,  "pip_value": 10.0, "tv": "GBPUSD", "chart": "ldWp9xnE", "sessions": ["london", "ny"], "desc": "Pound ($10/pip/lot)" },
-  "NAS100": { "pip": 1.0,    "atr_ref": 25, "pip_value": 1.0,  "tv": "NAS100", "chart": "Zs07LqQb", "sessions": ["ny"],           "desc": "US Tech 100 — VERIFY pip_value w/ broker ($/point/lot)" },
-  "US30":   { "pip": 1.0,    "atr_ref": 30, "pip_value": 1.0,  "tv": "US30",   "chart": "NKYI04JN", "sessions": ["ny"],           "desc": "Dow 30 — VERIFY pip_value w/ broker" },
-  "EURUSD": { "pip": 0.0001, "atr_ref": 6,  "pip_value": 10.0, "tv": "EURUSD", "chart": "qn9pRpwp", "sessions": ["london", "ny"], "desc": "Euro ($10/pip/lot)" },
-  "USDJPY": { "pip": 0.01,   "atr_ref": 7,  "pip_value": 6.7,  "tv": "USDJPY", "chart": "soFkmee0", "sessions": ["asia", "ny"],   "desc": "Yen (~$6.7/pip/lot, varies w/ rate)" },
-  "AUDUSD": { "pip": 0.0001, "atr_ref": 5,  "pip_value": 10.0, "tv": "AUDUSD", "chart": "CAGyRX2J", "sessions": ["asia"],         "desc": "Aussie ($10/pip/lot)" }
+  "XAUUSD": { "pip": 0.10,   "atr_ref": 30, "spread_pips": 3,   "pip_value": 10.0, "use_tpo": true, "tv": "XAUUSD", "chart": "eabXWKAd", "sessions": ["london", "ny"], "flags": { "rsi_filter": false }, "desc": "Gold (1.0 lot=100oz, $10/pip) — RSI off (informational only); structure-traded" },
+  "GBPUSD": { "pip": 0.0001, "atr_ref": 8,  "spread_pips": 1.0, "pip_value": 10.0, "tv": "GBPUSD", "chart": "ldWp9xnE", "sessions": ["london", "ny"], "desc": "Pound ($10/pip/lot)" },
+  "NAS100": { "pip": 1.0,    "atr_ref": 25, "spread_pips": 2.0, "pip_value": 1.0,  "tv": "NAS100", "chart": "Zs07LqQb", "sessions": ["ny"],           "desc": "US Tech 100 — VERIFY pip_value w/ broker ($/point/lot)" },
+  "US30":   { "pip": 1.0,    "atr_ref": 30, "spread_pips": 3.0, "pip_value": 1.0,  "tv": "US30",   "chart": "NKYI04JN", "sessions": ["ny"],           "desc": "Dow 30 — VERIFY pip_value w/ broker" },
+  "EURUSD": { "pip": 0.0001, "atr_ref": 6,  "spread_pips": 0.8, "pip_value": 10.0, "tv": "EURUSD", "chart": "qn9pRpwp", "sessions": ["london", "ny"], "desc": "Euro ($10/pip/lot)" },
+  "USDJPY": { "pip": 0.01,   "atr_ref": 7,  "spread_pips": 1.0, "pip_value": 6.7,  "tv": "USDJPY", "chart": "soFkmee0", "sessions": ["asia", "ny"],   "desc": "Yen (~$6.7/pip/lot, varies w/ rate)" },
+  "AUDUSD": { "pip": 0.0001, "atr_ref": 5,  "spread_pips": 1.0, "pip_value": 10.0, "tv": "AUDUSD", "chart": "CAGyRX2J", "sessions": ["asia"],         "desc": "Aussie ($10/pip/lot)" }
 }
