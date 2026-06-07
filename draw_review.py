@@ -63,8 +63,8 @@ def main():
     VAH_C = json.dumps({"linecolor": "rgba(70,130,240,0.95)", "linestyle": 0, "linewidth": 2})    # VAH = blue
     VAL_C = json.dumps({"linecolor": "rgba(180,90,240,0.95)", "linestyle": 0, "linewidth": 2})    # VAL = purple
 
-    SUP = json.dumps({"linecolor": "rgba(0,210,90,0.85)", "linestyle": 0, "linewidth": 2})   # support line (green)
-    RES = json.dumps({"linecolor": "rgba(240,70,70,0.85)", "linestyle": 0, "linewidth": 2})   # resistance line (red)
+    SUP = json.dumps({"backgroundColor": "rgba(0,210,90,0.14)", "color": "rgba(0,210,90,0.9)"})   # support ZONE (green box, solid border)
+    RES = json.dumps({"backgroundColor": "rgba(240,70,70,0.14)", "color": "rgba(240,70,70,0.9)"})   # resistance ZONE (red box, solid border)
     PURP = json.dumps({"linecolor": "rgba(180,120,255,0.85)", "linestyle": 2})   # SMC structure / liquidity / swings
     ORNG = json.dumps({"linecolor": "rgba(255,170,60,0.85)", "linestyle": 1})    # Auto-Trendline (projected to now)
 
@@ -102,8 +102,10 @@ def main():
 
     if cur_price and "sr" in LAYERS:
         for s in classic["sr"]:
-            color = SUP if s["role"] == "support" else RES
-            hline(CH, s["price"], f"{s['role'].capitalize()} {s['tf']}" + (" flip" if s["flip"] else ""), color, anchor_t)
+            ov = SUP if s["role"] == "support" else RES
+            right_edge = (s.get("t1") or anchor_t) + 50 * 4 * 3600   # extend right like the zone boxes
+            rect(CH, s.get("time") or anchor_t, s["lo"], right_edge, s["hi"],
+                 f"{s['role'].capitalize()} {s['tf']}" + (" flip" if s["flip"] else ""), ov)
             log["sr"].append(s)
             drawn[s["role"]] += 1
 

@@ -286,7 +286,8 @@ def merge_classic_zones(htf_r, htf_s, classic):
         tup = (zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}")
         (S if zz["role"] in ("buy zone", "support") else R).append(tup)
     for s in (classic or {}).get("sr", []):
-        tup = (s["price"], s["price"], f"{s['tf']} {s['role']} (classic)")
+        lo, hi = s.get("lo", s["price"]), s.get("hi", s["price"])   # S/R is the origin-candle band (a zone), not a bare price
+        tup = (lo, hi, f"{s['tf']} {s['role']} (classic)")
         (S if s["role"] == "support" else R).append(tup)
     return R, S
 

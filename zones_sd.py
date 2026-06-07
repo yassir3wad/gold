@@ -273,19 +273,20 @@ def has_direction_wick(c):
 
 
 def sr_levels(bars, lookback=20, level=0.5):
-    """Support/resistance LEVELS from big high-volume candles (distinct from order-block zones):
-      - big GREEN candle -> support at its open (launch base)
-      - big RED candle   -> resistance at its open
-    Polarity flip: once a later candle CLOSES through the level, it flips to the opposite role.
-    Returns dicts {price, origin, role, flipped, i, time}."""
+    """Support/resistance from big high-volume candles (distinct from order-block zones) — each is a ZONE
+    (the origin-candle base), not a bare line:
+      - big GREEN candle -> support, key price = open, zone = [low, open] (the launch base)
+      - big RED candle   -> resistance, key price = open, zone = [open, high]
+    Polarity flip: once a later candle CLOSES through the key price, it flips to the opposite role.
+    Returns dicts {price, lo, hi, origin, role, flipped, i, time} (price = the open; lo/hi = the zone band)."""
     out = []
     for i, c in enumerate(bars):
         if not big_candle(bars, i, lookback, level) or not small_opposite_wick(c) or not has_direction_wick(c):
             continue
         if c["close"] > c["open"]:
-            origin, px = "support", c["open"]
+            origin, px, lo, hi = "support", c["open"], c["low"], c["open"]
         elif c["close"] < c["open"]:
-            origin, px = "resistance", c["open"]
+            origin, px, lo, hi = "resistance", c["open"], c["open"], c["high"]
         else:
             continue
         flipped = False
@@ -295,8 +296,8 @@ def sr_levels(bars, lookback=20, level=0.5):
             if origin == "resistance" and b["close"] > px:
                 flipped = True; break
         role = ("resistance" if origin == "support" else "support") if flipped else origin
-        out.append({"price": round(px, 2), "origin": origin, "role": role,
-                    "flipped": flipped, "i": i, "time": c.get("time")})
+        out.append({"price": round(px, 2), "lo": round(lo, 2), "hi": round(hi, 2), "origin": origin,
+                    "role": role, "flipped": flipped, "i": i, "time": c.get("time")})
     return out
 
 
@@ -367,7 +368,8 @@ def build_classic_zones(tf_bars, cur_price):
                 zones.append({**z, "tf": tf, "otime": c.get("time"), "t1": t_last,
                               "strong_lvl": strong, "green": c["close"] > c["open"]})
         for x in sr_levels(b, lookback=20):
-            sr.append({"price": x["price"], "role": x["role"], "flip": x["flipped"], "tf": tf})
+            sr.append({"price": x["price"], "lo": x["lo"], "hi": x["hi"], "role": x["role"], "flip": x["flipped"],
+                       "tf": tf, "time": x.get("time"), "t1": t_last})
     # drop a lower-TF zone fully covered by a higher-TF zone (the first tf_bars entry is the highest TF)
     hi_tf_label = tf_bars[0][0] if tf_bars else None
     hi = [z for z in zones if z["tf"] == hi_tf_label]
@@ -392,13 +394,16 @@ def build_classic_zones(tf_bars, cur_price):
         seen.append(mid); nbuy += buy; nsell += (not buy)
     out_sr = []
     for role, below in (("support", True), ("resistance", False)):
-        cand = sorted({(s["price"], s["flip"], s["tf"]) for s in sr if s["role"] == role and ((s["price"] < cur_price) == below)},
-                      key=lambda x: abs(x[0] - cur_price))
+        cand = sorted([s for s in sr if s["role"] == role and ((s["price"] < cur_price) == below)],
+                      key=lambda s: abs(s["price"] - cur_price))
         sseen = []
-        for p, fl, l in cand:
+        for s in cand:
+            p = s["price"]
             if any(abs(p - q) < 15 for q in sseen):
                 continue
-            sseen.append(p); out_sr.append({"role": role, "price": round(p, 2), "tf": l, "flip": bool(fl)})
+            sseen.append(p)
+            out_sr.append({"role": role, "price": round(p, 2), "lo": s["lo"], "hi": s["hi"], "tf": s["tf"],
+                           "flip": bool(s["flip"]), "time": s.get("time"), "t1": s.get("t1")})
             if len(sseen) >= 4:
                 break
     return {"zones": out_zones, "sr": out_sr}
