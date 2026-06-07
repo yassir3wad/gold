@@ -14,13 +14,17 @@ Current live logs for the last 14 days show 18 executed trades across symbols, +
 
 ## Second-Pass Findings
 
-This second review adds three important findings.
+This latest review adds five important findings.
 
-First, the untracked `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. The remaining risk is that the 100-signal table labels many setups as "Excellent" for gold/forex without repo-backed evidence. That can still push an AI reviewer toward approving attractive textbook setups instead of the few setup families that have demonstrated cost-adjusted edge.
+First, `docs/signal-roadmap-detailed.md` is useful as a reference menu, and it already says it is not a build list. That warning is important and should stay. It now has an evidence-status section that separates `validated`, `experimental`, `rejected`, and `not-tested` families. Remaining improvement: add an explicit evidence/status column to the large 100-signal table so the warning is visible at the exact row the reviewer reads.
 
 Second, `draw_overlay.py` had a practical throttle bug. `_recent()` reads `(chart + ":ts")` from `~/.tv_overlay_ids.json`, but `_save_ids()` previously saved only the drawn entity IDs. This is now fixed: `_save_ids()` persists the timestamp, `draw_overlay()` accepts an injectable `state_path`, and `test_draw_overlay.py` covers the throttle path.
 
 Third, current all-symbol log analysis over the last 14 days shows 18 executed trades, +154 gross pips, +101 pips after spread, 39% gross win rate, 1.50 gross profit factor, 1.29 net profit factor, and +5.6 net pips/trade. XAUUSD remains positive, while one NAS100 trade is negative. The all-symbol sample still shows the same weak families: `zone-bounce rejection`, `momentum impulse`, and `liquidity-sweep reversal`.
+
+Fourth, `scalp_fast.py` now has `family_caps` and `observation_gate`, which addresses two major open items. These now apply even when `ai_decide` is enabled. Observe-only families such as `momentum_impulse` are logged but not surfaced/fired unless `observation_gate` is explicitly disabled for research.
+
+Fifth, `docs/signal-roadmap-detailed.md` still says the Confluence Score Guide is "a planned refinement to `confidence.py`." That is stale: `confidence.py` already implements those deductions and `test_confidence.py` covers them.
 
 ## Status Tracker
 
@@ -38,15 +42,16 @@ Legend: `Done` = implemented in current files; `Partial` = started but still inc
 | Add confidence penalties from roadmap guide | Done | `confidence.py` includes mid-value, accepted-through, over-tested, opposing-level, and VWAP-chop penalties. |
 | Add AI approval checklist / APPROVE-REJECT-WAIT | Done | `scalp_fast.py --review` prints the checklist and asks for `APPROVE / REJECT / WAIT`. |
 | Add cost/decision columns to outcome DB | Done | `outcome_db.py` includes spread/slippage/commission/gross/net and decision source/reason columns, with migration. |
-| Keep 100-signal roadmap as reference, not build list | Partial | `docs/signal-roadmap.md` and `docs/signal-roadmap-detailed.md` clearly say roadmap/menu, not build list. Still needs per-signal evidence tags. |
-| Evidence-tag every roadmap signal | Pending | Add `validated / experimental / rejected / not tested` tags to the roadmap tables. |
-| Disable or observation-gate `momentum_impulse` | Pending | `flags.json` still has `"momentum_impulse": true`; live logs remain negative after spread for this family. |
-| Add setup-family daily caps | Pending | No cap mechanism found; rejected/auto-skip volume remains high. |
+| Keep 100-signal roadmap as reference, not build list | Done | `docs/signal-roadmap.md` and `docs/signal-roadmap-detailed.md` clearly say roadmap/menu, not build list. |
+| Evidence-tag every roadmap signal | Partial | `docs/signal-roadmap-detailed.md` has an evidence-status section and defaults all unlisted signals to `not-tested`; still lacks an explicit per-row status column in the big table. |
+| Disable or observation-gate `momentum_impulse` | Done | `OBSERVE_FAMILIES = {"momentum_impulse"}` logs it as observation-only and blocks it from normal firing/review unless `observation_gate=false`. |
+| Add setup-family daily caps | Done | `FAMILY_CAPS` and `family_fired_today()` cap fired trades/reviews by strategy family unless `family_caps=false`. |
 | Tighten `zone_bounce` and `liquidity_sweep` | Partial | Existing gates/hard floor help, but both remain enabled and live logs remain negative after spread. |
 | Keep `break_retest` disabled | Done | `flags.json` has `"break_retest": false`. |
 | Split static vs live Node tests | Pending | `package.json` still runs CDP-dependent tests under `npm test`; no `test:static` / `test:live` split yet. |
 | Convert import-time Python tests | Pending | Full unittest discovery still needs cleanup; targeted `python3 -m unittest test_outcome_db test_metrics test_approval_model` ran 0 tests because these scripts use custom runners. |
 | Add spread/cost to backtest reports | Partial | `analyze_logs.py` is cost-aware; `backtest_multi_day.py` still mostly reports gross `net_pips`. |
+| Fix stale roadmap confidence TODO | Pending | `docs/signal-roadmap-detailed.md` still calls confidence deductions planned, but `confidence.py` already implements them. |
 | Split `scalp_fast.py` into modules | Pending | `scalp_fast.py` remains the large canonical scanner. Keep this low priority until behavior stabilizes. |
 
 ## Current Strengths
@@ -96,11 +101,13 @@ Recommended action:
 
 ### 2. AI-Decide Mode Bypasses Most Blocking Filters
 
-In `scalp_fast.py`, `ai_decide` is documented as bypassing all blocking filters except the hard floor. This is useful for surfacing context to an AI reviewer, but dangerous if the reviewer is not consistently applying a cost-aware standard.
+In `scalp_fast.py`, `ai_decide` is documented as bypassing soft quality filters, while still honoring the hard floor, `family_caps`, and `observation_gate`. This keeps research review useful without letting known negative families silently bypass the live discipline.
 
 Risk:
 
-- The engine can surface signals that the hard filters would have blocked.
+- The engine can still surface signals that soft filters would have blocked.
+- Known observe-only families are now blocked unless `observation_gate` is explicitly disabled.
+- Daily family caps now protect AI-review mode unless `family_caps` is explicitly disabled.
 - The reviewer may approve visually attractive setups that are statistically low edge after spread.
 - The system becomes dependent on subjective review quality instead of a measurable policy.
 
@@ -114,6 +121,7 @@ Recommended action:
   - trade frequency budget for the day
   - whether this is a core setup or an exception
 - Log the AI decision reason in structured fields, not only free text.
+- Treat any override of `observation_gate` or `family_caps` as a deliberate research mode, not normal live review.
 
 ### 3. The Approval Model Is a Research Artifact, Not a Live Upgrade
 
@@ -256,6 +264,7 @@ Current verification result:
 - `python3 analyze_logs.py --symbol XAUUSD --days 14` passed.
 - `python3 analyze_logs.py --days 14` passed and showed 18 executed trades, +154 gross pips, +101 pips after spread, 1.50 gross PF, 1.29 net PF, and +5.6 net pips/trade.
 - `python3 test_draw_overlay.py` passed with 17/17 checks, including overlay throttle state persistence.
+- `python3 test_confidence.py` passed with 28/28 checks, including confidence penalties and size-multiplier behavior.
 - `python3 -m pytest -q` failed because `pytest` is not installed.
 - `npm test` partially passed static Pine tests but failed live TradingView/CDP tests because TradingView is not connected on port 9222.
 - `python3 -m unittest discover -p 'test*.py'` failed because `test_stale_zone.py` calls `sys.exit()` during import.
@@ -336,14 +345,13 @@ This prevents accidentally reviving rejected ideas.
 
 ## Recommended Next Changes
 
-1. Add evidence tags to `docs/signal-roadmap-detailed.md` so the 100-signal roadmap cannot be mistaken for a validated live allowlist.
-2. Disable or observation-gate `momentum_impulse` for live alerts until it proves cost-adjusted edge out of sample.
-3. Add setup-family daily caps to reduce alert/reject volume.
-4. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
-5. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
-6. Split pure tests from TradingView-dependent integration tests in `package.json`.
-7. Convert script-style Python tests to import-safe test functions.
-8. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
+1. Add an explicit evidence/status column to the big table in `docs/signal-roadmap-detailed.md`.
+2. Fix the stale confidence TODO in `docs/signal-roadmap-detailed.md`; the deductions are already implemented in `confidence.py`.
+3. Tighten `zone_bounce` and `liquidity_sweep` so they require valid HTF/value-area context, not just a visually plausible wick.
+4. Add spread-adjusted metrics to `score_signals.py` and `backtest_multi_day.py`; `analyze_logs.py` is already done.
+5. Split pure tests from TradingView-dependent integration tests in `package.json`.
+6. Convert script-style Python tests to import-safe test functions.
+7. Keep `break_retest` disabled and monitor `CRT` after spread with at least 20-30 more live examples.
 
 ## Bottom Line
 

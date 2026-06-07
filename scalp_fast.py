@@ -647,7 +647,7 @@ def main():
     DRY = "--dry" in sys.argv   # test mode: compute + print only, NO telegram/log/sound/state
     REVIEW = "--review" in sys.argv   # AI-review gate: hold confirmed trades for approval (TP/SL + heads-ups still go)
     FL = load_flags()
-    AI = FL.get("ai_decide", False)   # AI-decides mode: bypass ALL blocking filters, surface every setup + context for Claude to judge
+    AI = FL.get("ai_decide", False)   # AI-decides mode: bypasses soft quality filters, but still honors hard floor, observation gate, and family caps
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
     tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
@@ -962,9 +962,10 @@ def main():
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
-    # observation gate: families in OBSERVE_FAMILIES are detected + logged (measurable) but NOT fired live,
-    # until they prove cost-adjusted edge out of sample (review Next #3). AI-decide still sees them.
-    if FL.get("observation_gate", True) and setups and not AI:
+    # observation gate: families in OBSERVE_FAMILIES are detected + logged (measurable) but NOT fired/surfaced,
+    # until they prove cost-adjusted edge out of sample. Applies even under ai_decide; set observation_gate=false
+    # for an explicit research override.
+    if FL.get("observation_gate", True) and setups:
         kept = []
         for s in setups:
             if flag_for(s[1]) in OBSERVE_FAMILIES:
@@ -1183,8 +1184,9 @@ def main():
     lot = max(LOT_MIN, min(LOT_MAX, lot))
     # --- pre-hold HARD FLOOR: drop structurally un-tradeable signals (negative R:R / no room — the chop-spam
     # that gets hand-rejected every tick) BEFORE they reach the held/review state. Uses the ACTUAL R:R (TP1
-    # vs stop), so it's direction-agnostic. The ONLY skip that ignores AI — deliberate (AI bypasses every other
-    # gate). Conservative: a genuine positive-R:R setup never trips it. ---
+    # vs stop), so it's direction-agnostic. One of the discipline gates that apply EVEN under ai_decide (with
+    # observation_gate + family_caps); ai_decide only bypasses the SOFT quality filters. Conservative: a
+    # genuine positive-R:R setup never trips it. ---
     if FL.get("hard_floor", True):
         _wall = nextR if side == "LONG" else nextS
         _room = round(abs(_wall - entry)/PIP) if _wall is not None else None
@@ -1208,8 +1210,9 @@ def main():
             _htf = at_S if side == "LONG" else at_R
             log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, [_reason])
         return
-    # daily family cap: stop a noisy family from overproducing alerts (review Priority 2). Only reduces trades.
-    if FL.get("family_caps", True) and not AI:
+    # daily family cap: stop a noisy family from overproducing alerts/reviews. Applies even under ai_decide;
+    # set family_caps=false for an explicit research override.
+    if FL.get("family_caps", True):
         _fam = flag_for(why); _cap = FAMILY_CAPS.get(_fam)
         if _cap is not None:
             _n = family_fired_today(SYMBOL).get(_fam, 0)
