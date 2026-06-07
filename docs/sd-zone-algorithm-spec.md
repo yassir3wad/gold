@@ -3,10 +3,23 @@
 > Reference specification for the classic zone system. **What is implemented today** lives in `zones_sd.py`
 > (+ `build_classic_zones`, the shared drawn==traded builder) and is wired into `scalp_fast` grading — see
 > `docs/zones-and-confluence.md` §3.5. **Implemented:** zone geometry, Key Levels (BOS + impulse + never
-> wicked through), touch decay, broken/flip, position-based buy/sell, 4h-covers-1h dedup, the confluence
-> merge + KL top-tier grade boost. **Not yet (gaps to revisit):** the full `NEW/UNTESTED/TESTED_ONCE/
-> MITIGATED/BROKEN/FLIPPED` state machine, the additive 0–100 score rubric (§15 below), and a hard
-> *rejection-confirmation* entry gate (we currently confirm via the existing pattern/trigger families).
+> wicked through), touch decay, broken/flip, 4h-covers-1h dedup, the confluence merge + KL top-tier grade
+> boost, **and the zone-drawing discipline below**. **Not yet (gaps to revisit):** the full `NEW/UNTESTED/
+> TESTED_ONCE/MITIGATED/BROKEN/FLIPPED` state machine, the additive 0–100 score rubric (§15 below), and a
+> hard *rejection-confirmation* entry gate (we currently confirm via the existing pattern/trigger families).
+>
+> ### Zone-drawing discipline (implemented in `build_classic_zones`)
+> 1. **A buy/sell zone is NOT every swing pivot.** It requires a *qualified* demand/supply origin: a clear
+>    **impulse move away** (`is_impulse_kl`) AND **never wicked through** AND **not consumed** (`valid`,
+>    crossings < 2). Unqualified swing lows/highs are suppressed (not drawn), keeping the chart clean.
+> 2. **Zone shape:** normal candle → low↔body-bottom (green→open, red→close); indecision candle → low↔high.
+> 3. **S/R zones are separate from buy/sell zones** (rule 5): S/R comes from *strong origin candles*
+>    (big + high-volume + small-opposite-wick + direction-wick); buy/sell zones from qualifying demand/supply.
+> 4. **Role by POSITION, not color** (rule 6): a zone *below* price is buy-side (support/buy zone), a zone
+>    *above* price is sell-side (resistance/sell zone). A former support price has fallen below is overhead
+>    (resistance/flip), **never** drawn as active support.
+> 5. **Clean chart** (rule 7): cap ~3 per side (nearest active + next + deeper), drop an S/R level a zone
+>    already covers, KL prioritised first.
 
 ---
 

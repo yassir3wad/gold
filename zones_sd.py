@@ -382,6 +382,11 @@ def build_classic_zones(tf_bars, cur_price):
         mid = zmid(z)
         if any(abs(mid - q) < 15 for q in seen):
             continue
+        # A buy/sell ZONE is NOT every swing low/high — it must be a QUALIFIED demand/supply origin: a clear
+        # impulse move away (is_impulse_kl) AND never wicked through. (z["valid"] already drops consumed zones.)
+        # Strong-level S/R zones come from strong origin candles instead (rule 5) and don't need the impulse.
+        if not z.get("strong_lvl") and not (z.get("impulse") and not z.get("wick_broken")):
+            continue
         # ROLE BY POSITION, not by candle color: a zone BELOW price is buy-side (support / buy zone), a zone
         # ABOVE price is sell-side (resistance / sell zone). So a green-origin support that price has fallen
         # below is correctly overhead (former support → now resistance, flipped) — NOT immediate support.

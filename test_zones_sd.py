@@ -173,10 +173,23 @@ def test_build_classic_position_aware():
     check("position: every zone below price is buy-side", below and all(z["role"] in ("buy zone", "support") for z in below))
 
 
+def test_buy_zone_requires_impulse():
+    # a buy/sell ZONE needs a qualified demand/supply origin (impulse move away), not just any swing low.
+    impulse = [C(100,105,99,104,10), C(104,112,103,108,10), C(108,109,102,103,10),
+               C(103,104,96,97,10),  C(97,101,94,100,100),  C(100,107,99,106,10), C(106,116,105,115,10)]
+    out = Z.build_classic_zones([("4H", impulse)], 95.0)
+    check("qualify: impulse swing low yields a zone", len(out["zones"]) >= 1)
+    # gentle swing low, NO impulse move away → must NOT be drawn as a buy/sell zone
+    gentle = [C(100,101,99,100,50)] * 5 + [C(100,101,90,91,50), C(91,92,90,91.5,50), C(91.5,92.5,91,92,50), C(92,93,91.5,92.5,50)]
+    out2 = Z.build_classic_zones([("4H", gentle)], 110.0)
+    check("qualify: gentle (no-impulse) swing low draws NO buy/sell zone",
+          not any(z["role"] in ("buy zone", "sell zone") for z in out2["zones"]))
+
+
 def main():
     for fn in (test_volume_fib, test_zone_geometry, test_find_demand_zone, test_value_area, test_prior_day_vas_cached,
                test_key_level_bos_and_score, test_key_level_decay, test_big_candle, test_sr_levels_and_flip,
-               test_build_classic_zones, test_build_classic_position_aware):
+               test_build_classic_zones, test_build_classic_position_aware, test_buy_zone_requires_impulse):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")
