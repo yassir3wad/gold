@@ -49,7 +49,7 @@ def main():
     ap.add_argument("--chart", default="eFMec2F9")
     ap.add_argument("--display-tf", default="60")
     ap.add_argument("--symbol", default="PEPPERSTONE:XAUUSD")   # PEPPERSTONE has real volume (OANDA gold doesn't) → value areas + TPO work
-    ap.add_argument("--layers", default="zones,sr,va,smc")   # comma-list of layers to draw: zones,sr,va,smc (e.g. --layers va)
+    ap.add_argument("--layers", default="zones,sr,va")   # comma-list of layers to draw: zones,sr,va. SMC is NOT drawn — the LuxAlgo indicator draws itself; SMC is consumed as stored JSON (refresh_zones --with-smc) + used in scalp (mtf_signal). Pass --layers zones,sr,va,smc only to debug-overlay SMC.
     a = ap.parse_args(); CH = a.chart
     LAYERS = {x.strip() for x in a.layers.split(",") if x.strip()}
     # KL = bright/solid, normal zone = faint. demand=green, supply=red.
