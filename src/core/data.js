@@ -28,6 +28,12 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
           if (!g || !g._primitivesCollection) continue;
           var pc = g._primitivesCollection;
           var items = [];
+          // Project ONLY the fields the consumers read (labels t/y, lines+boxes y1/y2/x1/x2/st/w/c/bc,
+          // tables tid/row/col, verbose extras). Returning the full raw primitive for every item blows past
+          // CDP's ~64KB returnByValue cap on label-dense charts (500+ structure labels) → truncated JSON →
+          // silent 0 labels. A lean projection keeps the payload small so all items survive.
+          function lean(v, id) { return {id: id, t: v.t, y: v.y, y1: v.y1, y2: v.y2, x: v.x, x1: v.x1, x2: v.x2,
+            yl: v.yl, sz: v.sz, tci: v.tci, ci: v.ci, st: v.st, w: v.w, c: v.c, bc: v.bc, tid: v.tid, row: v.row, col: v.col}; }
           try {
             var outer = pc.${collectionName};
             if (outer) {
@@ -35,7 +41,7 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
               if (inner) {
                 var coll = inner.get(false);
                 if (coll && coll._primitivesDataById && coll._primitivesDataById.size > 0) {
-                  coll._primitivesDataById.forEach(function(v, id) { items.push({id: id, raw: v}); });
+                  coll._primitivesDataById.forEach(function(v, id) { items.push(lean(v, id)); });
                 }
               }
             }
@@ -46,7 +52,7 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
               if (tcOuter) {
                 var tcColl = tcOuter.get('tableCells');
                 if (tcColl && tcColl._primitivesDataById && tcColl._primitivesDataById.size > 0) {
-                  tcColl._primitivesDataById.forEach(function(v, id) { items.push({id: id, raw: v}); });
+                  tcColl._primitivesDataById.forEach(function(v, id) { items.push(lean(v, id)); });
                 }
               }
             } catch(e) {}
@@ -367,7 +373,7 @@ export async function getPineLines({ study_filter, verbose } = {}) {
     const seen = {};
     const allLines = [];
     for (const item of s.items) {
-      const v = item.raw;
+      const v = item;        // buildGraphicsJS now projects lean fields directly onto item (no .raw)
       const y1 = v.y1 != null ? Math.round(v.y1 * 100) / 100 : null;
       const y2 = v.y2 != null ? Math.round(v.y2 * 100) / 100 : null;
       if (verbose) allLines.push({ id: item.id, y1, y2, x1: v.x1, x2: v.x2, horizontal: v.y1 === v.y2, style: v.st, width: v.w, color: v.ci });
@@ -389,7 +395,7 @@ export async function getPineLabels({ study_filter, max_labels, verbose } = {}) 
   const limit = max_labels || 50;
   const studies = raw.map(s => {
     let labels = s.items.map(item => {
-      const v = item.raw;
+      const v = item;        // buildGraphicsJS now projects lean fields directly onto item (no .raw)
       const text = v.t || '';
       const price = v.y != null ? Math.round(v.y * 100) / 100 : null;
       if (verbose) return { id: item.id, text, price, x: v.x, yloc: v.yl, size: v.sz, textColor: v.tci, color: v.ci };
@@ -409,7 +415,7 @@ export async function getPineTables({ study_filter } = {}) {
   const studies = raw.map(s => {
     const tables = {};
     for (const item of s.items) {
-      const v = item.raw;
+      const v = item;        // buildGraphicsJS now projects lean fields directly onto item (no .raw)
       const tid = v.tid || 0;
       if (!tables[tid]) tables[tid] = {};
       if (!tables[tid][v.row]) tables[tid][v.row] = {};
@@ -439,7 +445,7 @@ export async function getPineBoxes({ study_filter, verbose } = {}) {
     const seen = {};
     const allBoxes = [];
     for (const item of s.items) {
-      const v = item.raw;
+      const v = item;        // buildGraphicsJS now projects lean fields directly onto item (no .raw)
       const high = v.y1 != null && v.y2 != null ? Math.round(Math.max(v.y1, v.y2) * 100) / 100 : null;
       const low = v.y1 != null && v.y2 != null ? Math.round(Math.min(v.y1, v.y2) * 100) / 100 : null;
       if (verbose) allBoxes.push({ id: item.id, high, low, x1: v.x1, x2: v.x2, borderColor: v.c, bgColor: v.bc });

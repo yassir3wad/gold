@@ -186,7 +186,7 @@ def _tpo_levels():
     """Read the Kioseff TPO profile rows from its labels (each carries the TPO letters at that price).
     POC = price with the most letters; value area = the 70% band around it. (None,None,None) if empty."""
     rows = []
-    for s in tv("data", "labels", "--study-filter", "TPO").get("studies", []):
+    for s in tv("data", "labels", "--filter", "TPO").get("studies", []):   # --filter (NOT --study-filter, which was ignored → mixed in other studies' labels)
         for lb in s.get("labels", []):
             p = lb.get("price"); cnt = len(str(lb.get("text", "")).replace(" ", ""))
             if p and cnt: rows.append((round(p, PXD), cnt))

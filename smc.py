@@ -46,15 +46,25 @@ def read_smc(chart, tv=None, dedup_tol=0.0, max_labels=600):
     indicator isn't on the chart (it's mandatory). `max_labels` lifts the reader's default 50-label cap —
     Historical mode emits 500+ labels, so the Strong/Weak swings get truncated away without this."""
     tv = tv or _default_tv
-    bx = tv(chart, "data", "boxes", "--study-filter", SMC_FILTER).get("studies", [])
-    lb = tv(chart, "data", "labels", "--study-filter", SMC_FILTER, "--max", str(max_labels)).get("studies", [])
-    boxes = bx[0].get("zones", []) if bx else []
-    labels = lb[0].get("labels", []) if lb else []
+    # NOTE: the CLI flag is --filter (NOT --study-filter — that was silently ignored, so reads fell back to
+    # study[0], which on charts with a "Trading Sessions" indicator returned ITS boxes/labels, not SMC's).
+    bx = tv(chart, "data", "boxes", "--filter", SMC_FILTER).get("studies", [])
+    lb = tv(chart, "data", "labels", "--filter", SMC_FILTER, "--max", str(max_labels)).get("studies", [])
+    # Pick the study that actually IS the SMC indicator — the filter can still return >1 study and order is
+    # not guaranteed, so never blindly take [0].
+    def _pick(studies, key):
+        for s in studies:
+            if SMC_FILTER.upper() in (s.get("name", "") or "").upper():
+                return s.get(key, [])
+        return []
+    boxes = _pick(bx, "zones")
+    labels = _pick(lb, "labels")
     def _tag(l): return (l.get("text") or "").strip().upper()
     structure = dedup_levels([l for l in labels if _tag(l) in _STRUCTURE_TAGS], dedup_tol)
     liquidity = [l for l in labels if _tag(l) in _LIQUIDITY_TAGS]
     swings = [l for l in labels if _tag(l) in _SWING_TAGS]
-    return {"present": bool(bx), "boxes": boxes, "structure": structure,
+    present = any(SMC_FILTER.upper() in (s.get("name", "") or "").upper() for s in (bx + lb))
+    return {"present": present, "boxes": boxes, "structure": structure,
             "liquidity": liquidity, "swings": swings}
 
 

@@ -131,8 +131,10 @@ export async function run(argv) {
 async function execute(handler, values, positionals) {
   try {
     const result = await handler(values, positionals);
-    console.log(JSON.stringify(result, null, 2));
-    process.exit(0);
+    // Exit ONLY after stdout drains. console.log + immediate process.exit truncates output >64KB when
+    // stdout is a pipe (subprocess capture, e.g. read_smc): exit kills the process before the OS pipe
+    // buffer (64KB on macOS) flushes, yielding invalid JSON. The write callback fires after the drain.
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n', () => process.exit(0));
   } catch (err) {
     handleError(err);
   }
