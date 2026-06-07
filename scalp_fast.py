@@ -274,6 +274,31 @@ def load_zones():
                 z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
     return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
 
+
+def merge_classic_zones(htf_r, htf_s, classic, pip, tol_pips=5):
+    """Merge the classic sd_zones/sd_sr into the resistance/support level lists for confluence, SKIPPING a
+    classic level whose price range OVERLAPS an existing wall (within tol_pips) — so conf_R/conf_S never
+    double-count the same price area when a classic zone coincides with an old HTF cluster. Pure (testable).
+    buy zone/support → support side; sell zone/resistance → resistance side. Returns (R, S)."""
+    tol = tol_pips * pip
+    R = list(htf_r); S = list(htf_s)
+    def dup(lo, hi, lst): return any(not (hi < elo - tol or lo > ehi + tol) for elo, ehi, _ in lst)
+    for zz in (classic or {}).get("zones", []):
+        tgt = S if zz["role"] in ("buy zone", "support") else R
+        if not dup(zz["lo"], zz["hi"], tgt):
+            tgt.append((zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}"))
+    for s in (classic or {}).get("sr", []):
+        tgt = S if s["role"] == "support" else R
+        if not dup(s["price"], s["price"], tgt):
+            tgt.append((s["price"], s["price"], f"{s['tf']} {s['role']} (classic)"))
+    return R, S
+
+
+def kl_upgrade(grade):
+    """A Key-Level classic zone is the TOP-probability tier → upgrade a real setup (A or B) straight to A+
+    (a bare B + KL must reach A+, not just A — the generic cf_score path only does B→A). Pure (testable)."""
+    return "A+" if grade.startswith(("A", "B")) else grade
+
 def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
     """Pre-hold HARD FLOOR predicate (applies EVEN under ai_decide — the only skip that does).
     Returns (skip: bool, reasons: list[str]).
@@ -695,14 +720,10 @@ def main():
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
     # CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) join the confluence machinery:
     # buy zone/support → support side; sell zone/resistance → resistance side. So at_R/at_S/conf_R/conf_S and
-    # the target picker grade against EXACTLY what's drawn (the KL top-tier boost is applied later in grading).
+    # the target picker grade against EXACTLY what's drawn. merge_classic_zones DEDUPES against existing walls
+    # so an overlapping classic zone can't double-count in conf_R/conf_S. (KL top-tier boost is in grading.)
     if FL.get("classic_zones", True):
-        for zz in CLASSIC.get("zones", []):
-            tup = (zz["lo"], zz["hi"], f"{zz['tf']} {zz['role']}{' KL' if zz['kl'] else ''}")
-            (HTF_S if zz["role"] in ("buy zone", "support") else HTF_R).append(tup)
-        for s in CLASSIC.get("sr", []):
-            tup = (s["price"], s["price"], f"{s['tf']} {s['role']} (classic)")
-            (HTF_S if s["role"] == "support" else HTF_R).append(tup)
+        HTF_R, HTF_S = merge_classic_zones(HTF_R, HTF_S, CLASSIC, PIP)
     tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
@@ -1212,6 +1233,7 @@ def main():
         if _klz:
             cf_score += 2; cf_reasons.append(f"KL {_klz['tf']} {_klz['role']}")
             htf_note += f" | ⭐KL {_klz['tf']} {_klz['role']}"
+            grade = kl_upgrade(grade)   # KL = top tier → A+ directly (B+KL must reach A+, not just A)
     if cf_score:
         htf_note += f" | +{cf_score} HTF ({', '.join(cf_reasons[:3])})"
         if cf_score >= 2:                              # 2+ aligned HTF elements = a real grade boost

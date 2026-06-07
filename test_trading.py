@@ -342,13 +342,40 @@ def test_simulate_outcome():
     check("cf: empty bars -> none", cf.simulate_outcome("LONG", 100, 98, 103, []) == "none")
 
 
+def test_kl_upgrade():
+    # KL = top tier: a real setup (A or B) → A+ directly; C/garbage not promoted; A+ stays A+.
+    check("kl_upgrade: B(open space) -> A+", sf.kl_upgrade("B (open space)") == "A+")
+    check("kl_upgrade: B+vol -> A+", sf.kl_upgrade("B+vol") == "A+")
+    check("kl_upgrade: A -> A+", sf.kl_upgrade("A") == "A+")
+    check("kl_upgrade: A+ stays A+", sf.kl_upgrade("A+") == "A+")
+    check("kl_upgrade: C not promoted", sf.kl_upgrade("C-into-zone") == "C-into-zone")
+
+
+def test_merge_classic_dedup():
+    htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
+    classic = {"zones": [
+        {"role": "sell zone", "lo": 4402, "hi": 4408, "tf": "4H", "kl": False},   # overlaps old R → must be skipped
+        {"role": "buy zone",  "lo": 4250, "hi": 4260, "tf": "1H", "kl": True},     # distinct → added to S
+    ], "sr": [
+        {"role": "resistance", "price": 4405, "tf": "4H", "flip": False},          # overlaps old R → skipped
+        {"role": "support",    "price": 4280, "tf": "1H", "flip": False},          # distinct → added to S
+    ]}
+    R, S = sf.merge_classic_zones(htf_r, htf_s, classic, 0.10)
+    check("merge: overlapping classic R NOT double-counted at 4405",
+          len([1 for lo, hi, _ in R if lo - 4 <= 4405 <= hi + 4]) == 1)
+    check("merge: distinct classic buy zone added to S", any("buy zone" in lab for _, _, lab in S))
+    check("merge: distinct classic support added to S", any("support (classic)" in lab for _, _, lab in S))
+    check("merge: S grew by exactly the 2 distinct levels", len(S) == 3)
+    check("merge: inputs untouched (returns copies)", len(htf_r) == 1 and len(htf_s) == 1)
+
+
 def main():
     for fn in (test_hard_floor, test_skip_key_and_dedup, test_log_floor_skip_writes_and_dedups,
                test_stats, test_norm_grade, test_num, test_parse_time,
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
-               test_simulate_outcome):
+               test_simulate_outcome, test_kl_upgrade, test_merge_classic_dedup):
         try:
             fn()
         except Exception as e:
