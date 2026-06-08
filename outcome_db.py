@@ -171,6 +171,14 @@ def win_rate_by(dimension, db=DEFAULT_DB):
         con.close()
 
 
+def session_breakdown(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by trading session (LONDON, NEWYORK,
+    ASIA, etc). Win = net pips > 0. Only rows that represent a real executed trade (result in
+    TP1/TP2/SL/timeout/superseded/BE) with a numeric `pips` count.
+    Returns {session_name: {n, wins, losses, scratch, win_rate, net}}."""
+    return win_rate_by("session", db)
+
+
 if __name__ == "__main__":
     import sys, json
     db = DEFAULT_DB
