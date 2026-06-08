@@ -413,6 +413,18 @@ def test_fib_pullback_signal():
           and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
 
 
+def test_zones_fallback_non_xau_safe():
+    """Deployment-safety (codex): the hardcoded HTF_R/HTF_S/PDH/... are GOLD levels — a valid fallback
+    only for XAUUSD. With generated zone files now untracked, a fresh clone whose refresh fails must NOT
+    grade EURUSD/GBPUSD/indices against gold; non-XAU falls back to EMPTY dynamic zones instead."""
+    R = [(4400, 4410, "g")]; S = [(4300, 4310, "g")]
+    rx = sf.zones_fallback("XAUUSD", R, S, 4500, 4200, 4480, 4260)
+    check("zones_fallback: XAU keeps gold constants", rx == (R, S, 4500, 4200, 4480, 4260))
+    re_ = sf.zones_fallback("EURUSD", R, S, 4500, 4200, 4480, 4260)
+    check("zones_fallback: non-XAU → empty zones (no gold levels)", re_ == ([], [], None, None, None, None))
+    check("zones_fallback: non-XAU R/S empty", re_[0] == [] and re_[1] == [])
+
+
 def test_cluster_walls_and_next_wall():
     """Wall-dedup (codex Option 2): collapse near-duplicate edges into distinct clusters; the NEAR edge of
     each cluster is the obstacle, so a zone price is INSIDE isn't counted as the next wall."""
@@ -608,7 +620,7 @@ def main():
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
                test_fib_pullback_signal, test_refresh_fib_zones_builder, test_key_level_trade_helpers,
-               test_merge_smc_ob_zones, test_cluster_walls_and_next_wall, test_count_distinct_at):
+               test_merge_smc_ob_zones, test_cluster_walls_and_next_wall, test_zones_fallback_non_xau_safe, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

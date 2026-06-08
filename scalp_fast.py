@@ -262,10 +262,19 @@ def prior_day_vas(symbol, ref_ts, n=3):
             out.append(r)
     return out
 
+def zones_fallback(symbol, htf_r, htf_s, pdh, pdl, asia_h, asia_l):
+    """Fallback when no generated zone file is usable. The hardcoded HTF_R/HTF_S/PDH/... constants are
+    GOLD levels — a valid fallback ONLY for XAUUSD. For any other symbol, returning them would grade e.g.
+    EURUSD against gold prices, so fail SAFE with empty dynamic zones (no levels → no setups) instead of
+    silently trading the wrong map. Pure (testable). [generated zone files are gitignored — codex]"""
+    if symbol == "XAUUSD":
+        return list(htf_r), list(htf_s), pdh, pdl, asia_h, asia_l
+    return [], [], None, None, None, None
+
 def load_zones():
     """Return (HTF_R, HTF_S, PDH, PDL) from auto-derived zones.json. Rebuilds it (refresh_zones.py)
-    when stale (>ZONES_TTL); falls back to the hardcoded constants if no usable file exists.
-    Each scan is a fresh process, so this re-applies every run."""
+    when stale (>ZONES_TTL); falls back via zones_fallback() if no usable file exists (gold-only constants,
+    so non-XAU gets EMPTY zones, never gold levels). Each scan is a fresh process, so this re-applies every run."""
     z = None
     try:
         z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
@@ -282,7 +291,10 @@ def load_zones():
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:
         return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
                 z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
-    return list(HTF_R), list(HTF_S), PDH, PDL, ASIA_H, ASIA_L
+    if SYMBOL != "XAUUSD":
+        print(f">> WARN: no usable zones file for {SYMBOL} and refresh failed — running with EMPTY zones "
+              f"(hardcoded fallback is GOLD-only; refusing to grade {SYMBOL} against gold levels).")
+    return zones_fallback(SYMBOL, HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L)
 
 
 def merge_classic_zones(htf_r, htf_s, classic):
