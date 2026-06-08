@@ -7,6 +7,9 @@ These pin the zone-diff behavior that the scheduler relies on:
   - ordinary diffs still classify added/removed/modified correctly
 """
 import refresh_all_zones as R
+import json
+import os
+import tempfile
 
 _r = []
 
@@ -36,8 +39,26 @@ def test_modified_and_unchanged():
     check("added counted once", out["added"] == 1)
 
 
+def test_malformed_zone_file_raises():
+    tmp = tempfile.TemporaryDirectory()
+    real_tvdir = R.TVDIR
+    try:
+        R.TVDIR = tmp.name
+        with open(os.path.join(tmp.name, "zones_xauusd.json"), "w") as f:
+            f.write("{bad json")
+        try:
+            R.load_zones("XAUUSD")
+            check("malformed zone file must raise", False)
+        except json.JSONDecodeError:
+            check("malformed zone file must raise", True)
+    finally:
+        R.TVDIR = real_tvdir
+        tmp.cleanup()
+
+
 if __name__ == "__main__":
-    for fn in (test_missing_old_counts_additions, test_missing_new_counts_removals, test_modified_and_unchanged):
+    for fn in (test_missing_old_counts_additions, test_missing_new_counts_removals,
+               test_modified_and_unchanged, test_malformed_zone_file_raises):
         fn()
     for name, ok in _r:
         if not ok:

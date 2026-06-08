@@ -52,12 +52,16 @@ if "--symbol" in sys.argv:
         SINGLE_SYMBOL = sys.argv[idx + 1]
 
 def load_zones(symbol):
-    """Load zones file for symbol, return None if not found"""
-    try:
-        with open(os.path.join(TVDIR, f"zones_{symbol.lower()}.json")) as f:
-            return json.load(f)
-    except:
+    """Load zones file for symbol, or None if not found.
+
+    Invalid JSON must raise so callers can fail loudly instead of silently
+    treating a malformed file as a missing file.
+    """
+    path = os.path.join(TVDIR, f"zones_{symbol.lower()}.json")
+    if not os.path.exists(path):
         return None
+    with open(path) as f:
+        return json.load(f)
 
 def compare_zones(old_zones, new_zones):
     """Compare old and new zone files, return {added, removed, modified, unchanged}"""
@@ -119,14 +123,32 @@ def main():
     for idx, sym in enumerate(symbols, 1):
         desc = instruments[sym].get('desc', '')
         logging.info(f"[{idx}/{len(symbols)}] {sym} — {desc}")
-        old_zones = load_zones(sym)
+        try:
+            old_zones = load_zones(sym)
+        except json.JSONDecodeError as e:
+            logging.error(f"  ✗ existing zones file is malformed for {sym}: {e}")
+            had_failure = True
+            old_zones = None
+        except Exception as e:
+            logging.error(f"  ✗ error loading existing zones for {sym}: {e}")
+            had_failure = True
+            old_zones = None
         try:
             result = subprocess.run(
                 ["python3", os.path.join(TVDIR, "refresh_zones.py"), "--symbol", sym],
                 cwd=TVDIR, capture_output=True, text=True, timeout=60
             )
             if result.returncode == 0:
-                new_zones = load_zones(sym)
+                try:
+                    new_zones = load_zones(sym)
+                except json.JSONDecodeError as e:
+                    logging.error(f"  ✗ refreshed zones file is malformed for {sym}: {e}")
+                    had_failure = True
+                    continue
+                except Exception as e:
+                    logging.error(f"  ✗ error loading refreshed zones for {sym}: {e}")
+                    had_failure = True
+                    continue
                 diff = compare_zones(old_zones, new_zones)
                 changes_by_symbol[sym] = diff
                 for k in diff:
