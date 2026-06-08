@@ -388,6 +388,35 @@ def test_merge_classic_keeps_all():
     check("merge: inputs untouched (returns copies)", len(htf_r) == 1 and len(htf_s) == 1)
 
 
+def test_merge_smc_ob_zones():
+    htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
+    smc_block = {"tf": {
+        "240": {"boxes": [
+            {"high": 4515.5, "low": 4464.2, "side": "supply"},
+            {"high": 4293.8, "low": 4268.5, "side": "straddle"},
+        ], "swings": [{"text": "Strong High", "price": 4773.53}, {"text": "Weak Low", "price": 4268.53}]},
+        "60": {"boxes": [{"high": 4330.0, "low": 4310.0, "side": "demand"}],
+               "liquidity": [{"text": "EQH", "price": 4378.67}, {"text": "EQL", "price": 4090.5}]},
+        "15": {"boxes": [{"high": "4316.96", "low": "4301.06", "side": "supply"}]},
+    }}
+    R, S = sf.merge_smc_ob_zones(htf_r, htf_s, smc_block)
+    check("smc merge: supply OBs become resistance zones",
+          any(lab == "4H SMC supply OB" and lo == 4464.2 and hi == 4515.5 for lo, hi, lab in R)
+          and any(lab == "15m SMC supply OB" and lo == 4301.06 and hi == 4316.96 for lo, hi, lab in R))
+    check("smc merge: demand OBs become support zones",
+          any(lab == "1H SMC demand OB" and lo == 4310.0 and hi == 4330.0 for lo, hi, lab in S))
+    check("smc merge: swing highs/lows become directional levels",
+          any(lab == "4H SMC Strong High" and lo == 4773.53 and hi == 4773.53 for lo, hi, lab in R)
+          and any(lab == "4H SMC Weak Low" and lo == 4268.53 and hi == 4268.53 for lo, hi, lab in S))
+    check("smc merge: EQH/EQL liquidity becomes directional levels",
+          any(lab == "1H SMC EQH liquidity" and lo == 4378.67 and hi == 4378.67 for lo, hi, lab in R)
+          and any(lab == "1H SMC EQL liquidity" and lo == 4090.5 and hi == 4090.5 for lo, hi, lab in S))
+    check("smc merge: straddle/equilibrium boxes ignored",
+          not any("straddle" in lab for _, _, lab in R + S)
+          and not any(lo == 4268.5 and hi == 4293.8 for lo, hi, _ in R + S))
+    check("smc merge: inputs untouched", len(htf_r) == 1 and len(htf_s) == 1)
+
+
 def test_count_distinct_at():
     # an old HTF wall + a coinciding classic zone at the SAME price counts ONCE (no double-count) ...
     overlapping = [(4400, 4410, "old R"), (4402, 4408, "4H sell zone")]
@@ -454,7 +483,8 @@ def main():
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
-               test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all, test_count_distinct_at):
+               test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
+               test_merge_smc_ob_zones, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

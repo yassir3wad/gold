@@ -296,6 +296,49 @@ def merge_classic_zones(htf_r, htf_s, classic):
     return R, S
 
 
+def merge_smc_ob_zones(htf_r, htf_s, smc_block):
+    """Merge stable stored SMC price objects into the resistance/support maps used by setup detection.
+    Clear supply OBs, swing highs and EQH liquidity behave like resistance; clear demand OBs, swing lows
+    and EQL liquidity behave like support. Straddle boxes are intentionally ignored because they sit
+    around current/equilibrium price and are not directional. BOS/CHoCH structure labels are scoring-only:
+    they are too dense/noisy in historical mode to become trigger zones safely. Returns (R, S). Pure."""
+    R = list(htf_r); S = list(htf_s)
+    tf_names = {"240": "4H", "60": "1H", "15": "15m"}
+    for tfk, data in ((smc_block or {}).get("tf", {}) or {}).items():
+        tf_lab = tf_names.get(str(tfk), f"{tfk}m")
+        for b in data.get("boxes", []) or []:
+            side = b.get("side")
+            if side not in ("supply", "demand"):
+                continue
+            lo, hi = _num(b.get("low")), _num(b.get("high"))
+            if lo is None or hi is None:
+                continue
+            if hi < lo:
+                lo, hi = hi, lo
+            tup = (lo, hi, f"{tf_lab} SMC {side} OB")
+            (R if side == "supply" else S).append(tup)
+        for sw in data.get("swings", []) or []:
+            price = _num(sw.get("price"))
+            text = str(sw.get("text", "swing")).strip() or "swing"
+            low_text = text.lower()
+            if price is None:
+                continue
+            if "high" in low_text:
+                R.append((price, price, f"{tf_lab} SMC {text}"))
+            elif "low" in low_text:
+                S.append((price, price, f"{tf_lab} SMC {text}"))
+        for liq in data.get("liquidity", []) or []:
+            price = _num(liq.get("price"))
+            text = str(liq.get("text", "")).upper()
+            if price is None:
+                continue
+            if "EQH" in text:
+                R.append((price, price, f"{tf_lab} SMC EQH liquidity"))
+            elif "EQL" in text:
+                S.append((price, price, f"{tf_lab} SMC EQL liquidity"))
+    return R, S
+
+
 def count_distinct_at(levels, price, edge=None):
     """Count DISTINCT price clusters in `levels` [(lo,hi,lab)…] that bracket `price` (within `edge`), merging
     overlapping/adjacent brackets so the SAME wall covered by several sources (e.g. an old HTF cluster + a
@@ -410,6 +453,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "anti_chase": True, "adaptive_tp": True, "rsi_filter": True, "trend_regime": True,  # rsi_filter ON by default (forex/indices); per-symbol override turns it OFF for gold (XAUUSD) — RSI informational only there
                  "confluence": True, "volume_profile": True, "zone_reclaim": False, "smc_confluence": False,
                  "smc_mtf": True,   # consider the STORED multi-TF SMC snapshot (zones file, hourly cron): HTF-weighted OB/swing confluence + soft premium/discount alignment. Stable read (not the flaky per-tick live read smc_confluence).
+                 "smc_ob_zones": True,   # treat stable stored SMC price objects (clear OBs, swings, EQH/EQL) as real R/S zones for at_R/at_S, zone-bounce detection, confluence and target geometry. Straddle boxes remain scoring-only/no-trigger.
                  "classic_zones": True,   # consider the CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) in confluence + grade; a KEY-LEVEL (KL) classic zone is the top-probability tier and boosts the grade.
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
@@ -776,12 +820,18 @@ def main():
     AI = FL.get("ai_decide", False)   # AI-decides mode: bypasses soft quality filters, but still honors hard floor, observation gate, and family caps
     global HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L
     HTF_R, HTF_S, PDH, PDL, ASIA_H, ASIA_L = load_zones()   # auto-derived zones+session ranges (rebuilt ~6h); hardcoded = fallback
+    SMC_STORED = stored_smc() if (FL.get("smc_mtf", True) or FL.get("smc_ob_zones", True)) else {}
     # CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) join the confluence machinery:
     # buy zone/support → support side; sell zone/resistance → resistance side. So at_R/at_S/conf_R/conf_S and
     # the target picker grade against EXACTLY what's drawn (drawn == traded — overlapping zones are kept, not
     # dropped; conf_R/conf_S de-dup at COUNT time via count_distinct_at). (KL top-tier boost is in grading.)
     if FL.get("classic_zones", True):
         HTF_R, HTF_S = merge_classic_zones(HTF_R, HTF_S, CLASSIC)
+    # STORED SMC order blocks from zones_<symbol>.json must also be first-class trade zones, not only
+    # post-trigger confluence. This lets a clear supply/demand OB tap form a zone-bounce candidate.
+    # Ambiguous straddle/equilibrium boxes are intentionally ignored by merge_smc_ob_zones().
+    if FL.get("smc_ob_zones", True):
+        HTF_R, HTF_S = merge_smc_ob_zones(HTF_R, HTF_S, SMC_STORED)
     tv("timeframe", str(BASE_TF))   # execution TF (1m live, 5m backtest) — load_zones/VP may have switched TF; restore before reading bars
     price = tv("quote").get("last")
     b = tv("ohlcv", "-n", "180").get("bars", [])
@@ -1284,7 +1334,7 @@ def main():
             if tls and smcmod.near_level(entry, tls, SMC_TOL * PIP * VS):
                 cf_score += 1; cf_reasons.append("Auto-Trendline")
         if FL.get("smc_mtf", True):                        # STORED multi-TF SMC snapshot (zones file, hourly cron) — stable
-            _smcblk = stored_smc()
+            _smcblk = SMC_STORED
             smc_age = round((time.time() - _smcblk["ts"]) / 3600, 2) if _smcblk.get("ts") else None
             sig = smcmod.mtf_signal(entry, side, _smcblk, SMC_TOL * PIP * VS)
             cf_score += sig["score"]; cf_reasons += sig["reasons"]
