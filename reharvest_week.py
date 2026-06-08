@@ -23,20 +23,22 @@ def daterange(a, b):
 
 def main():
     a, b = sys.argv[1], sys.argv[2]
-    for date in daterange(a, b):
-        try:
-            va = tpo.fetch_va(SYMBOL, date, chart=BACKTEST_CHART)
-        except Exception as e:
-            print(f"{date}  FETCH-ERROR {e}", flush=True); continue
-        if va and va.get("poc") and va.get("vah") and va.get("val"):
-            sp = va.get("sp") or ((vs.get(SYMBOL, date) or {}).get("sp") or [])   # never wipe verified SP with an empty read
-            vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=sp)
-            print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={sp}", flush=True)
-        else:
-            print(f"{date}  INCOMPLETE {va}", flush=True)
-    # restore realtime on the backtest tab
-    tpo._default_tv(BACKTEST_CHART, "replay", "stop")
-    print("done; replay stopped", flush=True)
+    try:
+        for date in daterange(a, b):
+            try:
+                va = tpo.fetch_va(SYMBOL, date, chart=BACKTEST_CHART)
+            except Exception as e:
+                print(f"{date}  FETCH-ERROR {e}", flush=True); continue
+            if va and va.get("poc") and va.get("vah") and va.get("val"):
+                sp = va.get("sp") or ((vs.get(SYMBOL, date) or {}).get("sp") or [])   # never wipe verified SP with an empty read
+                vs.put(SYMBOL, date, va["poc"], va["vah"], va["val"], sp=sp)
+                print(f"{date}  POC={va['poc']} VAH={va['vah']} VAL={va['val']} SP={sp}", flush=True)
+            else:
+                print(f"{date}  INCOMPLETE {va}", flush=True)
+    finally:
+        # restore realtime on the backtest tab even if one date fetch crashes
+        tpo._default_tv(BACKTEST_CHART, "replay", "stop")
+        print("done; replay stopped", flush=True)
 
 
 if __name__ == "__main__":
