@@ -15,7 +15,7 @@ def test_shots_restores_timeframe_on_failure():
             if args[:1] == ("screenshot",):
                 raise RuntimeError("boom")
             if args[:1] == ("state",):
-                return {"resolution": "4h"}
+                return {"resolution": "5"}
             return {}
 
         J.tv = spy
@@ -24,8 +24,8 @@ def test_shots_restores_timeframe_on_failure():
             J.shots(folder, ["4h"], "entry")
         except RuntimeError:
             pass
-        assert ("timeframe", "1") in calls, "shots must restore 1m timeframe in finally"
-        print("✓ shots restores timeframe on failure")
+        assert ("timeframe", "5") in calls, "shots must restore the original timeframe in finally"
+        print("✓ shots restores original timeframe on failure")
     finally:
         J.tv = real_tv
 

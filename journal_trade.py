@@ -47,6 +47,8 @@ def reset_scale():
 def shots(folder, tfs, prefix):
     """Screenshot the chart across multiple timeframes (HTF context + 1m execution); restore 1m after."""
     taken = []
+    orig_tf = str(tv("state").get("resolution") or "1")
+    restore_tf = "D" if orig_tf == "1D" else orig_tf
     try:
         for tf in tfs:
             expected = "1D" if tf == "D" else tf
@@ -63,7 +65,7 @@ def shots(folder, tfs, prefix):
                 shutil.copy(s, os.path.join(folder, f"{prefix}_{lab}.png"))
                 taken.append(lab)
     finally:
-        tv("timeframe", "1")       # restore execution TF for the fast monitor
+        tv("timeframe", restore_tf) # restore the chart's original execution TF (1m/5m/etc.)
         time.sleep(2)
     return taken
 
