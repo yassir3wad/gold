@@ -42,7 +42,7 @@ def _bars_for(sym, cfg, n):
 
 
 def _unix(time_str):
-    try: return dt.datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M").astimezone().timestamp()
+    try: return dt.datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M").replace(tzinfo=dt.timezone.utc).timestamp()
     except Exception: return None
 
 
