@@ -37,34 +37,37 @@ def main():
     a = ap.parse_args()
     CH = a.chart
 
-    # 1) ACTIVATE the tab so its canvas renders live (else the screenshot is a stale frame)
-    tabs = tv("tab", "list").get("tabs", [])
-    idx = next((t["index"] for t in tabs if t.get("chart_id") == CH), None)
-    if idx is not None:
-        tv("tab", "switch", "--index", str(idx))
+    try:
+        # 1) ACTIVATE the tab so its canvas renders live (else the screenshot is a stale frame)
+        tabs = tv("tab", "list").get("tabs", [])
+        idx = next((t["index"] for t in tabs if t.get("chart_id") == CH), None)
+        if idx is not None:
+            tv("tab", "switch", "--index", str(idx))
+            time.sleep(2)
+
+        # 2) set symbol + 30m (the TPO session TF) and replay to the week end so the profiles are complete
+        tv("symbol", a.symbol, chart=CH)
+        tv("timeframe", "30", chart=CH)
+        tv("replay", "start", "--date", (dt.datetime.strptime(a.week_end, "%Y-%m-%d").date() + dt.timedelta(days=1)).isoformat(), chart=CH)
+        time.sleep(4)
+
+        # 3) frame the week: from (week_end - days) to (week_end + 1), so all the daily profiles are in view
+        end = dt.datetime.strptime(a.week_end, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+        frm = int((end - dt.timedelta(days=a.days)).timestamp())
+        to = int((end + dt.timedelta(days=1)).timestamp())
+        tv("chart", "--from", str(frm), "--to", str(to), chart=CH)
         time.sleep(2)
 
-    # 2) set symbol + 30m (the TPO session TF) and replay to the week end so the profiles are complete
-    tv("symbol", a.symbol, chart=CH)
-    tv("timeframe", "30", chart=CH)
-    tv("replay", "start", "--date", (dt.datetime.strptime(a.week_end, "%Y-%m-%d").date() + dt.timedelta(days=1)).isoformat(), chart=CH)
-    time.sleep(4)
-
-    # 3) frame the week: from (week_end - days) to (week_end + 1), so all the daily profiles are in view
-    end = dt.datetime.strptime(a.week_end, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
-    frm = int((end - dt.timedelta(days=a.days)).timestamp())
-    to = int((end + dt.timedelta(days=1)).timestamp())
-    tv("chart", "--from", str(frm), "--to", str(to), chart=CH)
-    time.sleep(2)
-
-    # 4) show the TPO indicator and capture the full window (axis included)
-    tid = next((s["id"] for s in (tv("state", chart=CH) or {}).get("studies", []) if "TPO" in (s.get("name") or "")), None)
-    if tid:
-        tv("indicator", "toggle", tid, "--visible", "true", chart=CH)
-    time.sleep(3)
-    res = tv("screenshot", "--region", "full", chart=CH)
-    print(json.dumps({"image": res.get("file_path"), "chart": CH, "symbol": a.symbol,
-                      "week_end": a.week_end, "days": a.days}))
+        # 4) show the TPO indicator and capture the full window (axis included)
+        tid = next((s["id"] for s in (tv("state", chart=CH) or {}).get("studies", []) if "TPO" in (s.get("name") or "")), None)
+        if tid:
+            tv("indicator", "toggle", tid, "--visible", "true", chart=CH)
+        time.sleep(3)
+        res = tv("screenshot", "--region", "full", chart=CH)
+        print(json.dumps({"image": res.get("file_path"), "chart": CH, "symbol": a.symbol,
+                          "week_end": a.week_end, "days": a.days}))
+    finally:
+        tv("replay", "stop", chart=CH)
 
 
 if __name__ == "__main__":
