@@ -1,69 +1,2113 @@
 {
- "ts": 1780686107.6603,
- "price": 50897.4,
- "pdh": 51656.8,
- "pdl": 50583.6,
- "asia_h": 51576.5,
- "asia_l": 51502.3,
+ "ts": 1780916931.9335492,
+ "price": 50833.6,
+ "pdh": 51741.2,
+ "pdl": 50677.8,
+ "asia_h": 50859.3,
+ "asia_l": 50614.4,
  "london_h": 51741.2,
  "london_l": 51347.9,
- "ny_h": 51656.8,
- "ny_l": 51180.9,
+ "ny_h": 51668.5,
+ "ny_l": 50780.6,
  "asia_end": 6,
  "london_end": 15,
  "ny_end": 20,
  "htf_r": [
   [
-   51125.1,
-   51133.1,
-   "51129.1 (4H+D, x2)"
+   50829.7,
+   50837.7,
+   "50833.7 (15m, x2)"
   ],
   [
-   51203.8,
-   51215.6,
-   "51209.7 (15m+1H, x2)"
-  ],
-  [
-   51332.0,
-   51351.9,
-   "51341.9 (15m+4H, x2)"
-  ],
-  [
-   51362.4,
-   51370.4,
-   "51366.4 (1H+4H, x2)"
-  ],
-  [
-   51547.2,
-   51563.6,
-   "51555.6 (15m, x3)"
+   50896.0,
+   50913.4,
+   "50904.7 (15m+round, x2)"
   ],
   [
    51652.8,
    51660.8,
-   "51656.8 (1H+4H+PDH, x3)"
+   "51656.8 (1H+4H, x2)"
+  ],
+  [
+   51737.2,
+   51745.2,
+   "51741.2 (1H+4H+PDH, x3)"
   ]
  ],
  "htf_s": [
   [
-   50817.8,
+   50811.0,
    50827.5,
-   "50822.7 (1H+4H, x2)"
+   "50818.9 (15m+1H+4H, x5)"
   ],
   [
    50781.7,
    50792.0,
-   "50787.2 (1H+4H, x3)"
+   "50786.8 (4H, x2)"
   ],
   [
-   50579.6,
-   50587.6,
-   "50583.6 (1H+4H+PDL, x3)"
+   50764.4,
+   50778.3,
+   "50771.4 (15m+4H, x2)"
   ],
   [
-   50316.9,
-   50324.9,
-   "50320.9 (4H+D, x2)"
+   50727.4,
+   50738.9,
+   "50733.2 (15m, x2)"
+  ],
+  [
+   50685.0,
+   50704.0,
+   "50692.7 (15m+round, x3)"
+  ],
+  [
+   50668.4,
+   50681.8,
+   "50675.1 (1H+PDL, x2)"
   ]
+ ],
+ "smc": {
+  "ts": 1780916924.971742,
+  "price": 50833.6,
+  "tf": {
+   "240": {
+    "boxes": [
+     {
+      "high": 51741.2,
+      "low": 51394.64,
+      "side": "supply"
+     },
+     {
+      "high": 51556,
+      "low": 51383.8,
+      "side": "supply"
+     },
+     {
+      "high": 51383.8,
+      "low": 51211.6,
+      "side": "supply"
+     },
+     {
+      "high": 50785.7,
+      "low": 50320.9,
+      "side": "demand"
+     },
+     {
+      "high": 50314.2,
+      "low": 50194.35,
+      "side": "demand"
+     },
+     {
+      "high": 50194.35,
+      "low": 50074.5,
+      "side": "demand"
+     },
+     {
+      "high": 49828.5,
+      "low": 49726.45,
+      "side": "demand"
+     },
+     {
+      "high": 49726.45,
+      "low": 49624.4,
+      "side": "demand"
+     },
+     {
+      "high": 49392.7,
+      "low": 49223.5,
+      "side": "demand"
+     },
+     {
+      "high": 49094.5,
+      "low": 48910.5,
+      "side": "demand"
+     },
+     {
+      "high": 49044.6,
+      "low": 48870.25,
+      "side": "demand"
+     },
+     {
+      "high": 48870.25,
+      "low": 48695.9,
+      "side": "demand"
+     }
+    ],
+    "structure": [
+     {
+      "text": "BOS",
+      "price": 48852
+     },
+     {
+      "text": "BOS",
+      "price": 48857.1
+     },
+     {
+      "text": "BOS",
+      "price": 48879.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 48996.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49027.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49148
+     },
+     {
+      "text": "CHoCH",
+      "price": 49300.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49385.1
+     },
+     {
+      "text": "BOS",
+      "price": 49423.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49442.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49470.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49652.7
+     },
+     {
+      "text": "BOS",
+      "price": 49686
+     },
+     {
+      "text": "CHoCH",
+      "price": 49733.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49762.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49772.5
+     },
+     {
+      "text": "BOS",
+      "price": 49826.5
+     },
+     {
+      "text": "BOS",
+      "price": 49991.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 50017
+     },
+     {
+      "text": "BOS",
+      "price": 50213.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 50517
+     },
+     {
+      "text": "CHoCH",
+      "price": 50768.4
+     },
+     {
+      "text": "BOS",
+      "price": 50823.5
+     },
+     {
+      "text": "BOS",
+      "price": 51336
+     },
+     {
+      "text": "CHoCH",
+      "price": 51366.4
+     }
+    ],
+    "liquidity": [
+     {
+      "text": "EQL",
+      "price": 48841.4
+     },
+     {
+      "text": "EQH",
+      "price": 49652.7
+     },
+     {
+      "text": "EQL",
+      "price": 50022.8
+     },
+     {
+      "text": "EQH",
+      "price": 49733.5
+     },
+     {
+      "text": "EQH",
+      "price": 49752.6
+     },
+     {
+      "text": "EQL",
+      "price": 50788
+     },
+     {
+      "text": "EQL",
+      "price": 50565.8
+     }
+    ],
+    "swings": [
+     {
+      "text": "Weak High",
+      "price": 51741.2
+     },
+     {
+      "text": "Strong Low",
+      "price": 44810.1
+     }
+    ],
+    "premium": [
+     48275.65,
+     51741.2
+    ],
+    "discount": [
+     44810.1,
+     48275.65
+    ],
+    "equilibrium": 48275.65
+   },
+   "60": {
+    "boxes": [
+     {
+      "high": 51741.2,
+      "low": 51608.1,
+      "side": "supply"
+     },
+     {
+      "high": 51741.2,
+      "low": 51670.18,
+      "side": "supply"
+     },
+     {
+      "high": 51556,
+      "low": 51531.9,
+      "side": "supply"
+     },
+     {
+      "high": 51531.9,
+      "low": 51507.8,
+      "side": "supply"
+     },
+     {
+      "high": 51347.9,
+      "low": 51312.65,
+      "side": "supply"
+     },
+     {
+      "high": 51312.65,
+      "low": 51277.4,
+      "side": "supply"
+     },
+     {
+      "high": 51107.2,
+      "low": 51042.4,
+      "side": "supply"
+     },
+     {
+      "high": 51066.56,
+      "low": 50995.54,
+      "side": "supply"
+     },
+     {
+      "high": 51042.4,
+      "low": 50977.6,
+      "side": "supply"
+     },
+     {
+      "high": 50601.6,
+      "low": 50507.2,
+      "side": "demand"
+     },
+     {
+      "high": 50391.91,
+      "low": 50320.9,
+      "side": "demand"
+     },
+     {
+      "high": 50133.5,
+      "low": 50054.8,
+      "side": "demand"
+     },
+     {
+      "high": 50054.8,
+      "low": 49976.1,
+      "side": "demand"
+     },
+     {
+      "high": 49942.8,
+      "low": 49826.1,
+      "side": "demand"
+     },
+     {
+      "high": 49790.4,
+      "low": 49766.55,
+      "side": "demand"
+     },
+     {
+      "high": 49766.55,
+      "low": 49742.7,
+      "side": "demand"
+     },
+     {
+      "high": 49670.4,
+      "low": 49629.55,
+      "side": "demand"
+     },
+     {
+      "high": 49629.55,
+      "low": 49588.7,
+      "side": "demand"
+     },
+     {
+      "high": 49132,
+      "low": 48964.75,
+      "side": "demand"
+     },
+     {
+      "high": 48966.9,
+      "low": 48910.5,
+      "side": "demand"
+     },
+     {
+      "high": 48964.75,
+      "low": 48797.5,
+      "side": "demand"
+     }
+    ],
+    "structure": [
+     {
+      "text": "BOS",
+      "price": 48838.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 48841.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 48852
+     },
+     {
+      "text": "CHoCH",
+      "price": 48857.8
+     },
+     {
+      "text": "BOS",
+      "price": 48867.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 48935.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 48948.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 48957.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49019.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49039.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49043.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49053.7
+     },
+     {
+      "text": "BOS",
+      "price": 49058.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49109.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49110.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49156.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49167.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49170.5
+     },
+     {
+      "text": "BOS",
+      "price": 49173.5
+     },
+     {
+      "text": "BOS",
+      "price": 49182.9
+     },
+     {
+      "text": "BOS",
+      "price": 49184.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49210
+     },
+     {
+      "text": "BOS",
+      "price": 49213.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49220.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49226.3
+     },
+     {
+      "text": "BOS",
+      "price": 49233.3
+     },
+     {
+      "text": "BOS",
+      "price": 49235.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49251.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49257
+     },
+     {
+      "text": "BOS",
+      "price": 49272.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49289.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49291.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49292.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49293.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49294
+     },
+     {
+      "text": "CHoCH",
+      "price": 49304.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49310
+     },
+     {
+      "text": "CHoCH",
+      "price": 49317.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49348.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49361.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49380.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49392.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49420.7
+     },
+     {
+      "text": "BOS",
+      "price": 49430.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49436.6
+     },
+     {
+      "text": "BOS",
+      "price": 49461.4
+     },
+     {
+      "text": "BOS",
+      "price": 49462.3
+     },
+     {
+      "text": "BOS",
+      "price": 49470.1
+     },
+     {
+      "text": "BOS",
+      "price": 49473.5
+     },
+     {
+      "text": "BOS",
+      "price": 49476.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49487.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49508.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49527
+     },
+     {
+      "text": "BOS",
+      "price": 49533.9
+     },
+     {
+      "text": "BOS",
+      "price": 49546.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49547.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49572.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49606.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49607.4
+     },
+     {
+      "text": "BOS",
+      "price": 49686.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49718.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49725.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49735
+     },
+     {
+      "text": "CHoCH",
+      "price": 49738.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49745.2
+     },
+     {
+      "text": "BOS",
+      "price": 49749.9
+     },
+     {
+      "text": "BOS",
+      "price": 49804.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49804.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49816.9
+     },
+     {
+      "text": "BOS",
+      "price": 49834.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49866.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49971.7
+     },
+     {
+      "text": "BOS",
+      "price": 49991.8
+     },
+     {
+      "text": "BOS",
+      "price": 50010.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 50070.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 50071.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 50085
+     },
+     {
+      "text": "BOS",
+      "price": 50116.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 50149.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 50188.9
+     },
+     {
+      "text": "BOS",
+      "price": 50194.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 50201.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 50201.8
+     },
+     {
+      "text": "BOS",
+      "price": 50332.7
+     },
+     {
+      "text": "BOS",
+      "price": 50528.5
+     },
+     {
+      "text": "BOS",
+      "price": 50589.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 50670.4
+     },
+     {
+      "text": "BOS",
+      "price": 50719.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 50773.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 50860
+     },
+     {
+      "text": "BOS",
+      "price": 51118.2
+     },
+     {
+      "text": "BOS",
+      "price": 51129.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 51207.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 51502.3
+     }
+    ],
+    "liquidity": [
+     {
+      "text": "EQL",
+      "price": 49079.5
+     },
+     {
+      "text": "EQH",
+      "price": 49059
+     },
+     {
+      "text": "EQH",
+      "price": 49472.6
+     },
+     {
+      "text": "EQH",
+      "price": 49309.2
+     },
+     {
+      "text": "EQL",
+      "price": 49254.7
+     },
+     {
+      "text": "EQL",
+      "price": 49377.5
+     },
+     {
+      "text": "EQH",
+      "price": 50201.8
+     },
+     {
+      "text": "EQH",
+      "price": 50202.8
+     },
+     {
+      "text": "EQL",
+      "price": 49475
+     },
+     {
+      "text": "EQL",
+      "price": 49079.9
+     },
+     {
+      "text": "EQL",
+      "price": 49078.3
+     },
+     {
+      "text": "EQH",
+      "price": 49257
+     },
+     {
+      "text": "EQH",
+      "price": 49711.5
+     },
+     {
+      "text": "EQL",
+      "price": 49451
+     },
+     {
+      "text": "EQL",
+      "price": 50532.6
+     },
+     {
+      "text": "EQH",
+      "price": 51092.5
+     }
+    ],
+    "swings": [
+     {
+      "text": "Weak High",
+      "price": 51741.2
+     },
+     {
+      "text": "Strong Low",
+      "price": 50320.9
+     }
+    ],
+    "premium": [
+     51031.05,
+     51741.2
+    ],
+    "discount": [
+     50320.9,
+     51031.05
+    ],
+    "equilibrium": 51031.05
+   },
+   "15": {
+    "boxes": [
+     {
+      "high": 51741.2,
+      "low": 51682.43,
+      "side": "supply"
+     },
+     {
+      "high": 51692.9,
+      "low": 51657.8,
+      "side": "supply"
+     },
+     {
+      "high": 51361.9,
+      "low": 51332.4,
+      "side": "supply"
+     },
+     {
+      "high": 51332.4,
+      "low": 51302.9,
+      "side": "supply"
+     },
+     {
+      "high": 51211.6,
+      "low": 51126.4,
+      "side": "supply"
+     },
+     {
+      "high": 51182.89,
+      "low": 51124.12,
+      "side": "supply"
+     },
+     {
+      "high": 51123.5,
+      "low": 51121.35,
+      "side": "supply"
+     },
+     {
+      "high": 51121.35,
+      "low": 51119.2,
+      "side": "supply"
+     },
+     {
+      "high": 50726.1,
+      "low": 50676.1,
+      "side": "demand"
+     },
+     {
+      "high": 50624.57,
+      "low": 50565.8,
+      "side": "demand"
+     },
+     {
+      "high": 50465,
+      "low": 50428.5,
+      "side": "demand"
+     },
+     {
+      "high": 50343.1,
+      "low": 50281,
+      "side": "demand"
+     },
+     {
+      "high": 50140.2,
+      "low": 50098.35,
+      "side": "demand"
+     },
+     {
+      "high": 50098.35,
+      "low": 50056.5,
+      "side": "demand"
+     },
+     {
+      "high": 50002.7,
+      "low": 49966.65,
+      "side": "demand"
+     },
+     {
+      "high": 49966.65,
+      "low": 49930.6,
+      "side": "demand"
+     },
+     {
+      "high": 49632.8,
+      "low": 49625.3,
+      "side": "demand"
+     },
+     {
+      "high": 49625.3,
+      "low": 49617.8,
+      "side": "demand"
+     },
+     {
+      "high": 49598.7,
+      "low": 49518.55,
+      "side": "demand"
+     },
+     {
+      "high": 49518.55,
+      "low": 49438.4,
+      "side": "demand"
+     },
+     {
+      "high": 49133.6,
+      "low": 48993.3,
+      "side": "demand"
+     },
+     {
+      "high": 48993.3,
+      "low": 48853,
+      "side": "demand"
+     }
+    ],
+    "structure": [
+     {
+      "text": "BOS",
+      "price": 48842.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 48859.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 48950
+     },
+     {
+      "text": "BOS",
+      "price": 48991.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49011.2
+     },
+     {
+      "text": "BOS",
+      "price": 49020.8
+     },
+     {
+      "text": "BOS",
+      "price": 49052.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49055.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49059.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49066
+     },
+     {
+      "text": "CHoCH",
+      "price": 49078.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49083.9
+     },
+     {
+      "text": "BOS",
+      "price": 49094
+     },
+     {
+      "text": "CHoCH",
+      "price": 49101.8
+     },
+     {
+      "text": "BOS",
+      "price": 49109.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49130.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49143.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49144.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49157.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49157.5
+     },
+     {
+      "text": "BOS",
+      "price": 49159.1
+     },
+     {
+      "text": "BOS",
+      "price": 49162.2
+     },
+     {
+      "text": "BOS",
+      "price": 49166.1
+     },
+     {
+      "text": "BOS",
+      "price": 49184.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49197.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49198.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49211.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49215.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49217
+     },
+     {
+      "text": "CHoCH",
+      "price": 49217.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49226.1
+     },
+     {
+      "text": "BOS",
+      "price": 49227.4
+     },
+     {
+      "text": "BOS",
+      "price": 49233.3
+     },
+     {
+      "text": "BOS",
+      "price": 49233.8
+     },
+     {
+      "text": "BOS",
+      "price": 49242.5
+     },
+     {
+      "text": "BOS",
+      "price": 49244.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49245.8
+     },
+     {
+      "text": "BOS",
+      "price": 49247.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49251.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49263.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49277.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49280.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49288.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49288.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49301.9
+     },
+     {
+      "text": "BOS",
+      "price": 49306.6
+     },
+     {
+      "text": "BOS",
+      "price": 49317.3
+     },
+     {
+      "text": "BOS",
+      "price": 49322.6
+     },
+     {
+      "text": "BOS",
+      "price": 49333.4
+     },
+     {
+      "text": "BOS",
+      "price": 49348.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49351.2
+     },
+     {
+      "text": "BOS",
+      "price": 49353.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49355.5
+     },
+     {
+      "text": "BOS",
+      "price": 49362.2
+     },
+     {
+      "text": "BOS",
+      "price": 49365.6
+     },
+     {
+      "text": "BOS",
+      "price": 49371.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49373.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49382.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49392.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49395
+     },
+     {
+      "text": "CHoCH",
+      "price": 49398.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49401.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49407.1
+     },
+     {
+      "text": "BOS",
+      "price": 49410.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49417.3
+     },
+     {
+      "text": "BOS",
+      "price": 49430.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49430.5
+     },
+     {
+      "text": "BOS",
+      "price": 49434
+     },
+     {
+      "text": "CHoCH",
+      "price": 49442.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49443.6
+     },
+     {
+      "text": "BOS",
+      "price": 49461.4
+     },
+     {
+      "text": "BOS",
+      "price": 49465.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49470.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49475
+     },
+     {
+      "text": "BOS",
+      "price": 49484.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 49496.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49501.6
+     },
+     {
+      "text": "BOS",
+      "price": 49504.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49514.8
+     },
+     {
+      "text": "BOS",
+      "price": 49517.8
+     },
+     {
+      "text": "BOS",
+      "price": 49533.8
+     },
+     {
+      "text": "BOS",
+      "price": 49533.9
+     },
+     {
+      "text": "BOS",
+      "price": 49547.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49556.4
+     },
+     {
+      "text": "BOS",
+      "price": 49556.5
+     },
+     {
+      "text": "BOS",
+      "price": 49557.8
+     },
+     {
+      "text": "BOS",
+      "price": 49561.6
+     },
+     {
+      "text": "BOS",
+      "price": 49575.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49594.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49603.2
+     },
+     {
+      "text": "BOS",
+      "price": 49605.7
+     },
+     {
+      "text": "BOS",
+      "price": 49606.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49607.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49614
+     },
+     {
+      "text": "BOS",
+      "price": 49619.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49624.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 49624.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49626
+     },
+     {
+      "text": "CHoCH",
+      "price": 49645.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49677.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49680.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49692.8
+     },
+     {
+      "text": "BOS",
+      "price": 49695.2
+     },
+     {
+      "text": "BOS",
+      "price": 49697.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49700.3
+     },
+     {
+      "text": "BOS",
+      "price": 49701
+     },
+     {
+      "text": "CHoCH",
+      "price": 49706.5
+     },
+     {
+      "text": "BOS",
+      "price": 49720.5
+     },
+     {
+      "text": "BOS",
+      "price": 49720.9
+     },
+     {
+      "text": "BOS",
+      "price": 49723.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49725.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49734.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49740.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49745.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49752.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 49772.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 49772.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 49783
+     },
+     {
+      "text": "BOS",
+      "price": 49783.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49788.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 49790.1
+     },
+     {
+      "text": "BOS",
+      "price": 49817.2
+     },
+     {
+      "text": "BOS",
+      "price": 49826.5
+     },
+     {
+      "text": "BOS",
+      "price": 49827.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 49827.9
+     },
+     {
+      "text": "BOS",
+      "price": 49828.5
+     },
+     {
+      "text": "BOS",
+      "price": 49855
+     },
+     {
+      "text": "CHoCH",
+      "price": 49868.8
+     },
+     {
+      "text": "BOS",
+      "price": 49893.4
+     },
+     {
+      "text": "BOS",
+      "price": 49895.5
+     },
+     {
+      "text": "BOS",
+      "price": 49932.5
+     },
+     {
+      "text": "BOS",
+      "price": 49939.2
+     },
+     {
+      "text": "BOS",
+      "price": 49949.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 49954.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 49961.2
+     },
+     {
+      "text": "BOS",
+      "price": 49972
+     },
+     {
+      "text": "BOS",
+      "price": 49985
+     },
+     {
+      "text": "CHoCH",
+      "price": 49995.4
+     },
+     {
+      "text": "BOS",
+      "price": 49999.7
+     },
+     {
+      "text": "BOS",
+      "price": 50004.5
+     },
+     {
+      "text": "BOS",
+      "price": 50071.6
+     },
+     {
+      "text": "BOS",
+      "price": 50074.5
+     },
+     {
+      "text": "BOS",
+      "price": 50343.1
+     },
+     {
+      "text": "BOS",
+      "price": 50450.5
+     },
+     {
+      "text": "BOS",
+      "price": 50483
+     },
+     {
+      "text": "CHoCH",
+      "price": 50495.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 50504.7
+     },
+     {
+      "text": "BOS",
+      "price": 50534.1
+     },
+     {
+      "text": "BOS",
+      "price": 50584.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 50631.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 50643
+     },
+     {
+      "text": "CHoCH",
+      "price": 50675.1
+     },
+     {
+      "text": "BOS",
+      "price": 50692.8
+     },
+     {
+      "text": "BOS",
+      "price": 50704.7
+     },
+     {
+      "text": "BOS",
+      "price": 50716.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 50718.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 50726
+     },
+     {
+      "text": "BOS",
+      "price": 50732.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 50744.8
+     },
+     {
+      "text": "BOS",
+      "price": 50785.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 50788
+     },
+     {
+      "text": "BOS",
+      "price": 50795.2
+     },
+     {
+      "text": "BOS",
+      "price": 50804.5
+     },
+     {
+      "text": "BOS",
+      "price": 50807.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 50816.1
+     },
+     {
+      "text": "CHoCH",
+      "price": 50816.7
+     },
+     {
+      "text": "BOS",
+      "price": 50832.9
+     },
+     {
+      "text": "BOS",
+      "price": 50837.4
+     },
+     {
+      "text": "BOS",
+      "price": 50843.7
+     },
+     {
+      "text": "CHoCH",
+      "price": 50862.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 50917
+     },
+     {
+      "text": "CHoCH",
+      "price": 50965.9
+     },
+     {
+      "text": "BOS",
+      "price": 50982.6
+     },
+     {
+      "text": "CHoCH",
+      "price": 50989.3
+     },
+     {
+      "text": "CHoCH",
+      "price": 51029
+     },
+     {
+      "text": "BOS",
+      "price": 51030.2
+     },
+     {
+      "text": "CHoCH",
+      "price": 51033.4
+     },
+     {
+      "text": "BOS",
+      "price": 51041.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 51061.9
+     },
+     {
+      "text": "BOS",
+      "price": 51084.9
+     },
+     {
+      "text": "BOS",
+      "price": 51092.5
+     },
+     {
+      "text": "CHoCH",
+      "price": 51096
+     },
+     {
+      "text": "BOS",
+      "price": 51102.4
+     },
+     {
+      "text": "BOS",
+      "price": 51118.2
+     },
+     {
+      "text": "BOS",
+      "price": 51286.1
+     },
+     {
+      "text": "BOS",
+      "price": 51292.9
+     },
+     {
+      "text": "CHoCH",
+      "price": 51330
+     },
+     {
+      "text": "CHoCH",
+      "price": 51366.4
+     },
+     {
+      "text": "CHoCH",
+      "price": 51547.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 51573.8
+     },
+     {
+      "text": "CHoCH",
+      "price": 51624.9
+     },
+     {
+      "text": "BOS",
+      "price": 51640.9
+     },
+     {
+      "text": "BOS",
+      "price": 51656.8
+     }
+    ],
+    "liquidity": [
+     {
+      "text": "EQL",
+      "price": 49233.3
+     },
+     {
+      "text": "EQH",
+      "price": 49101.9
+     },
+     {
+      "text": "EQH",
+      "price": 49101.8
+     },
+     {
+      "text": "EQL",
+      "price": 49037.2
+     },
+     {
+      "text": "EQH",
+      "price": 49430.2
+     },
+     {
+      "text": "EQH",
+      "price": 49420.7
+     },
+     {
+      "text": "EQL",
+      "price": 49305.4
+     },
+     {
+      "text": "EQH",
+      "price": 49461
+     },
+     {
+      "text": "EQH",
+      "price": 49496.5
+     },
+     {
+      "text": "EQH",
+      "price": 49247.8
+     },
+     {
+      "text": "EQL",
+      "price": 49082.7
+     },
+     {
+      "text": "EQL",
+      "price": 49124.6
+     },
+     {
+      "text": "EQH",
+      "price": 49266.6
+     },
+     {
+      "text": "EQL",
+      "price": 49211.9
+     },
+     {
+      "text": "EQL",
+      "price": 49087.4
+     },
+     {
+      "text": "EQL",
+      "price": 49215.2
+     },
+     {
+      "text": "EQH",
+      "price": 49253
+     },
+     {
+      "text": "EQL",
+      "price": 49745.9
+     },
+     {
+      "text": "EQL",
+      "price": 49447
+     },
+     {
+      "text": "EQL",
+      "price": 48920.9
+     },
+     {
+      "text": "EQL",
+      "price": 48948.7
+     },
+     {
+      "text": "EQL",
+      "price": 49238
+     },
+     {
+      "text": "EQL",
+      "price": 49875.6
+     },
+     {
+      "text": "EQH",
+      "price": 49695.2
+     },
+     {
+      "text": "EQH",
+      "price": 49784.8
+     },
+     {
+      "text": "EQL",
+      "price": 49371.3
+     },
+     {
+      "text": "EQL",
+      "price": 49475.3
+     },
+     {
+      "text": "EQH",
+      "price": 49607.6
+     },
+     {
+      "text": "EQL",
+      "price": 49559.9
+     },
+     {
+      "text": "EQH",
+      "price": 49596.8
+     },
+     {
+      "text": "EQH",
+      "price": 49699.5
+     },
+     {
+      "text": "EQL",
+      "price": 49743.6
+     },
+     {
+      "text": "EQH",
+      "price": 49786.4
+     },
+     {
+      "text": "EQH",
+      "price": 49833.8
+     },
+     {
+      "text": "EQL",
+      "price": 49801.4
+     },
+     {
+      "text": "EQL",
+      "price": 50025.8
+     },
+     {
+      "text": "EQH",
+      "price": 50056.3
+     },
+     {
+      "text": "EQH",
+      "price": 49730.6
+     },
+     {
+      "text": "EQH",
+      "price": 49735
+     },
+     {
+      "text": "EQL",
+      "price": 49606.4
+     },
+     {
+      "text": "EQH",
+      "price": 49692.8
+     },
+     {
+      "text": "EQL",
+      "price": 50402.1
+     },
+     {
+      "text": "EQL",
+      "price": 50951.3
+     },
+     {
+      "text": "EQL",
+      "price": 50950.2
+     },
+     {
+      "text": "EQH",
+      "price": 50917
+     },
+     {
+      "text": "EQL",
+      "price": 50862.9
+     },
+     {
+      "text": "EQH",
+      "price": 50915.5
+     },
+     {
+      "text": "EQL",
+      "price": 50809.1
+     },
+     {
+      "text": "EQL",
+      "price": 50355.3
+     },
+     {
+      "text": "EQL",
+      "price": 50495.5
+     },
+     {
+      "text": "EQH",
+      "price": 50718.4
+     },
+     {
+      "text": "EQL",
+      "price": 50584.3
+     },
+     {
+      "text": "EQH",
+      "price": 50719.4
+     },
+     {
+      "text": "EQH",
+      "price": 50718.5
+     },
+     {
+      "text": "EQL",
+      "price": 50675.7
+     },
+     {
+      "text": "EQH",
+      "price": 51123.8
+     },
+     {
+      "text": "EQH",
+      "price": 51092.4
+     },
+     {
+      "text": "EQH",
+      "price": 50900.9
+     },
+     {
+      "text": "EQH",
+      "price": 50915.2
+     },
+     {
+      "text": "EQH",
+      "price": 50770.4
+     },
+     {
+      "text": "EQH",
+      "price": 51599
+     },
+     {
+      "text": "EQL",
+      "price": 51504.2
+     },
+     {
+      "text": "EQL",
+      "price": 50614.9
+     },
+     {
+      "text": "EQH",
+      "price": 50816.7
+     }
+    ],
+    "swings": [
+     {
+      "text": "Weak High",
+      "price": 51741.2
+     },
+     {
+      "text": "Strong Low",
+      "price": 50565.8
+     }
+    ],
+    "premium": [
+     51153.5,
+     51741.2
+    ],
+    "discount": [
+     50565.8,
+     51153.5
+    ],
+    "equilibrium": 51153.5
+   }
+  }
+ },
+ "sd_zones": [
+  {
+   "tf": "4H",
+   "role": "resistance",
+   "lo": 51196.9,
+   "hi": 51211.6,
+   "mid": 51204.25,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780678800,
+   "t1": 1780912800
+  },
+  {
+   "tf": "1H",
+   "role": "resistance",
+   "lo": 51437.5,
+   "hi": 51463.5,
+   "mid": 51450.5,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780671600,
+   "t1": 1780916400
+  },
+  {
+   "tf": "4H",
+   "role": "sell zone",
+   "lo": 51556,
+   "hi": 51741.2,
+   "mid": 51648.6,
+   "kl": true,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780650000,
+   "t1": 1780912800
+  },
+  {
+   "tf": "4H",
+   "role": "buy zone",
+   "lo": 49693.4,
+   "hi": 50074.5,
+   "mid": 49883.95,
+   "kl": true,
+   "flip": false,
+   "score": 1.0,
+   "time": 1779368400,
+   "t1": 1780912800
+  },
+  {
+   "tf": "4H",
+   "role": "support",
+   "lo": 49228,
+   "hi": 49549.6,
+   "mid": 49388.8,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1779282000,
+   "t1": 1780912800
+  },
+  {
+   "tf": "1H",
+   "role": "buy zone",
+   "lo": 50565.8,
+   "hi": 50847.1,
+   "mid": 50706.45,
+   "kl": false,
+   "flip": false,
+   "score": 0.0,
+   "time": 1780869600,
+   "t1": 1780916400
+  }
+ ],
+ "sd_sr": [
+  {
+   "role": "resistance",
+   "price": 50921.4,
+   "lo": 50916.4,
+   "hi": 50921.4,
+   "tf": "1H",
+   "flip": true,
+   "time": 1780570800,
+   "t1": 1780916400
+  }
  ]
 }

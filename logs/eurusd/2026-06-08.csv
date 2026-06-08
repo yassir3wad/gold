@@ -1,0 +1,21 @@
+id,time,side,grade,confidence,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
+1780882098,2026-06-08 03:28,SHORT,observe,,momentum impulse,1.15188,,,16,7,VWAP,auto-skip,,observation-only
+1780882120,2026-06-08 03:28,SHORT,A+,,VWAP rejection,1.15188,,,16,7,VWAP,auto-skip,0.4,neg R:R 0.40 (TP1 < 0.8×SL); dead chop ER0.13 (<0.2)
+1780882163,2026-06-08 03:29,SHORT,A+,,VWAP rejection,1.15199,,,17,5,1H sell zone KL,auto-skip,0.24,neg R:R 0.24 (TP1 < 0.8×SL); dead chop ER0.17 (<0.2)
+1780882278,2026-06-08 03:31,SHORT,A+,,prior-day-low breakdown,1.15128,,,23,7,prior-day low,auto-skip,0.34,neg R:R 0.34 (TP1 < 0.8×SL); dead chop ER0.01 (<0.2)
+1780882930,2026-06-08 03:42,LONG,A+,6,VWAP bounce,1.15232,1.15082,1.15423,23,3,1H sell zone KL,rejected,,"counter-trend LONG vs DOWN 30m regime + off-session thin Asian tape (OPERATIONS: never take counter-trend fades off-session/chop, even A+); R:R to TP1 only 1.33 (<2). Strong location (x7 PDL, SMC discount-aligned, conf 6/10) but fails NOT-counter-trend discipline."
+1780882972,2026-06-08 03:42,LONG,A+,6,VWAP bounce,1.15236,1.15086,1.15424,23,4,1H sell zone KL,rejected,,re-fire of same counter-trend LONG at x7 PDL: counter-DOWN regime + off-session thin tape + R:R to TP1 1.27 (<2). Same rejection as prior tick — never counter-trend off-session even A+.
+1780883012,2026-06-08 03:43,LONG,A+,6,VWAP bounce,1.15238,1.15088,1.15425,23,4,1H sell zone KL,rejected,,"same counter-trend long at x7 PDL, 3rd re-fire: counter-DOWN + off-session + R:R 1.27 (<2). Reject per discipline."
+1780883073,2026-06-08 03:44,LONG,A+,6,VWAP bounce,1.1524,1.1509,1.15426,23,4,1H sell zone KL,rejected,,same counter-trend long at x7 PDL (4th re-fire): counter-DOWN + off-session + R:R 1.27. Reject.
+1780893907,2026-06-08 06:45,SHORT,A+,,support-trendline break,1.15306,,,4,2,1H sell zone KL,auto-skip,0.24,neg R:R 0.24 (TP1 < 0.8×SL)
+1780895959,2026-06-08 07:19,LONG,A+,,resistance-trendline break,1.15385,,,10,7,"1.15211 (15m+1H+PDL+round, x15)",auto-skip,0.4,neg R:R 0.40 (TP1 < 0.8×SL)
+1780898299,2026-06-08 07:58,SHORT,observe,,momentum impulse,1.1518,,,22,5,prior-day low,auto-skip,,observation-only
+1780899644,2026-06-08 08:20,LONG,A+,,CRT sweep+reclaim,1.15206,,,14,1,"1.15211 (15m+1H+PDL+round, x15)",auto-skip,0.4,neg R:R 0.40 (TP1 < 0.8×SL)
+1780902260,2026-06-08 09:04,LONG,A+,,CRT sweep+reclaim,1.1519,,,11,4,prior-day low,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)
+1780902740,2026-06-08 09:12,LONG,A+,,resistance-trendline break,1.15234,,,11,4,prior-day low,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)
+1780904323,2026-06-08 09:38,SHORT,A+,,VWAP rejection,1.15212,,,13,4,"1.15216 (15m+1H+PDL+round, x15)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)
+1780911564,2026-06-08 11:39,LONG,A+,,CRT sweep+reclaim,1.15087,,,15,8,value-area low,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); counter-DOWN no-room
+1780913238,2026-06-08 12:07,LONG,A+,,resistance-trendline break,1.15164,,,17,5,VWAP lower band,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)
+1780914856,2026-06-08 12:34,LONG,A+,,VWAP bounce,1.1525,,,20,7,prior-day low,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.0 (<0.2)
+1780917520,2026-06-08 13:18,SHORT,A+,,CRT sweep+reclaim,1.15324,,,20,2,"1.1583 (4H+D, x3)",auto-skip,0.24,neg R:R 0.24 (TP1 < 1.2×SL)
+1780917739,2026-06-08 13:22,LONG,A+,,resistance-trendline break,1.154,,,22,4,"1.15207 (15m+1H+PDL+round, x17)",auto-skip,0.24,neg R:R 0.24 (TP1 < 1.2×SL)

@@ -1,0 +1,21 @@
+id,time,side,grade,confidence,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
+1780911617,2026-06-08 11:40,LONG,A+,,zone-bounce rejection,29150.1,,,106,22,4H support,auto-skip,0.24,neg R:R 0.24 (TP1 < 1.2×SL); counter-DOWN no-room
+1780912950,2026-06-08 12:02,SHORT,A+,,zone-bounce rejection,29156.3,,,85,40,"29199.3 (15m+round, x2)",auto-skip,0.36,neg R:R 0.36 (TP1 < 1.2×SL); dead chop ER0.1 (<0.2)
+1780913061,2026-06-08 12:04,SHORT,A+,,zone-bounce rejection,29170.2,,,85,26,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.15 (<0.2)
+1780914863,2026-06-08 12:34,LONG,A+,,resistance-trendline break,29199.2,,,86,50,1H support (classic),auto-skip,0.24,neg R:R 0.24 (TP1 < 1.2×SL); dead chop ER0.06 (<0.2); counter-DOWN no-room
+1780914983,2026-06-08 12:36,SHORT,A+,,CRT sweep+reclaim,29198.4,,,100,10,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.05 (<0.2)
+1780915119,2026-06-08 12:38,SHORT,A+,,CRT sweep+reclaim,29195.3,,,100,14,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.06 (<0.2)
+1780915243,2026-06-08 12:40,SHORT,A+,,CRT sweep+reclaim,29191.8,,,100,2,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.08 (<0.2)
+1780915579,2026-06-08 12:46,SHORT,A+,,CRT sweep+reclaim,29196.6,,,100,7,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.05 (<0.2)
+1780915639,2026-06-08 12:47,SHORT,A+,,CRT sweep+reclaim,29185.6,,,100,18,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.01 (<0.2)
+1780915883,2026-06-08 12:51,SHORT,A+,,CRT sweep+reclaim,29187.9,,,100,5,"29199.3 (15m+round, x2)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.05 (<0.2)
+1780916899,2026-06-08 13:08,LONG,A+,,zone-bounce rejection,29210.8,,,100,16,"29201.6 (15m+round, x3)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.14 (<0.2)
+1780916961,2026-06-08 13:09,LONG,A+,,zone-bounce rejection,29214.6,,,100,20,"29201.6 (15m+round, x3)",auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.16 (<0.2)
+1780917105,2026-06-08 13:11,LONG,A,,Asian-range breakout,29271.8,,,158,48,open,auto-skip,0.34,neg R:R 0.34 (TP1 < 1.2×SL)
+1780917138,2026-06-08 13:12,LONG,A,,Asian-range breakout,29270.4,,,158,46,open,auto-skip,0.34,neg R:R 0.34 (TP1 < 1.2×SL)
+1780917199,2026-06-08 13:13,LONG,A,,resistance-trendline break,29287,,,164,63,open,auto-skip,0.34,neg R:R 0.34 (TP1 < 1.2×SL); counter-DOWN no-room
+1780917259,2026-06-08 13:14,LONG,C-into-zone,,resistance-trendline break,29291.6,,,164,67,open,auto-skip,0.34,neg R:R 0.34 (TP1 < 1.2×SL); counter-DOWN no-room
+1780917386,2026-06-08 13:16,SHORT,strict-reversal,,zone-bounce rejection,29309.5,,,193,10,4H SMC supply OB,auto-skip,,strict reversal context: no stacked confluence or valid prior VA
+1780917438,2026-06-08 13:17,SHORT,strict-reversal,,zone-bounce rejection,29311.3,,,193,8,4H SMC supply OB,auto-skip,,strict reversal context: no stacked confluence or valid prior VA
+1780917527,2026-06-08 13:18,SHORT,A+,,fib pullback rejection 0.52-0.645,29314.6,,,193,4,4H SMC supply OB,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)
+1780917561,2026-06-08 13:19,SHORT,A+,,fib pullback rejection 0.52-0.645,29311.2,,,193,8,4H SMC supply OB,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL)

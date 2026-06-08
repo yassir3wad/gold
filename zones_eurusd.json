@@ -1,10 +1,10 @@
 {
- "ts": 1780877626.085446,
- "price": 1.15236,
+ "ts": 1780916974.952686,
+ "price": 1.15256,
  "pdh": 1.16445,
  "pdl": 1.1518,
- "asia_h": 1.16194,
- "asia_l": 1.161,
+ "asia_h": 1.15398,
+ "asia_l": 1.15118,
  "london_h": 1.16445,
  "london_l": 1.15438,
  "ny_h": 1.15868,
@@ -19,19 +19,19 @@
    "1.1583 (4H+D, x3)"
   ],
   [
-   1.15927,
-   1.16177,
-   "1.16052 (1H+4H+round, x11)"
+   1.15938,
+   1.16188,
+   "1.16063 (1H+4H+round, x10)"
   ],
   [
-   1.1627,
-   1.1652,
-   "1.16395 (15m+1H+4H+PDH, x12)"
+   1.1621,
+   1.16376,
+   "1.16293 (1H+4H, x2)"
   ],
   [
-   1.16511,
-   1.16655,
-   "1.16579 (1H+4H+D, x5)"
+   1.16402,
+   1.16652,
+   "1.16527 (1H+4H+D+PDH, x10)"
   ],
   [
    1.16819,
@@ -41,19 +41,14 @@
  ],
  "htf_s": [
   [
-   1.1514,
-   1.15331,
-   "1.15219 (15m+PDL, x7)"
-  ],
-  [
-   1.1496,
-   1.15128,
-   "1.15044 (15m+round, x2)"
+   1.15082,
+   1.15332,
+   "1.15207 (15m+1H+PDL+round, x17)"
   ]
  ],
  "smc": {
-  "ts": 1780877620.950851,
-  "price": 1.15236,
+  "ts": 1780916967.98467,
+  "price": 1.15256,
   "tf": {
    "240": {
     "boxes": [
@@ -101,11 +96,6 @@
       "high": 1.16,
       "low": 1.16,
       "side": "supply"
-     },
-     {
-      "high": 1.16,
-      "low": 1.15,
-      "side": "straddle"
      },
      {
       "high": 1.15,
@@ -602,11 +592,6 @@
      },
      {
       "high": 1.17,
-      "low": 1.16,
-      "side": "supply"
-     },
-     {
-      "high": 1.17,
       "low": 1.17,
       "side": "supply"
      },
@@ -624,111 +609,15 @@
       "high": 1.14,
       "low": 1.14,
       "side": "demand"
-     },
-     {
-      "high": 1.13,
-      "low": 1.13,
-      "side": "demand"
-     },
-     {
-      "high": 1.12,
-      "low": 1.12,
-      "side": "demand"
-     },
-     {
-      "high": 1.11,
-      "low": 1.11,
-      "side": "demand"
-     },
-     {
-      "high": 1.11,
-      "low": 1.1,
-      "side": "demand"
-     },
-     {
-      "high": 1.1,
-      "low": 1.1,
-      "side": "demand"
-     },
-     {
-      "high": 1.09,
-      "low": 1.09,
-      "side": "demand"
-     },
-     {
-      "high": 1.09,
-      "low": 1.08,
-      "side": "demand"
-     },
-     {
-      "high": 1.08,
-      "low": 1.07,
-      "side": "demand"
-     },
-     {
-      "high": 1.08,
-      "low": 1.08,
-      "side": "demand"
-     },
-     {
-      "high": 1.07,
-      "low": 1.06,
-      "side": "demand"
-     },
-     {
-      "high": 1.07,
-      "low": 1.07,
-      "side": "demand"
-     },
-     {
-      "high": 1.06,
-      "low": 1.06,
-      "side": "demand"
-     },
-     {
-      "high": 1.06,
-      "low": 1.05,
-      "side": "demand"
-     },
-     {
-      "high": 1.05,
-      "low": 1.05,
-      "side": "demand"
-     },
-     {
-      "high": 1.04,
-      "low": 1.04,
-      "side": "demand"
-     },
-     {
-      "high": 1.03,
-      "low": 1.03,
-      "side": "demand"
      }
     ],
     "structure": [
      {
-      "text": "CHoCH",
-      "price": 1.11
-     },
-     {
-      "text": "BOS",
-      "price": 1.12
-     },
-     {
-      "text": "CHoCH",
-      "price": 1.13
-     },
-     {
-      "text": "CHoCH",
-      "price": 1.14
-     },
-     {
       "text": "BOS",
       "price": 1.15
      },
      {
-      "text": "CHoCH",
+      "text": "BOS",
       "price": 1.16
      },
      {
@@ -738,150 +627,342 @@
      {
       "text": "BOS",
       "price": 1.18
-     },
-     {
-      "text": "CHoCH",
-      "price": 1.19
      }
     ],
     "liquidity": [
      {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.18
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQL",
+      "price": 1.18
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.17
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.17
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQL",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
+      "text": "EQH",
+      "price": 1.16
+     },
+     {
       "text": "EQL",
       "price": 1.15
      },
      {
-      "text": "EQH",
-      "price": 1.14
-     },
-     {
-      "text": "EQH",
-      "price": 1.14
-     },
-     {
-      "text": "EQH",
-      "price": 1.14
-     },
-     {
-      "text": "EQH",
-      "price": 1.15
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.15
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.19
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
       "text": "EQL",
       "price": 1.15
      },
@@ -890,206 +971,14 @@
       "price": 1.15
      },
      {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.15
-     },
-     {
       "text": "EQL",
       "price": 1.15
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.19
-     },
-     {
-      "text": "EQL",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.19
-     },
-     {
-      "text": "EQL",
-      "price": 1.19
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.15
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.15
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQL",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.18
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.17
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
-     },
-     {
-      "text": "EQL",
-      "price": 1.16
-     },
-     {
-      "text": "EQH",
-      "price": 1.16
      }
     ],
     "swings": [
      {
       "text": "Strong High",
-      "price": 1.17
+      "price": 1.15
      },
      {
       "text": "Weak Low",
@@ -1097,14 +986,14 @@
      }
     ],
     "premium": [
-     1.16,
-     1.17
+     1.15,
+     1.15
     ],
     "discount": [
      1.15,
-     1.16
+     1.15
     ],
-    "equilibrium": 1.16
+    "equilibrium": 1.15
    },
    "15": {
     "boxes": [
@@ -1528,6 +1417,18 @@
   {
    "tf": "1H",
    "role": "sell zone",
+   "lo": 1.15316,
+   "hi": 1.15398,
+   "mid": 1.15357,
+   "kl": true,
+   "flip": false,
+   "score": 0.75,
+   "time": 1780894800,
+   "t1": 1780916400
+  },
+  {
+   "tf": "1H",
+   "role": "sell zone",
    "lo": 1.1559,
    "hi": 1.15601,
    "mid": 1.15596,
@@ -1535,7 +1436,7 @@
    "flip": false,
    "score": 1.0,
    "time": 1780671600,
-   "t1": 1780876800
+   "t1": 1780916400
   },
   {
    "tf": "4H",
@@ -1547,41 +1448,41 @@
    "flip": false,
    "score": 1.0,
    "time": 1780664400,
-   "t1": 1780866000
+   "t1": 1780909200
   },
   {
    "tf": "1H",
-   "role": "sell zone",
-   "lo": 1.16346,
-   "hi": 1.16445,
-   "mid": 1.16396,
-   "kl": true,
+   "role": "buy zone",
+   "lo": 1.14997,
+   "hi": 1.15146,
+   "mid": 1.15071,
+   "kl": false,
    "flip": false,
-   "score": 1.0,
-   "time": 1780650000,
-   "t1": 1780876800
+   "score": 0.0,
+   "time": 1780909200,
+   "t1": 1780916400
   }
  ],
  "sd_sr": [
   {
    "role": "resistance",
-   "price": 1.16168,
-   "lo": 1.16157,
-   "hi": 1.16168,
+   "price": 1.16222,
+   "lo": 1.16216,
+   "hi": 1.16222,
    "tf": "1H",
    "flip": true,
-   "time": 1779969600,
-   "t1": 1780876800
+   "time": 1780642800,
+   "t1": 1780916400
   },
   {
    "role": "resistance",
-   "price": 1.16505,
-   "lo": 1.16505,
-   "hi": 1.16524,
+   "price": 1.16416,
+   "lo": 1.16416,
+   "hi": 1.16428,
    "tf": "1H",
    "flip": false,
-   "time": 1780405200,
-   "t1": 1780876800
+   "time": 1780660800,
+   "t1": 1780916400
   }
  ]
 }

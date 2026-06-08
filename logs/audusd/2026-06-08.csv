@@ -1,0 +1,4 @@
+id,time,side,grade,confidence,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
+1780911594,2026-06-08 11:39,LONG,A+,,liquidity-sweep reversal,0.70486,,,13,9,1H buy zone,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.15 (<0.2); counter-DOWN no-room
+1780912099,2026-06-08 11:48,LONG,A+,,resistance-trendline break,0.70514,,,14,4,1H buy zone,auto-skip,0.4,neg R:R 0.40 (TP1 < 1.2×SL); dead chop ER0.09 (<0.2); counter-DOWN no-room
+1780917098,2026-06-08 13:11,LONG,A+,,prior-day-high breakout,0.70668,,,18,6,"0.70469 (15m+1H+4H+D, x27)",auto-skip,0.27,neg R:R 0.27 (TP1 < 1.2×SL)
