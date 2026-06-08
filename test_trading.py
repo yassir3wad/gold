@@ -360,6 +360,16 @@ def test_kl_upgrade():
     check("kl_upgrade: C not promoted", sf.kl_upgrade("C-into-zone") == "C-into-zone")
 
 
+def test_downgrade_grade():
+    # SOFT counter-trend penalty: lower the letter tier by N, floored at C, suffix dropped.
+    check("downgrade: A+ −1 → A", sf.downgrade_grade("A+", 1) == "A")
+    check("downgrade: A+ −2 → B", sf.downgrade_grade("A+", 2) == "B")
+    check("downgrade: A −1 → B", sf.downgrade_grade("A", 1) == "B")
+    check("downgrade: B(open space) −1 → C", sf.downgrade_grade("B (open space)", 1) == "C")
+    check("downgrade: floors at C", sf.downgrade_grade("C-into-zone", 1) == "C" and sf.downgrade_grade("B", 5) == "C")
+    check("downgrade: 0 steps unchanged tier", sf.downgrade_grade("A+", 0) == "A+")
+
+
 def test_merge_classic_keeps_all():
     # drawn == traded: EVERY classic zone enters the level map (none dropped, even overlapping ones).
     htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
@@ -397,7 +407,7 @@ def main():
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
-               test_simulate_outcome, test_kl_upgrade, test_merge_classic_keeps_all, test_count_distinct_at):
+               test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

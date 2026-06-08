@@ -316,6 +316,15 @@ def kl_upgrade(grade):
     (a bare B + KL must reach A+, not just A — the generic cf_score path only does B→A). Pure (testable)."""
     return "A+" if grade.startswith(("A", "B")) else grade
 
+
+_GRADE_TIERS = ["C", "B", "A", "A+"]   # ascending letter tiers
+def downgrade_grade(grade, steps):
+    """Lower the LETTER tier by `steps` (A+→A→B→C), floored at C. Used for the SOFT counter-trend penalty —
+    counter-trend dents the grade, it is NOT a hard veto. Pure (testable). Drops any suffix (it described the
+    original setup); downstream only checks the leading tier via startswith()."""
+    idx = 3 if grade.startswith("A+") else 2 if grade.startswith("A") else 1 if grade.startswith("B") else 0
+    return _GRADE_TIERS[max(0, idx - max(0, steps))]
+
 def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
     """Pre-hold HARD FLOOR predicate (applies EVEN under ai_decide — the only skip that does).
     Returns (skip: bool, reasons: list[str]).
@@ -1215,9 +1224,14 @@ def main():
     if FL.get("trend_regime", True) and regime != "flat":
         counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
         with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
-        if counter and not grade.startswith("A+") and not AI:
-            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
-        if counter: htf_note += f" | counter-{regime} (A+ only)"
+        if counter:
+            # SOFT counter-trend penalty (codex): counter-trend is context, not a disqualifier — dent the
+            # grade (−1; −2 when ALSO chopping or off-session = doubly bad context), but NEVER hard-veto on
+            # trend alone. The genuinely un-tradeable cases are still killed by the hard floor (thin-room +
+            # counter) and confidence already applies its own −1 (with_trend=False). Was: hard SKIP unless A+.
+            _ctp = 2 if (is_chop or not sess_ok) else 1
+            grade = downgrade_grade(grade, _ctp)
+            htf_note += f" | counter-{regime} (grade −{_ctp})"
         elif with_trend:
             htf_note += f" | with {regime} trend"
             if grade.startswith("B"): grade = "A"
