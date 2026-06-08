@@ -27,20 +27,22 @@ def main():
     tv(CH, "symbol", TV_SYMBOL); tv(CH, "timeframe", "1")
     tv(CH, "replay", "start", "--date", a.date); time.sleep(5)
     bars = {}; steps = 0; out = f"/tmp/bars_{a.date}.json"
-    while steps < a.max_steps:
-        done = False
-        for b in tv(CH, "ohlcv", "-n", str(a.batch + 12)).get("bars", []):
-            d = dt.datetime.utcfromtimestamp(b["time"]).date()
-            if d == target: bars[b["time"]] = b
-            elif d > target: done = True
-        if done and bars:
-            break
-        for _ in range(a.batch):
-            tv(CH, "replay", "step"); steps += 1
-        if steps % 200 == 0:
-            json.dump(sorted(bars.values(), key=lambda x: x["time"]), open(out, "w"))
-            print(f"  {steps} steps · {len(bars)} bars collected", flush=True)
-    tv(CH, "replay", "stop")
+    try:
+        while steps < a.max_steps:
+            done = False
+            for b in tv(CH, "ohlcv", "-n", str(a.batch + 12)).get("bars", []):
+                d = dt.datetime.utcfromtimestamp(b["time"]).date()
+                if d == target: bars[b["time"]] = b
+                elif d > target: done = True
+            if done and bars:
+                break
+            for _ in range(a.batch):
+                tv(CH, "replay", "step"); steps += 1
+            if steps % 200 == 0:
+                json.dump(sorted(bars.values(), key=lambda x: x["time"]), open(out, "w"))
+                print(f"  {steps} steps · {len(bars)} bars collected", flush=True)
+    finally:
+        tv(CH, "replay", "stop")
     ordered = sorted(bars.values(), key=lambda x: x["time"])
     json.dump(ordered, open(out, "w"))
     span = (f"{dt.datetime.utcfromtimestamp(ordered[0]['time']):%H:%M}-{dt.datetime.utcfromtimestamp(ordered[-1]['time']):%H:%M} UTC"
