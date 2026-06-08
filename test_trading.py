@@ -401,8 +401,33 @@ def test_count_distinct_at():
     check("count: nothing at price → 0", sf.count_distinct_at(overlapping, 4300) == 0)
 
 
+def test_load_flags_env_override():
+    """The backtest must run ai_decide=false WITHOUT editing the live flags.json. load_flags() honors a
+    FLAGS_FILE env override (replay_sim points it at flags_backtest.json); unset → the live default path."""
+    real_env = os.environ.get("FLAGS_FILE")
+    real_symflags = sf.SYMBOL_FLAGS
+    try:
+        sf.SYMBOL_FLAGS = {}                       # isolate from per-symbol overrides
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tf:
+            json.dump({"ai_decide": False, "bt_marker": 12345}, tf); bt_path = tf.name
+        os.environ["FLAGS_FILE"] = bt_path
+        f = sf.load_flags()
+        check("flags env: override file is read", f.get("bt_marker") == 12345)
+        check("flags env: ai_decide from override (false)", f.get("ai_decide") is False)
+        os.environ.pop("FLAGS_FILE", None)
+        f2 = sf.load_flags()                       # unset → live default path, no bt_marker
+        check("flags env: unset falls back to default", "bt_marker" not in f2)
+    finally:
+        if real_env is not None: os.environ["FLAGS_FILE"] = real_env
+        else: os.environ.pop("FLAGS_FILE", None)
+        sf.SYMBOL_FLAGS = real_symflags
+        try: os.remove(bt_path)
+        except Exception: pass
+
+
 def main():
     for fn in (test_hard_floor, test_skip_key_and_dedup, test_log_floor_skip_writes_and_dedups,
+               test_load_flags_env_override,
                test_stats, test_norm_grade, test_num, test_parse_time,
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,

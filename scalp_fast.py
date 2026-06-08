@@ -399,7 +399,10 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "family_caps": True, "observation_gate": True}   # daily per-family caps + observe-only families (review)
 def load_flags():
     f = dict(DEFAULT_FLAGS)
-    try: f.update(json.load(open(FLAGS_FILE)))
+    # FLAGS_FILE env override: the BACKTEST (replay_sim) points this at flags_backtest.json (ai_decide=false)
+    # so the engine's own discipline is exercised in replay — WITHOUT editing the live flags.json the cron reads.
+    path = os.environ.get("FLAGS_FILE", FLAGS_FILE)
+    try: f.update(json.load(open(path)))
     except Exception: pass
     f.update(SYMBOL_FLAGS or {})   # per-symbol overrides from instruments.json (e.g. disable mean-reversion on indices)
     return f
