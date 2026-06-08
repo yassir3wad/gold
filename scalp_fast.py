@@ -522,16 +522,24 @@ def is_dup_skip(prev, key, now, window=600):
     """Pure dedup predicate: True if `key` matches the previously-logged skip within `window` seconds."""
     return bool(prev) and prev.get("key") == key and (now - prev.get("t", 0)) < window
 
+FLOOR_SKIP_DEDUP_S = 3600   # an auto-skip thesis logs at most once per hour (chop re-fires the same un-tradeable setup every minute → log spam)
+
 def log_floor_skip(side, why, entry, grade, rng10, body_p, htf, rr1, flags):
-    """Record a pre-hold AUTO-SKIP (deduped by thesis ~10 min) so analyze_logs can MEASURE what the hard
-    floor absorbs. result='auto-skip'; the actual R:R goes in `exit`, the reason flags in `pips` (same
-    convention as a 'rejected' row). Deduped so the same recurring chop-thesis doesn't flood the log."""
+    """Record a pre-hold AUTO-SKIP (deduped by thesis ~1h) so analyze_logs can MEASURE what the hard floor
+    absorbs. result='auto-skip'; the actual R:R goes in `exit`, the reason flags in `pips` (same convention
+    as a 'rejected' row). Dedup tracks the timestamp of EVERY recent thesis-key (not just the last skip), so
+    interleaved chop theses (CRT/zone-bounce/momentum cycling) each dedup independently — a recurring
+    chop-thesis logs once/hour instead of every minute."""
     f = os.path.expanduser(f"~/.tv_fast_{SYMBOL.lower()}_skip.json")
-    key = floor_skip_key(side, entry, why)
+    key = floor_skip_key(side, entry, why); now = time.time()
     try:
-        if is_dup_skip(json.load(open(f)), key, time.time()): return   # same thesis within 10 min
-    except Exception: pass
-    try: json.dump({"key": key, "t": time.time()}, open(f, "w"))
+        recent = json.load(open(f))
+        if not isinstance(recent, dict) or "key" in recent: recent = {}   # ignore the old single-prev format
+    except Exception: recent = {}
+    if now - recent.get(key, 0) < FLOOR_SKIP_DEDUP_S: return              # this thesis already logged within the window
+    recent[key] = now
+    recent = {k: t for k, t in recent.items() if now - t < FLOOR_SKIP_DEDUP_S}   # prune expired keys
+    try: json.dump(recent, open(f, "w"))
     except Exception: pass
     log_signal({"id": int(time.time()), "time": _dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
                 "side": side, "grade": grade, "pattern": why, "entry": entry, "sl": "", "tp1": "",

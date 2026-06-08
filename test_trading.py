@@ -86,11 +86,14 @@ def test_log_floor_skip_writes_and_dedups():
             sf.log_floor_skip("SHORT", "break-and-retest", 4470.0, "C-into-zone", 47, 20, "x14 zone", 0.40, ["neg R:R 0.40 (TP1 < 0.8×SL)"])
             sf.log_floor_skip("SHORT", "break-and-retest", 4470.2, "C-into-zone", 47, 20, "x14 zone", 0.40, ["neg R:R 0.40 (TP1 < 0.8×SL)"])  # dup (rounds to 4470)
             sf.log_floor_skip("LONG",  "momentum impulse", 4480.0, "A+",          50, 30, "open",     0.38, ["neg R:R 0.38 (TP1 < 0.8×SL)"])
+            # INTERLEAVED re-fire of the FIRST thesis after a different one — must still dedup (the old
+            # single-prev store failed this, logging it again because 'momentum' overwrote the prev key).
+            sf.log_floor_skip("SHORT", "break-and-retest", 4470.1, "C-into-zone", 47, 20, "x14 zone", 0.40, ["neg R:R 0.40 (TP1 < 0.8×SL)"])
             paths = glob.glob(os.path.join(tmp, "tradingview-mcp", "logs", "testsym", "*.csv"))
             check("log: csv created", len(paths) == 1)
             rows = list(csv.DictReader(open(paths[0]))) if paths else []
             skips = [r for r in rows if r.get("result") == "auto-skip"]
-            check("log: deduped to 2 distinct theses", len(skips) == 2)
+            check("log: deduped to 2 distinct theses (incl. interleaved re-fire)", len(skips) == 2)
             check("log: reason stored in pips", any("neg R:R" in r.get("pips", "") for r in skips))
             check("log: R:R stored in exit", any(r.get("exit") not in ("", None) for r in skips))
         finally:
