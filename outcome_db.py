@@ -66,7 +66,11 @@ def _ensure_schema(con):
             con.execute(f"ALTER TABLE signals ADD COLUMN {_q(c)} TEXT")
     # Indexes for the common analyze_logs query paths.
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(time)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol_time ON signals(symbol, time)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_result ON signals(result)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_session ON signals(session)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_pattern ON signals(pattern)")
     con.commit()
 
 
@@ -88,6 +92,8 @@ def log_signal(row, db=DEFAULT_DB):
     if "id" not in row or row["id"] in (None, ""):
         raise ValueError("log_signal: row must have a non-empty 'id'")
     data = {k: ("" if v is None else str(v)) for k, v in row.items() if k in ALL_COLS}
+    if data.get("symbol"):
+        data["symbol"] = data["symbol"].upper()
     data["id"] = str(row["id"])
     cols = list(data.keys())
     placeholders = ", ".join("?" for _ in cols)
@@ -115,7 +121,7 @@ def rows(symbol=None, since=None, db=DEFAULT_DB):
         return []
     where, params = [], []
     if symbol:
-        where.append("UPPER(symbol) = ?")
+        where.append("symbol = ?")
         params.append(symbol.upper())
     if since:
         where.append('"time" >= ?')
@@ -158,6 +164,55 @@ def win_rate_by(dimension, db=DEFAULT_DB):
                 continue   # non-numeric pips → not a counted outcome
             g = r["grp"] if r["grp"] not in (None, "") else "?"
             a = agg.setdefault(g, {"n": 0, "wins": 0, "losses": 0, "scratch": 0, "net": 0.0})
+            a["n"] += 1
+            a["net"] += p
+            if p > 0:   a["wins"] += 1
+            elif p < 0: a["losses"] += 1
+            else:       a["scratch"] += 1
+        for a in agg.values():
+            a["win_rate"] = (100.0 * a["wins"] / a["n"]) if a["n"] else 0.0
+            a["net"] = round(a["net"], 1)
+        return agg
+    finally:
+        con.close()
+
+
+def session_breakdown(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by trading session (LONDON, NEWYORK,
+    ASIA, etc). Win = net pips > 0. Only rows that represent a real executed trade (result in
+    TP1/TP2/SL/timeout/superseded/BE) with a numeric `pips` count.
+    Returns {session_name: {n, wins, losses, scratch, win_rate, net}}."""
+    return win_rate_by("session", db)
+
+
+def strategy_performance(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by pattern/strategy. Win = net pips > 0.
+    Only rows that represent a real executed trade (result in TP1/TP2/SL/timeout/superseded/BE) with a
+    numeric `pips` count. Returns {pattern_name: {n, wins, losses, scratch, win_rate, net}}."""
+    return win_rate_by("pattern", db)
+
+
+def hourly_distribution(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by hour of day (0-23). Win = net pips > 0.
+    Only rows that represent a real executed trade (result in TP1/TP2/SL/timeout/superseded/BE) with a
+    numeric `pips` count. Returns {hour: {n, wins, losses, scratch, win_rate, net}}."""
+    if not os.path.exists(db):
+        return {}
+    executed = ("TP1", "TP2", "SL", "timeout", "superseded", "BE")
+    con = _connect(db)
+    try:
+        marks = ", ".join("?" for _ in executed)
+        # Extract hour from time column (format: 'YYYY-MM-DD HH:MM') using substr(time, 12, 2)
+        sql = (f"SELECT CAST(substr({_q('time')}, 12, 2) AS INTEGER) AS hour, result, pips FROM signals "
+               f"WHERE result IN ({marks})")
+        agg = {}
+        for r in con.execute(sql, list(executed)).fetchall():
+            try:
+                p = float(str(r["pips"]).replace(",", "").strip())
+            except (TypeError, ValueError):
+                continue   # non-numeric pips → not a counted outcome
+            h = r["hour"] if r["hour"] is not None else -1
+            a = agg.setdefault(h, {"n": 0, "wins": 0, "losses": 0, "scratch": 0, "net": 0.0})
             a["n"] += 1
             a["net"] += p
             if p > 0:   a["wins"] += 1
