@@ -277,6 +277,71 @@ def test_smc_bucket_roundtrip():
         _cleanup(db)
 
 
+# ---- CSV export round-trip (subtask-3-2: verify export_signals preserves data) ----
+
+def test_csv_export_roundtrip():
+    """CSV → SQLite → CSV preserves data: write CSV → import via migrate → export → compare."""
+    db = _mkdb()
+    csv_dir = tempfile.mkdtemp()
+    try:
+        import migrate_logs_to_db, export_signals
+        # Create original CSV with test data (all SIG_COLS)
+        orig_csv = os.path.join(csv_dir, "original.csv")
+        test_data = [
+            {"id": "8001", "time": "2026-06-08 09:00", "side": "LONG", "grade": "A", "confidence": "high",
+             "pattern": "momentum impulse", "entry": "4500.0", "sl": "4485.0", "tp1": "4515.0",
+             "rng10": "60", "body_p": "12", "htf": "open", "result": "TP1", "exit": "4515.0", "pips": "150"},
+            {"id": "8002", "time": "2026-06-08 09:30", "side": "SHORT", "grade": "B", "confidence": "medium",
+             "pattern": "VWAP rejection", "entry": "4500.0", "sl": "4515.0", "tp1": "4485.0",
+             "rng10": "55", "body_p": "10", "htf": "open", "result": "SL", "exit": "4515.0", "pips": "-150"},
+            {"id": "8003", "time": "2026-06-08 10:00", "side": "LONG", "grade": "A", "confidence": "high",
+             "pattern": "break-and-retest", "entry": "4500.0", "sl": "4490.0", "tp1": "4520.0",
+             "rng10": "70", "body_p": "15", "htf": "open", "result": "TP2", "exit": "4520.0", "pips": "200"},
+        ]
+        with open(orig_csv, "w", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=outcome_db.SIG_COLS)
+            w.writeheader()
+            for row in test_data:
+                w.writerow({k: row.get(k, "") for k in outcome_db.SIG_COLS})
+
+        # Import CSV into SQLite using migrate_logs_to_db
+        files, seen, written, uniq = migrate_logs_to_db.migrate(db, sources=[(orig_csv, "XAUUSD")])
+        assert written == 3, f"expected 3 rows written, got {written}"
+        assert uniq == 3, f"expected 3 unique ids, got {uniq}"
+
+        # Export back to CSV using export_signals
+        export_csv = os.path.join(csv_dir, "exported.csv")
+        count, _ = export_signals.export_signals(export_csv, db=db)
+        assert count == 3, f"expected 3 rows exported, got {count}"
+
+        # Read both CSVs and compare
+        with open(orig_csv, "r") as f:
+            orig_rows = list(_csv.DictReader(f))
+        with open(export_csv, "r") as f:
+            export_rows = list(_csv.DictReader(f))
+
+        assert len(orig_rows) == len(export_rows), \
+            f"row count mismatch: orig {len(orig_rows)} vs export {len(export_rows)}"
+
+        # Compare each row (export is newest-first, so reverse it to match original order)
+        export_rows_by_id = {r["id"]: r for r in export_rows}
+        for orig_row in orig_rows:
+            rid = orig_row["id"]
+            assert rid in export_rows_by_id, f"id {rid!r} missing from export"
+            export_row = export_rows_by_id[rid]
+            for col in outcome_db.SIG_COLS:
+                orig_val = orig_row.get(col, "")
+                export_val = export_row.get(col, "")
+                assert orig_val == export_val, \
+                    f"id {rid}, col {col}: orig {orig_val!r} != export {export_val!r}"
+
+        print("PASS (j) CSV export roundtrip (CSV → SQLite → CSV preserves data)")
+    finally:
+        _cleanup(db)
+        import shutil
+        shutil.rmtree(csv_dir, ignore_errors=True)
+
+
 def main():
     test_upsert_roundtrip()
     test_inplace_update()
@@ -287,6 +352,7 @@ def main():
     test_old_style_row_backcompat()
     test_smc_bucket_schema()
     test_smc_bucket_roundtrip()
+    test_csv_export_roundtrip()
     print("\nALL TESTS PASSED")
 
 
@@ -300,6 +366,7 @@ class OutcomeDbUnitTests(unittest.TestCase):
     def test_old_style_row_backcompat_case(self): test_old_style_row_backcompat()
     def test_smc_bucket_schema_case(self): test_smc_bucket_schema()
     def test_smc_bucket_roundtrip_case(self): test_smc_bucket_roundtrip()
+    def test_csv_export_roundtrip_case(self): test_csv_export_roundtrip()
 
 
 if __name__ == "__main__":
