@@ -58,10 +58,6 @@ def export_signals(output_path, db=outcome_db.DEFAULT_DB, symbol=None, since=Non
     # Fetch rows from database
     rows = outcome_db.rows(symbol=symbol, since=since, db=db)
 
-    if not rows:
-        print(f"No signals found matching filters", file=sys.stderr)
-        return 0, output_path
-
     # Determine columns to export
     if full:
         cols = outcome_db.ALL_COLS
@@ -83,6 +79,8 @@ def export_signals(output_path, db=outcome_db.DEFAULT_DB, symbol=None, since=Non
                 writer.writerow(values)
                 written += 1
 
+        if written == 0:
+            print("No signals found matching filters; wrote header-only CSV", file=sys.stderr)
         return written, output_path
 
     except Exception as e:

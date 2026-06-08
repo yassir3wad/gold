@@ -66,6 +66,8 @@ def _ensure_schema(con):
             con.execute(f"ALTER TABLE signals ADD COLUMN {_q(c)} TEXT")
     # Indexes for the common analyze_logs query paths.
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(time)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol_time ON signals(symbol, time)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_result ON signals(result)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_session ON signals(session)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_pattern ON signals(pattern)")
@@ -90,6 +92,8 @@ def log_signal(row, db=DEFAULT_DB):
     if "id" not in row or row["id"] in (None, ""):
         raise ValueError("log_signal: row must have a non-empty 'id'")
     data = {k: ("" if v is None else str(v)) for k, v in row.items() if k in ALL_COLS}
+    if data.get("symbol"):
+        data["symbol"] = data["symbol"].upper()
     data["id"] = str(row["id"])
     cols = list(data.keys())
     placeholders = ", ".join("?" for _ in cols)
@@ -117,7 +121,7 @@ def rows(symbol=None, since=None, db=DEFAULT_DB):
         return []
     where, params = [], []
     if symbol:
-        where.append("UPPER(symbol) = ?")
+        where.append("symbol = ?")
         params.append(symbol.upper())
     if since:
         where.append('"time" >= ?')

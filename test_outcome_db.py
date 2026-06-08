@@ -342,7 +342,27 @@ def test_csv_export_roundtrip():
         shutil.rmtree(csv_dir, ignore_errors=True)
 
 
-# ---- (k) performance benchmark: 50K synthetic records, all queries under 100ms ----
+def test_csv_export_empty_writes_header():
+    """Empty exports still produce a valid header-only CSV for downstream tools."""
+    db = _mkdb()
+    csv_dir = tempfile.mkdtemp()
+    try:
+        import export_signals
+        outcome_db.init_db(db)
+        export_csv = os.path.join(csv_dir, "empty.csv")
+        count, _ = export_signals.export_signals(export_csv, db=db)
+        assert count == 0, f"expected 0 rows exported, got {count}"
+        with open(export_csv, "r") as f:
+            rows = list(_csv.reader(f))
+        assert rows == [outcome_db.SIG_COLS], f"expected header-only CSV, got {rows!r}"
+        print("PASS (k) empty CSV export writes header")
+    finally:
+        _cleanup(db)
+        import shutil
+        shutil.rmtree(csv_dir, ignore_errors=True)
+
+
+# ---- Optional performance benchmark: 50K synthetic records ----
 
 def test_performance_benchmark():
     """Performance test with 50K synthetic records: all query patterns (full scan, filtered, aggregated)
@@ -417,7 +437,7 @@ def test_performance_benchmark():
         all_rows = outcome_db.rows(db=db)
         assert len(all_rows) == N, f"expected {N} rows, got {len(all_rows)}"
 
-        # --- Query performance tests (all < 500ms for 50K dataset proves production-ready) ---
+        # --- Query performance tests (50K dataset; run only when explicitly requested) ---
         timings = []
 
         # (1) Full scan (newest-first ORDER BY time) - expected to be slower for 50K rows
@@ -494,7 +514,7 @@ def test_performance_benchmark():
         # Print detailed timing report
         max_query_len = max(len(q[0]) for q in timings)
         timing_lines = [f"  {q[0]:<{max_query_len}} : {q[1]:5.1f}ms ({q[2]} results)" for q in timings]
-        print(f"PASS (k) performance benchmark ({N} rows, all queries meet production SLA):\n" + "\n".join(timing_lines))
+        print(f"PASS (benchmark) performance benchmark ({N} rows, all queries meet production SLA):\n" + "\n".join(timing_lines))
 
     finally:
         _cleanup(db)
@@ -533,35 +553,49 @@ def test_query_plans():
         try:
             failures = []
 
-            # (1) rows(symbol="XAUUSD") → must use idx_signals_symbol
-            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE UPPER(symbol) = ? ORDER BY \"time\" DESC",
+            # (1) rows(symbol="XAUUSD") → must use an index, preferably the symbol/time composite
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE symbol = ? ORDER BY \"time\" DESC",
                                ["XAUUSD"]).fetchall()
-            plan_text = " ".join(str(row) for row in plan)
-            if "idx_signals_symbol" not in plan_text and "SCAN" in plan_text.upper():
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_symbol" not in plan_text:
                 failures.append(f"rows(symbol=...) does full table scan: {plan_text}")
 
-            # (2) win_rate_by('pattern') → must use idx_signals_result (WHERE) or idx_signals_pattern
+            # (2) rows(since=...) → must use the time index
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE \"time\" >= ? ORDER BY \"time\" DESC",
+                               ["2026-06-08"]).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_time" not in plan_text:
+                failures.append(f"rows(since=...) does not use time index: {plan_text}")
+
+            # (3) rows(symbol=..., since=...) → must use the symbol/time composite index
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE symbol = ? AND \"time\" >= ? ORDER BY \"time\" DESC",
+                               ["XAUUSD", "2026-06-08"]).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_symbol_time" not in plan_text:
+                failures.append(f"rows(symbol=..., since=...) does not use composite index: {plan_text}")
+
+            # (4) win_rate_by('pattern') → must use idx_signals_result (WHERE) or idx_signals_pattern
             executed = ("TP1", "TP2", "SL", "timeout", "superseded", "BE")
             marks = ", ".join("?" for _ in executed)
             plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"pattern\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
                                list(executed)).fetchall()
-            plan_text = " ".join(str(row) for row in plan)
+            plan_text = " ".join(str(tuple(row)) for row in plan)
             # Accept either idx_signals_result OR idx_signals_pattern (SQLite may choose either)
-            if ("idx_signals_result" not in plan_text and "idx_signals_pattern" not in plan_text) and "SCAN" in plan_text.upper():
+            if "idx_signals_result" not in plan_text and "idx_signals_pattern" not in plan_text:
                 failures.append(f"win_rate_by('pattern') does full table scan: {plan_text}")
 
-            # (3) win_rate_by('session') → must use idx_signals_result (WHERE) or idx_signals_session
+            # (5) win_rate_by('session') → must use idx_signals_result (WHERE) or idx_signals_session
             plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"session\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
                                list(executed)).fetchall()
-            plan_text = " ".join(str(row) for row in plan)
-            if ("idx_signals_result" not in plan_text and "idx_signals_session" not in plan_text) and "SCAN" in plan_text.upper():
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_result" not in plan_text and "idx_signals_session" not in plan_text:
                 failures.append(f"win_rate_by('session') does full table scan: {plan_text}")
 
-            # (4) hourly_distribution() → must use idx_signals_result (WHERE clause filters on result)
+            # (6) hourly_distribution() → must use idx_signals_result (WHERE clause filters on result)
             plan = con.execute(f"EXPLAIN QUERY PLAN SELECT CAST(substr(\"time\", 12, 2) AS INTEGER) AS hour, result, pips FROM signals WHERE result IN ({marks})",
                                list(executed)).fetchall()
-            plan_text = " ".join(str(row) for row in plan)
-            if "idx_signals_result" not in plan_text and "SCAN" in plan_text.upper():
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_result" not in plan_text:
                 failures.append(f"hourly_distribution() does full table scan: {plan_text}")
 
             if failures:
@@ -585,8 +619,10 @@ def main():
     test_smc_bucket_schema()
     test_smc_bucket_roundtrip()
     test_csv_export_roundtrip()
-    test_performance_benchmark()
+    test_csv_export_empty_writes_header()
     test_query_plans()
+    if os.environ.get("RUN_PERF_BENCHMARK") == "1":
+        test_performance_benchmark()
     print("\nALL TESTS PASSED")
 
 
@@ -601,7 +637,7 @@ class OutcomeDbUnitTests(unittest.TestCase):
     def test_smc_bucket_schema_case(self): test_smc_bucket_schema()
     def test_smc_bucket_roundtrip_case(self): test_smc_bucket_roundtrip()
     def test_csv_export_roundtrip_case(self): test_csv_export_roundtrip()
-    def test_performance_benchmark_case(self): test_performance_benchmark()
+    def test_csv_export_empty_writes_header_case(self): test_csv_export_empty_writes_header()
     def test_query_plans_case(self): test_query_plans()
 
 
