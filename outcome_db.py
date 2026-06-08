@@ -67,6 +67,8 @@ def _ensure_schema(con):
     # Indexes for the common analyze_logs query paths.
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_symbol ON signals(symbol)")
     con.execute("CREATE INDEX IF NOT EXISTS idx_signals_result ON signals(result)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_session ON signals(session)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_signals_pattern ON signals(pattern)")
     con.commit()
 
 
