@@ -89,8 +89,10 @@ ER_STRIDE = max(1, 15 // BASE_TF)  # bars per 15m step (15 on 1m, 3 on 5m) so th
 SMC_TTL = 3600        # SMC/trendline HTF context refreshes slowly (4h); cached this long (live). Backtest clears the cache per replay step-refresh, so it stays date-faithful.
 SMC_TOL = 80          # SMC proximity in PIPS (gold $8) — ×PIP makes it pair-correct (EURUSD 0.008)
 CHOP_ER = 0.30                     # 15m efficiency-ratio below this = range/chop -> suppress breakout/momentum entries
-RR_FLOOR     = 0.8                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
-                                   # is structurally un-tradeable (no room / negative R:R) and is auto-skipped
+RR_FLOOR     = 1.2                 # pre-hold HARD FLOOR (primary): TP1 must be >= this × the stop, else the trade
+                                   # is structurally un-tradeable (sub-1.2 R:R is -EV at scalp win rates) and is
+                                   # auto-skipped. Raised 0.8→1.2 (2026-06-08): the gold June 2-5 -135p loss was
+                                   # driven entirely by 3 zone-bounce trades at R:R 0.83-1.06 that all hit SL.
                                    # BEFORE it can reach the held/review state — regardless of direction. This is
                                    # the dominant chop-spam signature ("neg R:R, TP1 +6p vs SL -18p"). A genuine
                                    # setup (positive R:R with room) never trips it. Applies EVEN under ai_decide.
@@ -1224,14 +1226,17 @@ def main():
     if FL.get("trend_regime", True) and regime != "flat":
         counter = (side == "LONG" and regime == "DOWN") or (side == "SHORT" and regime == "UP")
         with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
-        if counter:
-            # SOFT counter-trend penalty (codex): counter-trend is context, not a disqualifier — dent the
-            # grade (−1; −2 when ALSO chopping or off-session = doubly bad context), but NEVER hard-veto on
-            # trend alone. The genuinely un-tradeable cases are still killed by the hard floor (thin-room +
-            # counter) and confidence already applies its own −1 (with_trend=False). Was: hard SKIP unless A+.
+        if counter and FL.get("counter_trend_soft", False):
+            # SOFT counter-trend (flag, default OFF until backtest-validated): counter-trend dents the grade
+            # (−1; −2 when ALSO chop/off-session), never a hard veto. Confidence already applies its own −1.
             _ctp = 2 if (is_chop or not sess_ok) else 1
             grade = downgrade_grade(grade, _ctp)
             htf_note += f" | counter-{regime} (grade −{_ctp})"
+        elif counter and not grade.startswith("A+") and not AI:
+            # LEGACY hard veto (default): only A+ counter-trend allowed (until counter_trend_soft is validated).
+            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
+        elif counter:
+            htf_note += f" | counter-{regime} (A+ only)"
         elif with_trend:
             htf_note += f" | with {regime} trend"
             if grade.startswith("B"): grade = "A"

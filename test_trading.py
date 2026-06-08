@@ -32,13 +32,13 @@ def test_hard_floor():
         ("no-room long 3p",           "LONG",  "UP",   50.0, 6/18, 3,  0.34, True),
         ("counter+oversold no-room",  "SHORT", "UP",   26.7, 6/18, 5,  0.37, True),
         ("thin-room dead-chop+counter","SHORT","UP",   33.6, 1.1,  6,  0.05, True),  # secondary clause
+        ("sub-1.2 R:R rr1.0",         "LONG",  "UP",   55.0, 1.0,  40, 0.40, True),  # RR_FLOOR=1.2: 1.0 < 1.2 skips
+        ("sub-1.2 R:R rr0.8",         "LONG",  "UP",   50.0, 0.8,  40, 0.40, True),  # the zone-bounce -EV pattern
         # MUST NOT SKIP — genuine positive-R:R setups with room
         ("the +77 winner",            "LONG",  "UP",   45.0, 1.3,  84, 0.45, False),
-        ("clean with-trend rr1.0",    "LONG",  "UP",   55.0, 1.0,  40, 0.40, False),
         ("counter but rr1.4+room",    "SHORT", "UP",   50.0, 1.4,  60, 0.45, False),
-        ("mean-revert long@support",  "LONG",  "DOWN", 28.0, 1.2,  40, 0.40, False),
-        ("rr exactly at floor 0.8",   "LONG",  "UP",   50.0, 0.8,  40, 0.40, False),  # >= floor passes
-        ("room unknown (no wall)",    "LONG",  "UP",   50.0, 1.0,  None,0.40, False),  # above chop ER floor
+        ("rr exactly at floor 1.2",   "LONG",  "DOWN", 28.0, 1.2,  40, 0.40, False),  # >= floor passes
+        ("room unknown (no wall)",    "LONG",  "UP",   50.0, 1.3,  None,0.40, False),  # rr above floor + room unknown → no skip
         ("rr None (no risk)",         "LONG",  "UP",   50.0, None, 40, 0.40, False),
     ]
     for name, side, regime, rsi, rr1, room, er, expect in cases:
