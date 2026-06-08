@@ -1,8 +1,8 @@
 {
- "ts": 1780859429.088577,
- "price": 4327.73,
- "pdh": 4515.48,
- "pdl": 4423.85,
+ "ts": 1780870228.003895,
+ "price": 4318.49,
+ "pdh": 4481.54,
+ "pdl": 4311.65,
  "asia_h": 4470.04,
  "asia_l": 4435.12,
  "london_h": 4475.75,
@@ -21,7 +21,7 @@
   [
    4423.45,
    4424.25,
-   "4423.85 (1H+4H+PDL, x3)"
+   "4423.85 (1H+4H, x2)"
   ],
   [
    4428.15,
@@ -44,10 +44,16 @@
    "4475.75 (15m+1H, x2)"
   ]
  ],
- "htf_s": [],
+ "htf_s": [
+  [
+   4311.25,
+   4312.05,
+   "4311.65 (15m+PDL, x2)"
+  ]
+ ],
  "smc": {
-  "ts": 1780860924,
-  "price": 4327.73,
+  "ts": 1780870222.030051,
+  "price": 4318.49,
   "tf": {
    "240": {
     "boxes": [
@@ -82,8 +88,8 @@
       "side": "supply"
      },
      {
-      "high": 4334.74,
-      "low": 4311.65,
+      "high": 4333.23,
+      "low": 4310.06,
       "side": "straddle"
      }
     ],
@@ -190,18 +196,18 @@
      },
      {
       "text": "Weak Low",
-      "price": 4311.65
+      "price": 4310.06
      }
     ],
     "premium": [
-     4542.59,
+     4541.8,
      4773.53
     ],
     "discount": [
-     4311.65,
-     4542.59
+     4310.06,
+     4541.8
     ],
-    "equilibrium": 4542.59
+    "equilibrium": 4541.8
    },
    "60": {
     "boxes": [
@@ -211,8 +217,8 @@
       "side": "supply"
      },
      {
-      "high": 4460.41,
-      "low": 4446.24,
+      "high": 4459.65,
+      "low": 4445.41,
       "side": "supply"
      },
      {
@@ -241,9 +247,9 @@
       "side": "straddle"
      },
      {
-      "high": 4325.82,
-      "low": 4311.65,
-      "side": "demand"
+      "high": 4324.31,
+      "low": 4310.06,
+      "side": "straddle"
      },
      {
       "high": 4309.44,
@@ -252,6 +258,10 @@
      }
     ],
     "structure": [
+     {
+      "text": "CHoCH",
+      "price": 4124.53
+     },
      {
       "text": "BOS",
       "price": 4132.81
@@ -539,10 +549,6 @@
      {
       "text": "BOS",
       "price": 4517.2
-     },
-     {
-      "text": "CHoCH",
-      "price": 4524.07
      }
     ],
     "liquidity": [
@@ -614,24 +620,24 @@
      },
      {
       "text": "Weak Low",
-      "price": 4311.65
+      "price": 4310.06
      }
     ],
     "premium": [
-     4453.32,
+     4452.53,
      4595
     ],
     "discount": [
-     4311.65,
-     4453.32
+     4310.06,
+     4452.53
     ],
-    "equilibrium": 4453.32
+    "equilibrium": 4452.53
    },
    "15": {
     "boxes": [
      {
       "high": 4515.48,
-      "low": 4505.29,
+      "low": 4505.21,
       "side": "supply"
      },
      {
@@ -670,8 +676,8 @@
       "side": "supply"
      },
      {
-      "high": 4418.66,
-      "low": 4408.47,
+      "high": 4417.91,
+      "low": 4407.63,
       "side": "supply"
      },
      {
@@ -715,9 +721,9 @@
       "side": "supply"
      },
      {
-      "high": 4321.84,
-      "low": 4311.65,
-      "side": "demand"
+      "high": 4320.33,
+      "low": 4310.06,
+      "side": "straddle"
      },
      {
       "high": 4318.09,
@@ -1019,46 +1025,6 @@
      {
       "text": "BOS",
       "price": 4518.36
-     },
-     {
-      "text": "BOS",
-      "price": 4518.72
-     },
-     {
-      "text": "BOS",
-      "price": 4520.72
-     },
-     {
-      "text": "CHoCH",
-      "price": 4520.96
-     },
-     {
-      "text": "CHoCH",
-      "price": 4521.83
-     },
-     {
-      "text": "CHoCH",
-      "price": 4522.97
-     },
-     {
-      "text": "CHoCH",
-      "price": 4524
-     },
-     {
-      "text": "CHoCH",
-      "price": 4524.79
-     },
-     {
-      "text": "BOS",
-      "price": 4525.5
-     },
-     {
-      "text": "BOS",
-      "price": 4525.95
-     },
-     {
-      "text": "BOS",
-      "price": 4527.02
      }
     ],
     "liquidity": [
@@ -1073,14 +1039,6 @@
      {
       "text": "EQL",
       "price": 4457.16
-     },
-     {
-      "text": "EQH",
-      "price": 4520.96
-     },
-     {
-      "text": "EQH",
-      "price": 4520.65
      },
      {
       "text": "EQL",
@@ -1118,19 +1076,107 @@
      },
      {
       "text": "Weak Low",
-      "price": 4311.65
+      "price": 4310.06
      }
     ],
     "premium": [
-     4413.56,
+     4412.77,
      4515.48
     ],
     "discount": [
-     4311.65,
-     4413.56
+     4310.06,
+     4412.77
     ],
-    "equilibrium": 4413.56
+    "equilibrium": 4412.77
    }
   }
- }
+ },
+ "sd_zones": [
+  {
+   "tf": "1H",
+   "role": "resistance",
+   "lo": 4406.22,
+   "hi": 4421.19,
+   "mid": 4413.7,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780664400,
+   "t1": 1780869600
+  },
+  {
+   "tf": "4H",
+   "role": "resistance",
+   "lo": 4464.77,
+   "hi": 4475.75,
+   "mid": 4470.26,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780653600,
+   "t1": 1780869600
+  },
+  {
+   "tf": "4H",
+   "role": "support",
+   "lo": 4495.62,
+   "hi": 4515.48,
+   "mid": 4505.55,
+   "kl": false,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780567200,
+   "t1": 1780869600
+  },
+  {
+   "tf": "4H",
+   "role": "sell zone",
+   "lo": 4529.89,
+   "hi": 4541.57,
+   "mid": 4535.73,
+   "kl": true,
+   "flip": false,
+   "score": 1.0,
+   "time": 1780380000,
+   "t1": 1780869600
+  },
+  {
+   "tf": "4H",
+   "role": "sell zone",
+   "lo": 4525.4,
+   "hi": 4595,
+   "mid": 4560.2,
+   "kl": true,
+   "flip": false,
+   "score": 0.75,
+   "time": 1780063200,
+   "t1": 1780869600
+  }
+ ],
+ "sd_sr": [
+  {
+   "role": "resistance",
+   "price": 4370.07,
+   "tf": "1H",
+   "flip": false
+  },
+  {
+   "role": "resistance",
+   "price": 4387.81,
+   "tf": "1H",
+   "flip": true
+  },
+  {
+   "role": "resistance",
+   "price": 4406.22,
+   "tf": "1H",
+   "flip": false
+  },
+  {
+   "role": "resistance",
+   "price": 4430.25,
+   "tf": "4H",
+   "flip": true
+  }
+ ]
 }
