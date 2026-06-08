@@ -23,6 +23,7 @@
   "session_sweep": true,
   "ai_decide": true,
   "zone_bounce": true,
+  "fib_pullback": true,
   "va_reject": true,
   "draw_overlay": true,
   "smc_confluence": false,

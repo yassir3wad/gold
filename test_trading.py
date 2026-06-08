@@ -370,6 +370,37 @@ def test_downgrade_grade():
     check("downgrade: 0 steps unchanged tier", sf.downgrade_grade("A+", 0) == "A+")
 
 
+def test_fib_pullback_signal():
+    short_bars = [
+        _bar(109, 108, c=108.5), _bar(110, 109, c=109.5), _bar(108, 106, c=106.5),
+        _bar(106, 104, c=104.5), _bar(104, 102, c=102.5), _bar(102, 100, c=100.5),
+        _bar(103, 101, c=102.5), _bar(104, 102, c=103.5), _bar(105.9, 104.5, o=105.5, c=104.8),
+    ]
+    s = sf.fib_pullback_signal(short_bars, "SHORT", pip=0.1, vs=1.0, pxd=2)
+    check("fib: SHORT anchors top→bottom and rejects 0.52-0.645 pocket",
+          s is not None and s["wave_hi"] == 110.0 and s["wave_lo"] == 100.0
+          and s["zone_lo"] == 105.2 and s["zone_hi"] == 106.45)
+
+    long_bars = [
+        _bar(101, 100, c=100.5), _bar(102, 100.2, c=101.5), _bar(104, 101.5, c=103.5),
+        _bar(106, 103.5, c=105.5), _bar(108, 105.5, c=107.5), _bar(110, 107.5, c=109.5),
+        _bar(108, 106, c=106.5), _bar(106, 104, c=104.5), _bar(105.4, 104.1, o=104.3, c=105.0),
+    ]
+    l = sf.fib_pullback_signal(long_bars, "LONG", pip=0.1, vs=1.0, pxd=2)
+    check("fib: LONG anchors bottom→top and rejects 0.52-0.645 pocket",
+          l is not None and l["wave_hi"] == 110.0 and l["wave_lo"] == 100.0
+          and l["zone_lo"] == 103.55 and l["zone_hi"] == 104.8)
+
+    no_reject = list(short_bars)
+    no_reject[-1] = _bar(105.9, 104.5, o=104.8, c=105.4)
+    check("fib: touch without directional rejection does not trigger",
+          sf.fib_pullback_signal(no_reject, "SHORT", pip=0.1, vs=1.0, pxd=2) is None)
+    check("fib grade: valid pocket is +1 tier only",
+          sf.fib_grade_boost("B (open space)") == "A"
+          and sf.fib_grade_boost("A") == "A+"
+          and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
+
+
 def test_merge_classic_keeps_all():
     # drawn == traded: EVERY classic zone enters the level map (none dropped, even overlapping ones).
     htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
@@ -484,7 +515,7 @@ def main():
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
-               test_merge_smc_ob_zones, test_count_distinct_at):
+               test_fib_pullback_signal, test_merge_smc_ob_zones, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

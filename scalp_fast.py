@@ -102,6 +102,10 @@ HARD_CHOP_ER = 0.20                # PRIMARY floor: ER below this = truly dead t
 HARD_ROOM_P  = 10                  # secondary floor: a THIN-room setup (<HARD_ROOM_P×VS) that is ALSO a
                                    # counter-trend fade (whipsaw-in-a-box) is skipped too.
 ZONE_WICK_P = 15                   # zone-bounce: min rejection-wick (pips) for a candle to count as a zone defense
+FIB_MIN_WAVE_P = 80                # fib pullback: minimum impulse leg before a correction is tradeable
+FIB_TOUCH_P = 8                    # fib pullback: touch halo around the retracement pocket, in pips × VS
+FIB_REJECT_P = 6                   # fib pullback: minimum rejection wick from the fib pocket, in pips × VS
+FIB_PULLBACK_ZONE = (0.52, 0.645)  # user's chart template: primary correction pocket between 0.52 and 0.645
 ZONES_FILE = os.path.expanduser("~/tradingview-mcp/zones.json")
 ZONES_TTL = 6*3600                 # auto-rebuild HTF zones (refresh_zones.py) when older than this
 ZONES_MAX_AGE = 18*3600            # ...but still use a stale file up to this old rather than fall back
@@ -362,6 +366,73 @@ def kl_upgrade(grade):
     return "A+" if grade.startswith(("A", "B")) else grade
 
 
+def fib_pullback_signal(bars, side, pip, vs=1.0, pxd=2, lookback=80,
+                        zone=FIB_PULLBACK_ZONE, min_wave_p=FIB_MIN_WAVE_P,
+                        touch_p=FIB_TOUCH_P, reject_p=FIB_REJECT_P):
+    """Detect a correction pullback into the primary fib pocket of the latest impulse leg.
+    SHORT: draw fib from wave top to wave bottom, then reject a pullback into 0.52-0.645.
+    LONG: draw fib from wave bottom to wave top, then reject a pullback into 0.52-0.645.
+    Returns context dict or None. Pure (testable)."""
+    if len(bars) < 8 or side not in ("LONG", "SHORT"):
+        return None
+    win = bars[-lookback:] if len(bars) > lookback else bars[:]
+    if len(win) < 8:
+        return None
+    last = win[-1]; hist = win[:-1]
+    if side == "SHORT":
+        low_i, low_bar = min(enumerate(hist), key=lambda kv: kv[1]["low"])
+        prior = hist[:low_i]
+        if not prior:
+            return None
+        high_i, high_bar = max(enumerate(prior), key=lambda kv: kv[1]["high"])
+        wave_hi, wave_lo = high_bar["high"], low_bar["low"]
+        if low_i <= high_i:
+            return None
+        wave_p = (wave_hi - wave_lo) / pip
+        if wave_p < min_wave_p * vs:
+            return None
+        z1, z2 = (wave_lo + r * (wave_hi - wave_lo) for r in zone)
+        zlo, zhi = min(z1, z2), max(z1, z2)
+        pad, wick = touch_p * vs * pip, reject_p * vs * pip
+        touched = last["high"] >= zlo - pad and last["low"] <= zhi + pad
+        rejected = last["close"] < last["open"] and (last["high"] - last["close"]) >= wick
+        if touched and rejected:
+            return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
+                    "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p)}
+    else:
+        high_i, high_bar = max(enumerate(hist), key=lambda kv: kv[1]["high"])
+        prior = hist[:high_i]
+        if not prior:
+            return None
+        low_i, low_bar = min(enumerate(prior), key=lambda kv: kv[1]["low"])
+        wave_hi, wave_lo = high_bar["high"], low_bar["low"]
+        if high_i <= low_i:
+            return None
+        wave_p = (wave_hi - wave_lo) / pip
+        if wave_p < min_wave_p * vs:
+            return None
+        z1, z2 = (wave_hi - r * (wave_hi - wave_lo) for r in zone)
+        zlo, zhi = min(z1, z2), max(z1, z2)
+        pad, wick = touch_p * vs * pip, reject_p * vs * pip
+        touched = last["low"] <= zhi + pad and last["high"] >= zlo - pad
+        rejected = last["close"] > last["open"] and (last["close"] - last["low"]) >= wick
+        if touched and rejected:
+            return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
+                    "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p)}
+    return None
+
+
+def fib_grade_boost(grade):
+    """A valid fib correction pocket is +1 confluence tier, not a free pass for bad/counter-zone setups."""
+    if grade.startswith("A") and not grade.startswith("A+"):
+        return "A+"
+    if grade.startswith("B"):
+        return "A"
+    return grade
+
+
 _GRADE_TIERS = ["C", "B", "A", "A+"]   # ascending letter tiers
 def downgrade_grade(grade, steps):
     """Lower the LETTER tier by `steps` (A+→A→B→C), floored at C. Used for the SOFT counter-trend penalty —
@@ -457,6 +528,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "classic_zones": True,   # consider the CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) in confluence + grade; a KEY-LEVEL (KL) classic zone is the top-probability tier and boosts the grade.
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
+                 "fib_pullback": True,
                  "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
                  "family_caps": True, "observation_gate": True}   # daily per-family caps + observe-only families (review)
 def load_flags():
@@ -471,11 +543,11 @@ def load_flags():
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
             "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
-            "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt"}
+            "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt", "fib": "fib_pullback"}
 # Daily per-family caps on FIRED (alerted) trades — stop noisy families from overproducing (review Priority 2).
 # Keyed by strategy flag; families not listed are uncapped. Only REDUCES trades (safe). Flag: family_caps.
 FAMILY_CAPS = {"trendline_break": 3, "crt": 2, "zone_bounce": 1, "momentum_impulse": 1,
-               "liquidity_sweep": 1, "session_sweep": 2, "break_retest": 1}
+               "liquidity_sweep": 1, "session_sweep": 2, "break_retest": 1, "fib_pullback": 2}
 # Observation-only families: detected + LOGGED (for measurement) but NOT surfaced/fired live, until they
 # prove cost-adjusted edge out of sample (review Next #3: momentum impulse is negative net). Flag: observation_gate.
 OBSERVE_FAMILIES = {"momentum_impulse"}
@@ -1011,6 +1083,8 @@ def main():
     if cd_left > 0 and not AI:
         print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
 
+    fib_long = fib_pullback_signal(b, "LONG", PIP, VS, PXD) if FL.get("fib_pullback", True) else None
+    fib_short = fib_pullback_signal(b, "SHORT", PIP, VS, PXD) if FL.get("fib_pullback", True) else None
     setups = []
     buf = buf_p * PIP  # break buffer (ATR-scaled)
     # 1) Trendline break (with strong momentum candle)
@@ -1143,6 +1217,14 @@ def main():
                     round(rng10), round(body_pips), at_R[2], None,
                     ["strict reversal context: no stacked confluence or valid prior VA"],
                 )
+    # 12) Fib correction pullback — after a clear impulse leg, wait for price to pull back into the
+    # primary correction pocket (0.52-0.645 on the user's chart template) and reject it. Directional:
+    # SHORT draws top→bottom on a down wave; LONG draws bottom→top on an up wave.
+    if FL.get("fib_pullback", True):
+        if fib_long:
+            setups.append(("LONG", f"fib pullback rejection {fib_long['ratio']}", last['close'], round(last['low'] - buf_p*PIP, PXD)))
+        if fib_short:
+            setups.append(("SHORT", f"fib pullback rejection {fib_short['ratio']}", last['close'], round(last['high'] + buf_p*PIP, PXD)))
     # CRT (Candle Range Theory): the prior 15m block = the "range candle"; the last few 1m bars SWEEP its
     # high/low (liquidity grab) and the last candle CLOSES BACK INSIDE the range = manipulation + reversal.
     # Distinct from liquidity_sweep (which needs an HTF zone): CRT's edge is the swept range-extreme + the
@@ -1168,9 +1250,10 @@ def main():
         for s in vareject.detect_va_reject(price, vw, {"vah": _pv.get("vah"), "val": _pv.get("val"), "poc": _pv.get("poc")},
                                            b, pip=PIP, bar_minutes=BASE_TF):
             setups.append((s[0], s[1], s[2], round(s[3], PXD)))
-    # volume filter: breakouts/breaks need above-avg volume; reversals (sweep/retest/VWAP/reclaim/bounce/CRT) exempt
+    # volume filter: breakouts/breaks need above-avg volume; reversals/correction entries
+    # (sweep/retest/VWAP/reclaim/bounce/CRT/fib) are exempt.
     if FL["volume_filter"] and not vol_ok and not AI:
-        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT"))]
+        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT", "fib"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 
@@ -1290,6 +1373,14 @@ def main():
         htf_note += f" | x{conf} confluence"
         if grade == "A": grade = "A+"
         elif grade.startswith("B"): grade = "A"
+    fib_ctx = fib_long if side == "LONG" else fib_short
+    if FL.get("fib_pullback", True) and fib_ctx:
+        before = grade
+        grade = fib_grade_boost(grade)
+        htf_note += (f" | fib {fib_ctx['ratio']} pullback "
+                     f"{fib_ctx['zone_lo']}-{fib_ctx['zone_hi']} "
+                     f"(wave {fib_ctx['wave_lo']}-{fib_ctx['wave_hi']}, +{fib_ctx['wave_pips']}p)"
+                     f"{' grade+1' if grade != before else ''}")
     # #2b RSI divergence at a level upgrades a reversal to A+
     if FL.get("rsi_filter", True) and is_rev and rsi is not None and rsi_divergence(b, side):
         htf_note += " | RSI divergence"; grade = "A+" if not grade.startswith("A+") else grade
