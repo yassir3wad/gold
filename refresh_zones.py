@@ -44,6 +44,18 @@ def tv(*a):
     try: return json.loads(r.stdout)
     except Exception: return {}
 
+def symbol_base(s):
+    """Bare ticker from a TV symbol: 'PEPPERSTONE:XAUUSD' -> 'XAUUSD'. Pure."""
+    return s.split(":")[-1].strip().upper() if s else ""
+
+def symbol_matches(expected_tv, chart_symbol):
+    """True iff the chart is ACTUALLY showing the expected instrument (base-ticker match). Guards against a
+    flaky/timed-out symbol switch writing the wrong instrument's levels into a zone file (the 2026-06-08
+    incident: a stalled switch left the chart on gold, so refresh_zones --symbol GBPUSD wrote GOLD zones into
+    zones_gbpusd.json). Empty/None chart_symbol -> False (unreadable = refuse to write). Pure (testable)."""
+    cb = symbol_base(chart_symbol)
+    return bool(cb) and cb == symbol_base(expected_tv)
+
 def pivots(b, L=3, R=3):
     sh, sl = [], []
     for i in range(L, len(b)-R):
@@ -99,8 +111,18 @@ def build_fib_zones(tf_bars, pip=PIP, decimals=DECIMALS):
     return out
 
 def main():
-    price = tv('quote').get('last')
+    q = tv('quote')
+    price = q.get('last')
     if price is None: print("no price"); return
+    # GUARD: verify the chart is actually on the requested instrument before reading/writing — a flaky/timed-out
+    # symbol switch must NEVER contaminate a zone file with another instrument's levels (2026-06-08 gold→GBP/NAS).
+    _expected = _cfg.get("tv", SYMBOL)
+    _chart_sym = q.get('symbol')
+    if not symbol_matches(_expected, _chart_sym):
+        print(f">> ABORT refresh: chart shows '{_chart_sym}' but {SYMBOL} (expected {_expected}) was requested — "
+              f"symbol switch failed/timed out. NOT writing {ZONES_FILE} (would write the wrong instrument's "
+              f"levels). Existing file kept.")
+        sys.exit(1)
     cands = []   # (price, source-tag)
     pdh = pdl = None
     tf_bars = {}

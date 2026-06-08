@@ -413,6 +413,24 @@ def test_fib_pullback_signal():
           and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
 
 
+def test_refresh_symbol_guard():
+    """refresh_zones must refuse to write when the chart isn't on the requested instrument (the 2026-06-08
+    gold→GBP/NAS contamination): base-ticker match against the configured tv symbol; unreadable → False."""
+    import refresh_zones as rz
+    check("sym base: strips exchange", rz.symbol_base("PEPPERSTONE:XAUUSD") == "XAUUSD")
+    check("sym base: bare ticker", rz.symbol_base("GBPUSD") == "GBPUSD")
+    check("sym base: empty", rz.symbol_base(None) == "" and rz.symbol_base("") == "")
+    # gold: chart shows PEPPERSTONE:XAUUSD, expected PEPPERSTONE:XAUUSD → match
+    check("sym match: gold ok", rz.symbol_matches("PEPPERSTONE:XAUUSD", "PEPPERSTONE:XAUUSD") is True)
+    # FX: chart adds an exchange prefix, base still matches the bare expected
+    check("sym match: exchange-prefixed chart ok", rz.symbol_matches("GBPUSD", "OANDA:GBPUSD") is True)
+    # THE INCIDENT: requested GBP but chart stuck on gold → mismatch → refuse to write
+    check("sym match: gold-on-GBP refused", rz.symbol_matches("GBPUSD", "PEPPERSTONE:XAUUSD") is False)
+    check("sym match: NAS-on-gold refused", rz.symbol_matches("NAS100", "PEPPERSTONE:XAUUSD") is False)
+    # unreadable symbol (read failed) → refuse (fail safe, don't write)
+    check("sym match: unreadable → False", rz.symbol_matches("GBPUSD", None) is False and rz.symbol_matches("GBPUSD", "") is False)
+
+
 def test_zones_fallback_non_xau_safe():
     """Deployment-safety (codex): the hardcoded HTF_R/HTF_S/PDH/... are GOLD levels — a valid fallback
     only for XAUUSD. With generated zone files now untracked, a fresh clone whose refresh fails must NOT
@@ -620,7 +638,8 @@ def main():
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
                test_fib_pullback_signal, test_refresh_fib_zones_builder, test_key_level_trade_helpers,
-               test_merge_smc_ob_zones, test_cluster_walls_and_next_wall, test_zones_fallback_non_xau_safe, test_count_distinct_at):
+               test_merge_smc_ob_zones, test_cluster_walls_and_next_wall, test_zones_fallback_non_xau_safe,
+               test_refresh_symbol_guard, test_count_distinct_at):
         try:
             fn()
         except Exception as e:
