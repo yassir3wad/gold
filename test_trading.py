@@ -401,6 +401,30 @@ def test_fib_pullback_signal():
           and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
 
 
+def test_key_level_trade_helpers():
+    classic = {"zones": [
+        {"role": "buy zone", "lo": 4250.0, "hi": 4260.0, "tf": "1H", "kl": True},
+        {"role": "sell zone", "lo": 4339.71, "hi": 4353.38, "tf": "1H", "kl": True},
+        {"role": "sell zone", "lo": 4400.0, "hi": 4410.0, "tf": "4H", "kl": False},
+    ]}
+    check("kl at: buy/support KL is LONG location",
+          sf.classic_key_level_at(classic, "LONG", 4258.0, 4.0)["role"] == "buy zone")
+    check("kl at: sell/resistance KL is SHORT location",
+          sf.classic_key_level_at(classic, "SHORT", 4341.0, 4.0)["role"] == "sell zone")
+    check("kl at: non-KL classic zone ignored",
+          sf.classic_key_level_at(classic, "SHORT", 4405.0, 4.0) is None)
+
+    bull_reject = _bar(4262, 4252, o=4254, c=4261)
+    bear_reject = _bar(4352, 4338, o=4349, c=4340)
+    passive = _bar(4352, 4338, o=4340, c=4348)
+    check("kl rejection: LONG needs bullish rejection from KL",
+          sf.key_level_rejection(bull_reject, classic["zones"][0], "LONG", wick_p=15, pip=0.1) is True)
+    check("kl rejection: SHORT needs bearish rejection from KL",
+          sf.key_level_rejection(bear_reject, classic["zones"][1], "SHORT", wick_p=15, pip=0.1) is True)
+    check("kl rejection: passive/opposite close does not trigger",
+          sf.key_level_rejection(passive, classic["zones"][1], "SHORT", wick_p=15, pip=0.1) is False)
+
+
 def test_merge_classic_keeps_all():
     # drawn == traded: EVERY classic zone enters the level map (none dropped, even overlapping ones).
     htf_r = [(4400, 4410, "old R")]; htf_s = [(4300, 4310, "old S")]
@@ -515,7 +539,7 @@ def main():
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
-               test_fib_pullback_signal, test_merge_smc_ob_zones, test_count_distinct_at):
+               test_fib_pullback_signal, test_key_level_trade_helpers, test_merge_smc_ob_zones, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

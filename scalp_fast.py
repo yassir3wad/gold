@@ -366,6 +366,42 @@ def kl_upgrade(grade):
     return "A+" if grade.startswith(("A", "B")) else grade
 
 
+def classic_key_level_at(classic, side, price, tol):
+    """Return the active classic Key-Level zone for `side` at `price`, if any.
+    KL buy/support zones are LONG trade locations; KL sell/resistance zones are SHORT trade locations."""
+    want = ("buy zone", "support") if side == "LONG" else ("sell zone", "resistance")
+    for z in (classic or {}).get("zones", []) or []:
+        if not z.get("kl") or z.get("role") not in want:
+            continue
+        lo, hi = _num(z.get("lo")), _num(z.get("hi"))
+        if lo is None or hi is None:
+            continue
+        if hi < lo:
+            lo, hi = hi, lo
+        if lo - tol <= price <= hi + tol:
+            return z
+    return None
+
+
+def key_level_rejection(last, zone, side, wick_p, pip):
+    """True when the latest candle rejects a KL zone in the trade direction."""
+    if not zone:
+        return False
+    lo, hi = _num(zone.get("lo")), _num(zone.get("hi"))
+    if lo is None or hi is None:
+        return False
+    if hi < lo:
+        lo, hi = hi, lo
+    wick = wick_p * pip
+    if side == "LONG":
+        return (last["low"] <= hi and last["close"] >= lo
+                and last["close"] > last["open"]
+                and (last["close"] - last["low"]) >= wick)
+    return (last["high"] >= lo and last["close"] <= hi
+            and last["close"] < last["open"]
+            and (last["high"] - last["close"]) >= wick)
+
+
 def fib_pullback_signal(bars, side, pip, vs=1.0, pxd=2, lookback=80,
                         zone=FIB_PULLBACK_ZONE, min_wave_p=FIB_MIN_WAVE_P,
                         touch_p=FIB_TOUCH_P, reject_p=FIB_REJECT_P):
@@ -461,7 +497,7 @@ def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
         reasons.append(f"counter-{regime} no-room")
     return (bool(reasons), reasons)
 
-ZONE_REJECTION_FAMILIES = ("zone-bounce", "zone-reclaim")   # rejections AT a classic/SMC supply-demand zone
+ZONE_REJECTION_FAMILIES = ("zone-bounce", "zone-reclaim", "key-level")   # rejections AT a classic/SMC/KL supply-demand zone
 def is_zone_rejection(why):
     return any(k in (why or "") for k in ZONE_REJECTION_FAMILIES)
 
@@ -479,7 +515,7 @@ def zrskip_record(why, flags, side, regime, er, rr1, entry, sl, tp1):
     return {"family": why, "side": side, "regime": regime, "with_trend": with_trend, "block": block,
             "chop": chop, "neg_rr": neg_rr, "er": er, "rr1": rr1, "entry": entry, "sl": sl, "tp1": tp1}
 
-REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT")   # fade / mean-reversion setups
+REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT", "key-level")   # fade / mean-reversion setups
 def reversal_rsi_extreme(side, why, rsi, lo=25, hi=75):
     """#3 gate (pure): True if a REVERSAL setup is being taken at a WRONG-WAY RSI extreme — a SHORT into
     deep oversold (selling the bottom, rsi<=lo) or a LONG into overbought (buying the top, rsi>=hi).
@@ -526,6 +562,7 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "smc_mtf": True,   # consider the STORED multi-TF SMC snapshot (zones file, hourly cron): HTF-weighted OB/swing confluence + soft premium/discount alignment. Stable read (not the flaky per-tick live read smc_confluence).
                  "smc_ob_zones": True,   # treat stable stored SMC price objects (clear OBs, swings, EQH/EQL) as real R/S zones for at_R/at_S, zone-bounce detection, confluence and target geometry. Straddle boxes remain scoring-only/no-trigger.
                  "classic_zones": True,   # consider the CLASSIC supply/demand + S/R zones (zones_sd, the ones draw_review draws) in confluence + grade; a KEY-LEVEL (KL) classic zone is the top-probability tier and boosts the grade.
+                 "key_level_trades": True,   # KL classic zones are trade locations: a directional rejection at KL can create its own setup, not just add confluence.
                  "range_filter": True, "session_sweep": True, "zone_bounce": True, "session_filter": True,
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "fib_pullback": True,
@@ -543,11 +580,13 @@ def load_flags():
 PAT_FLAG = {"trendline": "trendline_break", "range/triangle": "range_breakout", "double": "double_top_bottom",
             "impulse": "momentum_impulse", "sweep": "liquidity_sweep", "retest": "break_retest",
             "VWAP": "vwap", "breakout": "session_breakout", "breakdown": "session_breakout",
-            "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt", "fib": "fib_pullback"}
+            "reclaim": "zone_reclaim", "bounce": "zone_bounce", "CRT": "crt", "fib": "fib_pullback",
+            "key-level": "key_level_trades"}
 # Daily per-family caps on FIRED (alerted) trades — stop noisy families from overproducing (review Priority 2).
 # Keyed by strategy flag; families not listed are uncapped. Only REDUCES trades (safe). Flag: family_caps.
 FAMILY_CAPS = {"trendline_break": 3, "crt": 2, "zone_bounce": 1, "momentum_impulse": 1,
-               "liquidity_sweep": 1, "session_sweep": 2, "break_retest": 1, "fib_pullback": 2}
+               "liquidity_sweep": 1, "session_sweep": 2, "break_retest": 1, "fib_pullback": 2,
+               "key_level_trades": 2}
 # Observation-only families: detected + LOGGED (for measurement) but NOT surfaced/fired live, until they
 # prove cost-adjusted edge out of sample (review Next #3: momentum impulse is negative net). Flag: observation_gate.
 OBSERVE_FAMILIES = {"momentum_impulse"}
@@ -1188,7 +1227,16 @@ def main():
         for lvl, nm in pools_lo:   # raid sell-side liquidity below, reclaim -> LONG
             if lvl and strong and bull and last['low'] < lvl and last['close'] > lvl + rcl_p*PIP:
                 setups.append(("LONG", f"{nm} liq sweep", last['close'], last['low'])); break
-    # 11) Zone-bounce — a REJECTION candle at a confluent zone (NO "strong" candle / 2-bar pattern needed).
+    # 11) Key-Level rejection — KL zones are trade locations, not merely confluence. They still need a
+    # directional rejection candle and still pass through hard-floor/R:R/session/review gates below.
+    if FL.get("key_level_trades", True) and FL.get("classic_zones", True):
+        _kl_long = classic_key_level_at(CLASSIC, "LONG", price, ZHALO_P * PIP)
+        _kl_short = classic_key_level_at(CLASSIC, "SHORT", price, ZHALO_P * PIP)
+        if key_level_rejection(last, _kl_long, "LONG", wick_p, PIP):
+            setups.append(("LONG", "key-level rejection", last["close"], round(last["low"] - buf_p*PIP, PXD)))
+        if key_level_rejection(last, _kl_short, "SHORT", wick_p, PIP):
+            setups.append(("SHORT", "key-level rejection", last["close"], round(last["high"] + buf_p*PIP, PXD)))
+    # 12) Zone-bounce — a REJECTION candle at a confluent zone (NO "strong" candle / 2-bar pattern needed).
     # Catches the gradual bounce/fade the impulse triggers miss: long lower-wick close-up at support, or
     # upper-wick close-down at resistance. Tight stop just beyond the zone. Gated to confluent (conf>=2) zones.
     if FL.get("zone_bounce", True):
@@ -1217,7 +1265,7 @@ def main():
                     round(rng10), round(body_pips), at_R[2], None,
                     ["strict reversal context: no stacked confluence or valid prior VA"],
                 )
-    # 12) Fib correction pullback — after a clear impulse leg, wait for price to pull back into the
+    # 13) Fib correction pullback — after a clear impulse leg, wait for price to pull back into the
     # primary correction pocket (0.52-0.645 on the user's chart template) and reject it. Directional:
     # SHORT draws top→bottom on a down wave; LONG draws bottom→top on an up wave.
     if FL.get("fib_pullback", True):
@@ -1251,9 +1299,9 @@ def main():
                                            b, pip=PIP, bar_minutes=BASE_TF):
             setups.append((s[0], s[1], s[2], round(s[3], PXD)))
     # volume filter: breakouts/breaks need above-avg volume; reversals/correction entries
-    # (sweep/retest/VWAP/reclaim/bounce/CRT/fib) are exempt.
+    # (sweep/retest/VWAP/reclaim/bounce/CRT/fib/key-level) are exempt.
     if FL["volume_filter"] and not vol_ok and not AI:
-        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT", "fib"))]
+        setups = [s for s in setups if any(w in s[1] for w in ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT", "fib", "key-level"))]
     # feature-flag filter: drop any setup whose strategy is toggled off
     setups = [s for s in setups if FL.get(flag_for(s[1]) or "", True)]
 

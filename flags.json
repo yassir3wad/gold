@@ -30,6 +30,7 @@
   "smc_mtf": true,
   "smc_ob_zones": true,
   "classic_zones": true,
+  "key_level_trades": true,
   "auto_trendlines": true,
   "confidence_sizing": false,
   "family_caps": true,
