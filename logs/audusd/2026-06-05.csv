@@ -1,4 +1,0 @@
-id,time,side,grade,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
-1780622074,2026-06-05 03:14,SHORT,A+,momentum impulse,0.71,0.71,0.71,7,2,"0.71464 (15m+15mEMA+1H+1HEMA, x56)",rejected,,"SHORT at RSI 19.9 = selling extreme capitulation (OB/OS chasing). Momentum impulse already exhausted into deeply oversold, no-trend bias. Chasing the low — high bounce risk, no edge. Skip."
-1780622317,2026-06-05 03:18,SHORT,A+,momentum impulse,0.71,0.71,0.71,7,2,"0.71464 (15m+15mEMA+1H+1HEMA, x56)",rejected,,"SHORT at RSI 17.8 = extreme capitulation chasing (worse than the 19.9 just rejected). Selling exhaustion into deeply oversold, no-trend bias, high snap-back risk. No edge — skip."
-1780655427,2026-06-05 12:30,LONG,A+,momentum impulse,0.71438,,,4,1,"0.71219 (15m+1H+4H+D, x25)",auto-skip,0.24,neg R:R 0.24 (TP1 < 0.8×SL)

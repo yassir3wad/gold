@@ -1,2 +1,0 @@
-id,time,side,grade,confidence,pattern,entry,sl,tp1,rng10,body_p,htf,result,exit,pips
-1780917637,2026-06-08 13:20,SHORT,A+,,fib pullback rejection 0.52-0.645,159.908,,,10,4,"160.23 (15m+1H+4H+PDH, x23)",auto-skip,0.24,neg R:R 0.24 (TP1 < 1.2×SL); counter-UP no-room

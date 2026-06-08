@@ -41,3 +41,8 @@ outcomes.db-wal
 value_areas.db
 value_areas.db-shm
 value_areas.db-wal
+
+# per-symbol runtime signal logs + zone caches (generated each run; live keeps them on disk, not in git)
+logs/*/*.csv
+logs/*.jsonl
+zones_*.json
