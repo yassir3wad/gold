@@ -63,6 +63,18 @@ def test_skip_key_and_dedup():
     check("skip key: rounds price", k == "LONG|4463|zone-bounce rejection")
     check("skip key: side+price+why differ", sf.floor_skip_key("SHORT", 4463, "x") != k)
 
+    # COARSE dedup (codex) for loiter-prone VA/VWAP-rejection families: drop the drifting entry from the key
+    # so re-fires as price oscillates near a (quasi-stable) level collapse to ONE row per side+family/window.
+    ka = sf.floor_skip_key("LONG", 4338.90, "prev VAL rejection (VA/VWAP)")
+    kb = sf.floor_skip_key("LONG", 4312.84, "prev VAL rejection (VA/VWAP)")   # 26p of drift, same thesis
+    check("skip key: prev-VAL ignores drifting entry", ka == kb)
+    check("skip key: prev-VAL key has no price", ka == "LONG|prev VAL rejection (VA/VWAP)")
+    check("skip key: VWAP rejection also coarse",
+          sf.floor_skip_key("SHORT", 4400, "VWAP rejection") == sf.floor_skip_key("SHORT", 4380, "VWAP rejection"))
+    # non-loiter families STILL key on price (distinct setups must log distinctly)
+    check("skip key: CRT still price-keyed",
+          sf.floor_skip_key("LONG", 4400, "CRT sweep+reclaim") != sf.floor_skip_key("LONG", 4380, "CRT sweep+reclaim"))
+
     now = 1_000_000.0
     prev = {"key": k, "t": now - 100}
     check("dedup: same key within window", sf.is_dup_skip(prev, k, now, 600) is True)

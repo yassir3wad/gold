@@ -759,8 +759,16 @@ def log_signal(row):
         outcome_db.log_signal({**row, "symbol": SYMBOL})
     except Exception: pass
 
+# Loiter-prone reversal-at-level families: they re-fire every tick as price oscillates around a (quasi-stable)
+# VA/VWAP level, and the LOGGED entry is the drifting current price — so price-keyed dedup misses them and the
+# log fills with near-identical rows (prev-VAL hit 48 rows in a day). Dedup these by side+family only (codex).
+COARSE_DEDUP_FAMILIES = ("VAL rejection", "VA rejection", "VWAP rejection", "VWAP bounce")
 def floor_skip_key(side, entry, why):
-    """Thesis identity for de-duping auto-skip logging: same side + same ~price + same pattern."""
+    """Thesis identity for de-duping auto-skip logging: same side + same ~price + same pattern. For the
+    loiter-prone VA/VWAP-rejection families the drifting entry is dropped (side+family only) so oscillation
+    near a level collapses to one row per dedup window instead of spamming."""
+    if any(f in (why or "") for f in COARSE_DEDUP_FAMILIES):
+        return f"{side}|{why}"
     return f"{side}|{round(entry)}|{why}"
 
 def is_dup_skip(prev, key, now, window=600):
