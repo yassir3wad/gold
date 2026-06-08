@@ -530,6 +530,16 @@ def zrskip_record(why, flags, side, regime, er, rr1, entry, sl, tp1):
     return {"family": why, "side": side, "regime": regime, "with_trend": with_trend, "block": block,
             "chop": chop, "neg_rr": neg_rr, "er": er, "rr1": rr1, "entry": entry, "sl": sl, "tp1": tp1}
 
+def gate_trace(name):
+    """Per-scan TERMINAL-gate trace for dry-replay funnel analysis (codex): every scan ends at exactly one
+    gate (no_trigger / counter_trend / cramped / hard_floor_* / off_session / fast_signal / …). Emits a
+    machine-parseable '>> GATE <name>' line ONLY when SKIP_TRACE env is set (replay_sim sets it) — silent
+    live, so no behavior/log change. Returns name (testable). Makes 'why did trades vanish' measurable
+    instead of the blind '0 surfaced'."""
+    if os.environ.get("SKIP_TRACE"):
+        print(f">> GATE {name}")
+    return name
+
 REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT", "key-level")   # fade / mean-reversion setups
 def reversal_rsi_extreme(side, why, rsi, lo=25, hi=75):
     """#3 gate (pure): True if a REVERSAL setup is being taken at a WRONG-WAY RSI extreme — a SHORT into
@@ -1127,17 +1137,17 @@ def main():
         htf = at_R or at_S
         extra = f" — but price at {htf[2]}, watch for a burst there" if htf else ""
         print(f"\n>> TOO QUIET: last 10 1m bars only {rng10:.0f}p (<{vol_min:.0f}p). No fast scalp{extra}.")
-        return
+        gate_trace("too_quiet"); return
 
     ff_bo, ff_lbl = (newsmod.is_blackout(SYMBOL) if newsmod else (False, ""))
     if FL["news_filter"] and (news or ff_bo):
-        print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'})."); return
+        print(f"\n>> NEWS BLACKOUT — muted ({ff_lbl or 'manual window'})."); gate_trace("news"); return
 
     try: cd_t = json.load(open(CD_FILE)).get("t", 0)
     except Exception: cd_t = 0
     cd_left = COOLDOWN_MIN*60 - (time.time() - cd_t)
     if cd_left > 0 and not AI:
-        print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); return
+        print(f"\n>> COOLDOWN: {cd_left/60:.0f}m left since last signal — no new setups (anti-cluster)."); gate_trace("cooldown"); return
 
     fib_long = fib_pullback_signal(b, "LONG", PIP, VS, PXD) if FL.get("fib_pullback", True) else None
     fib_short = fib_pullback_signal(b, "SHORT", PIP, VS, PXD) if FL.get("fib_pullback", True) else None
@@ -1386,7 +1396,7 @@ def main():
         if FL.get("trend_regime", True) and regime == "UP":   cands = [c for c in cands if c[0] != "SHORT"]
         if FL.get("trend_regime", True) and regime == "DOWN": cands = [c for c in cands if c[0] != "LONG"]
         if not cands and (at_R or at_S):
-            print(f">> heads-up suppressed: price at {(at_R or at_S)[2]} but it's counter to the {regime} trend (A+ confirmation can still fire)."); return
+            print(f">> heads-up suppressed: price at {(at_R or at_S)[2]} but it's counter to the {regime} trend (A+ confirmation can still fire)."); gate_trace("watch_counter"); return
         if cands:
             sidehint, htf = cands[0]
             print(f"\n>> HTF WATCH: price at {htf[2]} — good-trade location; a {sidehint.lower()} trigger here = A+. Waiting.")
@@ -1397,7 +1407,7 @@ def main():
             new_zone = abs(price - w.get("price", 0)) > WATCH_NEW_ZONE_P * VS and htf[2] != w.get("label")
             recent = (time.time() - w.get("t", 0)) < WATCH_CD_MIN*60
             if recent and not new_zone:
-                print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); return
+                print(f">> heads-up suppressed (within {WATCH_CD_MIN}m of last ping, same ~zone)."); gate_trace("watch_dedup"); return
             wa = "🟢⬆️" if sidehint == "LONG" else "🔴⬇️"
             wmsg = (f"{wa} 👀 {SYMBOL} — SETUP FORMING ({sidehint})\nPrice at {htf[2]} (~{price}).\n"
                     f"Get ready — I'll send the CONFIRMED entry (with SL/TP) when a {sidehint.lower()} trigger fires.")
@@ -1411,7 +1421,7 @@ def main():
                 except Exception: pass
         else:
             print("\n>> NO FAST SETUP: volatility OK but no break/pattern/impulse trigger this bar.")
-        return
+        gate_trace("no_trigger"); return
 
     # take the first (priority order above); build the trade
     side, why, entry, struct = setups[0]
@@ -1429,7 +1439,7 @@ def main():
             if last['close'] < at_S[0]: htf_note = f" | A break below HTF support [{at_S[2]}]"; grade = "A"
             else: htf_note = f" | SHORT into HTF support [{at_S[2]}]"; grade = "C-into-zone"
     if grade == "C-into-zone" and not AI:
-        print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality)."); return
+        print(f"\n>> SKIP: {side} into {'resistance' if side=='LONG' else 'support'} — counter-zone poke, not a real break (low quality)."); gate_trace("counter_zone_poke"); return
 
     is_rev = any(k in why for k in ("sweep", "VWAP", "retest"))
     # #4 confluence — multiple stacked levels at price strengthen the grade
@@ -1461,14 +1471,14 @@ def main():
             htf_note += f" | counter-{regime} (grade −{_ctp})"
         elif counter and not grade.startswith("A+") and not AI:
             # LEGACY hard veto (default): only A+ counter-trend allowed (until counter_trend_soft is validated).
-            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); return
+            print(f"\n>> SKIP COUNTER-TREND: {side} {grade} against {regime} EMA stack — only A+ counter-trend allowed."); gate_trace("counter_trend"); return
         elif counter:
             htf_note += f" | counter-{regime} (A+ only)"
         elif with_trend:
             htf_note += f" | with {regime} trend"
             if grade.startswith("B"): grade = "A"
     if FL["session_filter"] and not sess_ok and not grade.startswith("A+") and not AI:
-        print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); return
+        print(f"\n>> OFF-SESSION ({side} {grade}) — skipped (only A+ trades outside London/NY)."); gate_trace("off_session"); return
     if vol_ok and "open space" in grade: grade = "B+vol"   # volume gives a low-grade setup a small boost
 
     # --- HTF confluence — a '+' on top of our zones. SMC (LuxAlgo) and Auto-Trendlines are SEPARATE
@@ -1533,7 +1543,7 @@ def main():
     if FL.get("adaptive_tp", True) and wall is not None:
         room = abs(wall - entry)/PIP - tp_buf
         if room < room_min and not AI:
-            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{room_min:.0f}p R:R too poor)."); return
+            print(f"\n>> SKIP CRAMPED: {side} {grade} — only {room:.0f}p clean room to next structure {wall} (<{room_min:.0f}p R:R too poor)."); gate_trace("cramped"); return
         if room < room_min:   # AI mode: surface but flag the tight room
             print(f"   ⚠ CRAMPED: only {room:.0f}p clean room to next structure {wall} — poor R:R, judge carefully.")
         tp2_p = max(tp2_cap*0.2, min(tp2_cap, room)); tp1_p = min(tp1_cap, tp2_p*0.6)
@@ -1606,7 +1616,7 @@ def main():
             if not DRY:
                 _htf = at_S if side == "LONG" else at_R
                 log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, _flags)
-            return
+            gate_trace("hard_floor_" + ("chop" if any("dead chop" in f for f in _flags) else "rr" if any("neg R:R" in f for f in _flags) else "other")); return
     # #3 RSI-reset gate (OFF by default): skip a reversal taken at a wrong-way RSI extreme (selling the
     # bottom / buying the top) even with room — wait for the reset. Logged as auto-skip so it's measurable.
     if FL.get("rsi_reset_gate", False) and reversal_rsi_extreme(side, why, rsi):
@@ -1617,7 +1627,7 @@ def main():
         if not DRY:
             _htf = at_S if side == "LONG" else at_R
             log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, [_reason])
-        return
+        gate_trace("rsi_reset"); return
     # daily family cap: stop a noisy family from overproducing alerts/reviews. Applies even under ai_decide;
     # set family_caps=false for an explicit research override.
     if FL.get("family_caps", True):
@@ -1629,8 +1639,9 @@ def main():
                 if not DRY:
                     _htf = at_S if side == "LONG" else at_R
                     log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", None, [f"daily cap {_n}/{_cap}"])
-                return
+                gate_trace("family_cap"); return
     _cf = f"  confidence {conf_score}/10 ({conf_lbl})" if conf_score is not None else ""
+    gate_trace("fast_signal")
     print(f"\n>> FAST SIGNAL: {side} [{grade}]{_cf} [{why}]{htf_note}")
     print(f"   SMC: zone={smc_zone} aligned={smc_aligned} age={smc_age}")   # machine-parseable (replay_sim scrapes this for the SMC bucket report)
     _szt = f" [conf-sized {risk_usd/RISK_USD:.2f}×]" if (FL.get('confidence_sizing', False) and risk_usd != RISK_USD) else ""

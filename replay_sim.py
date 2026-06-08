@@ -93,6 +93,7 @@ def cursor_unix(chart):
 
 def run_scanner(chart):
     env = dict(os.environ); env["TV_CHART_OVERRIDE"] = chart; env["STATE_SUFFIX"] = SUFFIX; env["TV_BASE_TF"] = BASE_TF
+    env["SKIP_TRACE"] = "1"   # emit per-scan '>> GATE <name>' terminal-gate trace (codex funnel) — backtest only
     try:
         r = subprocess.run(["python3", os.path.join(SCRIPTDIR, "scalp_fast.py"), "--symbol", SYMBOL, "--dry"],
                            cwd=TVDIR, capture_output=True, text=True, timeout=90, env=env)
@@ -149,6 +150,8 @@ def main():
     signals = []; allbars = {}; analyzed = 0; last_key = None; last_step = -99
     zrecs = []; last_zk = None; last_zstep = -99           # ZRSKIP measurement: zone-rejections killed by the hard floor
     zout = f"/tmp/zrskip_{a.date}.json"
+    from collections import Counter
+    gates = Counter(); gout = f"/tmp/gates_{a.date}.json"  # per-scan terminal-gate funnel (codex): why each scan ended
     for step in range(a.max_steps):
         cu = cursor_unix(CH)
         if cu:
@@ -185,13 +188,18 @@ def main():
             if zk != last_zk or step - last_zstep > 5:     # dedup the same chop-skip re-firing each bar
                 zrecs.append(rec); last_zk = zk; last_zstep = step
                 json.dump(zrecs, open(zout, "w"))
+        _g = re.findall(r">> GATE (\w+)", out_txt)          # per-scan terminal gate (exactly one per analyzed scan)
+        if _g:
+            gates[_g[-1]] += 1; json.dump(dict(gates), open(gout, "w"))
         tv(CH, "replay", "step")
 
     tv(CH, "replay", "stop")
     json.dump(signals, open(out, "w"))
     json.dump(zrecs, open(zout, "w"))                                                   # ZRSKIP measurement bucket
+    json.dump(dict(gates), open(gout, "w"))                                             # gate funnel
     json.dump(sorted(allbars.values(), key=lambda x: x["time"]), open(barfile, "w"))   # bars for scoring
     print(f"\n=== {len(signals)} distinct signals · {len(zrecs)} zrskip · {analyzed} candles analyzed · saved {out} ===")
+    print(f"=== GATE funnel: {dict(gates.most_common())} ===")
 
 if __name__ == "__main__":
     main()

@@ -544,9 +544,31 @@ def test_zrskip_record():
     check("zrskip: chop+negRR tagged both", r4 is not None and r4["block"] == "both" and r4["with_trend"] is True)
 
 
+def test_gate_trace():
+    """gate_trace returns the gate name always, but only EMITS the '>> GATE' line when SKIP_TRACE is set
+    (replay_sim sets it; live stays silent → no log/behavior change)."""
+    import io, contextlib
+    real = os.environ.get("SKIP_TRACE")
+    try:
+        os.environ.pop("SKIP_TRACE", None)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            r = sf.gate_trace("hard_floor_rr")
+        check("gate: returns name", r == "hard_floor_rr")
+        check("gate: silent when SKIP_TRACE unset", ">> GATE" not in buf.getvalue())
+        os.environ["SKIP_TRACE"] = "1"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            sf.gate_trace("counter_trend")
+        check("gate: emits when SKIP_TRACE set", ">> GATE counter_trend" in buf.getvalue())
+    finally:
+        if real is not None: os.environ["SKIP_TRACE"] = real
+        else: os.environ.pop("SKIP_TRACE", None)
+
+
 def main():
     for fn in (test_hard_floor, test_skip_key_and_dedup, test_log_floor_skip_writes_and_dedups,
-               test_load_flags_env_override, test_zrskip_record,
+               test_load_flags_env_override, test_zrskip_record, test_gate_trace,
                test_stats, test_norm_grade, test_num, test_parse_time,
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
