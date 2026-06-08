@@ -179,6 +179,13 @@ def session_breakdown(db=DEFAULT_DB):
     return win_rate_by("session", db)
 
 
+def strategy_performance(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by pattern/strategy. Win = net pips > 0.
+    Only rows that represent a real executed trade (result in TP1/TP2/SL/timeout/superseded/BE) with a
+    numeric `pips` count. Returns {pattern_name: {n, wins, losses, scratch, win_rate, net}}."""
+    return win_rate_by("pattern", db)
+
+
 def hourly_distribution(db=DEFAULT_DB):
     """Aggregate executed-trade win rate + net pips grouped by hour of day (0-23). Win = net pips > 0.
     Only rows that represent a real executed trade (result in TP1/TP2/SL/timeout/superseded/BE) with a
