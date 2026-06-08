@@ -500,6 +500,80 @@ def test_performance_benchmark():
         _cleanup(db)
 
 
+# ---- (l) EXPLAIN QUERY PLAN verification: key queries use indexes ----
+
+def test_query_plans():
+    """Verify that key queries use indexes (no SCAN TABLE) by running EXPLAIN QUERY PLAN on:
+      - rows() with symbol filter → idx_signals_symbol
+      - win_rate_by('pattern') → idx_signals_result + idx_signals_pattern
+      - win_rate_by('session') → idx_signals_result + idx_signals_session
+      - hourly_distribution() → idx_signals_result
+    Fail if any critical query does a full table scan instead of index scan."""
+    db = _mkdb()
+    try:
+        outcome_db.init_db(db)
+        # Insert test data so queries have something to scan
+        symbols = ["XAUUSD", "EURUSD"]
+        patterns = ["momentum impulse", "VWAP rejection"]
+        sessions = ["LONDON", "NEWYORK"]
+        results = ["TP1", "SL"]
+        for i in range(100):
+            outcome_db.log_signal({
+                "id": f"qp_{i}",
+                "time": f"2026-06-08 {10 + (i % 12):02d}:00",
+                "side": "LONG",
+                "pattern": patterns[i % len(patterns)],
+                "session": sessions[i % len(sessions)],
+                "result": results[i % len(results)],
+                "pips": str(50 if i % 2 == 0 else -30),
+                "symbol": symbols[i % len(symbols)],
+            }, db=db)
+
+        con = outcome_db._connect(db)
+        try:
+            failures = []
+
+            # (1) rows(symbol="XAUUSD") → must use idx_signals_symbol
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE UPPER(symbol) = ? ORDER BY \"time\" DESC",
+                               ["XAUUSD"]).fetchall()
+            plan_text = " ".join(str(row) for row in plan)
+            if "idx_signals_symbol" not in plan_text and "SCAN" in plan_text.upper():
+                failures.append(f"rows(symbol=...) does full table scan: {plan_text}")
+
+            # (2) win_rate_by('pattern') → must use idx_signals_result (WHERE) or idx_signals_pattern
+            executed = ("TP1", "TP2", "SL", "timeout", "superseded", "BE")
+            marks = ", ".join("?" for _ in executed)
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"pattern\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(row) for row in plan)
+            # Accept either idx_signals_result OR idx_signals_pattern (SQLite may choose either)
+            if ("idx_signals_result" not in plan_text and "idx_signals_pattern" not in plan_text) and "SCAN" in plan_text.upper():
+                failures.append(f"win_rate_by('pattern') does full table scan: {plan_text}")
+
+            # (3) win_rate_by('session') → must use idx_signals_result (WHERE) or idx_signals_session
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"session\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(row) for row in plan)
+            if ("idx_signals_result" not in plan_text and "idx_signals_session" not in plan_text) and "SCAN" in plan_text.upper():
+                failures.append(f"win_rate_by('session') does full table scan: {plan_text}")
+
+            # (4) hourly_distribution() → must use idx_signals_result (WHERE clause filters on result)
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT CAST(substr(\"time\", 12, 2) AS INTEGER) AS hour, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(row) for row in plan)
+            if "idx_signals_result" not in plan_text and "SCAN" in plan_text.upper():
+                failures.append(f"hourly_distribution() does full table scan: {plan_text}")
+
+            if failures:
+                raise AssertionError("Query plan failures:\n  " + "\n  ".join(failures))
+
+            print("PASS (l) EXPLAIN QUERY PLAN - all queries use indexes")
+        finally:
+            con.close()
+    finally:
+        _cleanup(db)
+
+
 def main():
     test_upsert_roundtrip()
     test_inplace_update()
@@ -512,6 +586,7 @@ def main():
     test_smc_bucket_roundtrip()
     test_csv_export_roundtrip()
     test_performance_benchmark()
+    test_query_plans()
     print("\nALL TESTS PASSED")
 
 
@@ -527,6 +602,7 @@ class OutcomeDbUnitTests(unittest.TestCase):
     def test_smc_bucket_roundtrip_case(self): test_smc_bucket_roundtrip()
     def test_csv_export_roundtrip_case(self): test_csv_export_roundtrip()
     def test_performance_benchmark_case(self): test_performance_benchmark()
+    def test_query_plans_case(self): test_query_plans()
 
 
 if __name__ == "__main__":
