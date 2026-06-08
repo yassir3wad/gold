@@ -347,6 +347,24 @@ def hard_floor_skip(side, regime, rsi, rr1, room, chop_er, VS):
         reasons.append(f"counter-{regime} no-room")
     return (bool(reasons), reasons)
 
+ZONE_REJECTION_FAMILIES = ("zone-bounce", "zone-reclaim")   # rejections AT a classic/SMC supply-demand zone
+def is_zone_rejection(why):
+    return any(k in (why or "") for k in ZONE_REJECTION_FAMILIES)
+
+def zrskip_record(why, flags, side, regime, er, rr1, entry, sl, tp1):
+    """MEASUREMENT ONLY (does NOT change behavior): when a zone-rejection setup is auto-skipped by the
+    pre-hold HARD FLOOR, return a bucket record so we can measure whether WITH-trend zone-rejections that
+    the floor kills actually had edge. Two block mechanisms observed: dead CHOP (gold case) and neg R:R
+    geometry (GBP case — TP1 capped at the nearest micro-structure on tight-range FX). `block` tags which.
+    `with_trend` = side aligned with 30m regime. Returns None for non-zone-rejection families. Pure."""
+    if not is_zone_rejection(why): return None
+    chop   = any("dead chop" in (f or "") for f in (flags or []))
+    neg_rr = any("neg R:R"   in (f or "") for f in (flags or []))
+    block  = "both" if (chop and neg_rr) else "chop" if chop else "rr" if neg_rr else "other"
+    with_trend = (side == "LONG" and regime == "UP") or (side == "SHORT" and regime == "DOWN")
+    return {"family": why, "side": side, "regime": regime, "with_trend": with_trend, "block": block,
+            "chop": chop, "neg_rr": neg_rr, "er": er, "rr1": rr1, "entry": entry, "sl": sl, "tp1": tp1}
+
 REVERSAL_KINDS = ("sweep", "retest", "VWAP", "reclaim", "bounce", "CRT")   # fade / mean-reversion setups
 def reversal_rsi_extreme(side, why, rsi, lo=25, hi=75):
     """#3 gate (pure): True if a REVERSAL setup is being taken at a WRONG-WAY RSI extreme — a SHORT into
@@ -1368,6 +1386,17 @@ def main():
         if _skip:
             print(f"\n>> AUTO-SKIP (pre-hold floor): {side} {grade} [{why}] — {', '.join(_flags)}. "
                   f"Not surfaced for review (un-tradeable).")
+            # MEASUREMENT (no behavior change — still skipping): record zone-rejections killed by dead chop,
+            # split by with-/counter-trend, to validate the proposed chop-exemption before shipping it.
+            _zr = zrskip_record(why, _flags, side, regime, chop_er, _rr1, entry, sl_lvl, tp1)
+            if _zr:
+                _zr.update({"grade": grade, "t": ts, "sym": SYMBOL})
+                print(f">> ZRSKIP {json.dumps(_zr)}")               # backtest (replay_sim) scrapes this
+                if not DRY:
+                    try:
+                        with open(os.path.expanduser("~/tradingview-mcp/logs/zrskip.jsonl"), "a") as _zf:
+                            _zf.write(json.dumps(_zr) + "\n")        # live accumulation (separate file, no CSV schema change)
+                    except Exception: pass
             if not DRY:
                 _htf = at_S if side == "LONG" else at_R
                 log_floor_skip(side, why, entry, grade, rng10, body_pips, _htf[2] if _htf else "open", _rr1, _flags)

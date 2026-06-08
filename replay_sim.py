@@ -147,6 +147,8 @@ def main():
 
     out = f"/tmp/replay_sim_{a.date}.json"; barfile = f"/tmp/bars_{a.date}.json"
     signals = []; allbars = {}; analyzed = 0; last_key = None; last_step = -99
+    zrecs = []; last_zk = None; last_zstep = -99           # ZRSKIP measurement: zone-rejections killed by the hard floor
+    zout = f"/tmp/zrskip_{a.date}.json"
     for step in range(a.max_steps):
         cu = cursor_unix(CH)
         if cu:
@@ -165,7 +167,8 @@ def main():
         analyzed += 1
         for b in tv(CH, "ohlcv", "-n", "3").get("bars", []):   # capture real bars for outcome scoring (one pass)
             allbars[b["time"]] = b
-        sig = parse_signal(run_scanner(CH))
+        out_txt = run_scanner(CH)
+        sig = parse_signal(out_txt)
         if sig and sig["entry"]:
             key = f"{sig['side']}|{round(sig['entry'])}|{sig['why']}"
             if key != last_key or step - last_step > 5:   # dedup the same thesis repeating across bars
@@ -174,12 +177,21 @@ def main():
                 print(f"[{lt}] {sig['side']:5} {sig['why']:22} @{sig['entry']} SL {sig['sl']} TP1 {sig['tp1']} | "
                       f"RSI {sig['rsi']} ER {sig['er']} {sig['regime']} sess={sig['session']}", flush=True)
                 json.dump(signals, open(out, "w"))   # incremental save (long run survives a crash)
+        for _m in re.findall(r">> ZRSKIP (\{.*\})", out_txt):   # measurement: zone-rejection killed by dead chop
+            try: rec = json.loads(_m)
+            except Exception: continue
+            rec["t"] = cu                                  # authoritative replay-cursor time for scoring
+            zk = f"{rec['side']}|{round(rec['entry'])}|{rec['family']}"
+            if zk != last_zk or step - last_zstep > 5:     # dedup the same chop-skip re-firing each bar
+                zrecs.append(rec); last_zk = zk; last_zstep = step
+                json.dump(zrecs, open(zout, "w"))
         tv(CH, "replay", "step")
 
     tv(CH, "replay", "stop")
     json.dump(signals, open(out, "w"))
+    json.dump(zrecs, open(zout, "w"))                                                   # ZRSKIP measurement bucket
     json.dump(sorted(allbars.values(), key=lambda x: x["time"]), open(barfile, "w"))   # bars for scoring
-    print(f"\n=== {len(signals)} distinct signals · {analyzed} candles analyzed · saved {out} ===")
+    print(f"\n=== {len(signals)} distinct signals · {len(zrecs)} zrskip · {analyzed} candles analyzed · saved {out} ===")
 
 if __name__ == "__main__":
     main()

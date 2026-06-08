@@ -425,9 +425,31 @@ def test_load_flags_env_override():
         except Exception: pass
 
 
+def test_zrskip_record():
+    """Measurement bucket for the missed-zone-rejection study: a ZONE-REJECTION auto-skipped by the hard
+    floor is recorded, TAGGING the block mechanism (chop vs neg-R:R) + with_trend. NOT a behavior change."""
+    chop = ["dead chop ER0.03 (<0.2)"]
+    # with-trend short blocked by CHOP (gold case) → recorded, block='chop'
+    r = sf.zrskip_record("zone-bounce rejection", chop, "SHORT", "DOWN", 0.03, 1.38, 4310.25, 4317.0, 4300.0)
+    check("zrskip: with-trend chop recorded", r is not None and r["with_trend"] is True and r["block"] == "chop")
+    check("zrskip: carries levels+rr", r["entry"] == 4310.25 and r["tp1"] == 4300.0 and r["rr1"] == 1.38)
+    # with-trend short blocked by neg-R:R geometry (GBP case) → recorded, block='rr'
+    r2 = sf.zrskip_record("zone-bounce rejection", ["neg R:R 0.34 (TP1 < 1.2×SL)"], "SHORT", "DOWN", 0.4, 0.34, 1.3337, 1.3346, 1.3331)
+    check("zrskip: neg-R:R skip now recorded (GBP case)", r2 is not None and r2["block"] == "rr")
+    # counter-trend long blocked → with_trend False
+    r3 = sf.zrskip_record("zone-bounce rejection", chop, "LONG", "DOWN", 0.02, 1.5, 4312.37, 4305.0, 4324.0)
+    check("zrskip: counter-trend recorded with_trend False", r3 is not None and r3["with_trend"] is False)
+    # not a zone-rejection family (CRT) → None
+    check("zrskip: non-zone family → None",
+          sf.zrskip_record("CRT sweep+reclaim", chop, "SHORT", "DOWN", 0.03, 1.3, 4310, 4317, 4300) is None)
+    # both reasons present → block='both'
+    r4 = sf.zrskip_record("zone-reclaim bounce", ["neg R:R 0.5 (TP1 < 1.2×SL); dead chop ER0.1 (<0.2)"], "LONG", "UP", 0.1, 0.5, 1.10, 1.09, 1.11)
+    check("zrskip: chop+negRR tagged both", r4 is not None and r4["block"] == "both" and r4["with_trend"] is True)
+
+
 def main():
     for fn in (test_hard_floor, test_skip_key_and_dedup, test_log_floor_skip_writes_and_dedups,
-               test_load_flags_env_override,
+               test_load_flags_env_override, test_zrskip_record,
                test_stats, test_norm_grade, test_num, test_parse_time,
                test_analyze_end_to_end, test_group_stats, test_reversal_rsi_extreme,
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
