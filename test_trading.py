@@ -401,6 +401,27 @@ def test_fib_pullback_signal():
           and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
 
 
+def test_cluster_walls_and_next_wall():
+    """Wall-dedup (codex Option 2): collapse near-duplicate edges into distinct clusters; the NEAR edge of
+    each cluster is the obstacle, so a zone price is INSIDE isn't counted as the next wall."""
+    # 3 near edges within tol collapse to one cluster; a far pair to another
+    check("cluster: merges within tol",
+          sf.cluster_walls([4346, 4348, 4351, 4400, 4402], 10) == [(4346, 4351), (4400, 4402)])
+    check("cluster: empty -> []", sf.cluster_walls([None, None], 10) == [])
+    # resistance above: nearest cluster LO beyond price+gap
+    check("next_wall R: nearest cluster near-edge",
+          sf.next_wall([4346, 4348, 4351, 4400], 4342.0, "R", 10, 0.3) == 4346)
+    # THE FIX: a box [4330,4346] price (4342) sits INSIDE → its lo (4330) is below price, so the cluster is
+    # skipped and nextR jumps to the next genuine wall (4400) instead of the spurious 4346 top-edge.
+    check("next_wall R: zone-price-is-inside skips to next real wall",
+          sf.next_wall([4330, 4346, 4400], 4342.0, "R", 20, 0.3) == 4400)
+    # support below: nearest cluster HI beyond price-gap
+    check("next_wall S: nearest cluster near-edge below",
+          sf.next_wall([4300, 4302, 4250], 4342.0, "S", 10, 0.3) == 4302)
+    check("next_wall: none beyond -> None",
+          sf.next_wall([4346, 4400], 4500.0, "R", 10, 0.3) is None)
+
+
 def test_refresh_fib_zones_builder():
     import refresh_zones as rz
     short_bars = [
@@ -575,7 +596,7 @@ def main():
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
                test_fib_pullback_signal, test_refresh_fib_zones_builder, test_key_level_trade_helpers,
-               test_merge_smc_ob_zones, test_count_distinct_at):
+               test_merge_smc_ob_zones, test_cluster_walls_and_next_wall, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

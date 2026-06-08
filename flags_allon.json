@@ -35,5 +35,6 @@
   "confidence_sizing": true,
   "family_caps": true,
   "observation_gate": false,
-  "hard_floor": true
+  "hard_floor": true,
+  "wall_dedup": true
 }

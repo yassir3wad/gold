@@ -362,6 +362,37 @@ def count_distinct_at(levels, price, edge=None):
     return n
 
 
+def cluster_walls(prices, tol):
+    """Collapse a flat list of wall prices into DISTINCT obstacle clusters (merging points within `tol`),
+    returning sorted (lo, hi) bounds per cluster. Used for nextR/nextS so a level map saturated with many
+    near-duplicate SMC OB edges (one box contributes 2 points; 3 TFs pile up) doesn't read as a wall every
+    few pips. The CALLER picks the near edge (cluster lo for resistance above, cluster hi for support below)
+    so a zone price is currently INSIDE isn't counted as the next obstacle. Pure (testable)."""
+    pts = sorted({p for p in prices if p is not None})
+    if not pts:
+        return []
+    clusters = []; lo = hi = pts[0]
+    for p in pts[1:]:
+        if p - hi <= tol:
+            hi = p
+        else:
+            clusters.append((lo, hi)); lo = hi = p
+    clusters.append((lo, hi))
+    return clusters
+
+
+def next_wall(prices, price, side, tol, gap):
+    """Nearest DISTINCT wall beyond `price` after clustering (next_wall replaces the raw min/max over every
+    edge). side='R' → nearest cluster whose NEAR edge (lo) is > price+gap (resistance above); 'S' → nearest
+    cluster whose near edge (hi) is < price-gap (support below). Returns the edge price or None. Pure."""
+    cl = cluster_walls(prices, tol)
+    if side == "R":
+        cand = [lo for lo, _ in cl if lo > price + gap]
+        return min(cand) if cand else None
+    cand = [hi for _, hi in cl if hi < price - gap]
+    return max(cand) if cand else None
+
+
 def kl_upgrade(grade):
     """A Key-Level classic zone is the TOP-probability tier → upgrade a real setup (A or B) straight to A+
     (a bare B + KL must reach A+, not just A — the generic cf_score path only does B→A). Pure (testable)."""
@@ -592,6 +623,8 @@ DEFAULT_FLAGS = {"trendline_break": True, "range_breakout": True, "double_top_bo
                  "news_filter": True, "volume_filter": True, "crt": True, "ai_decide": False,
                  "fib_pullback": True,
                  "hard_floor": True, "rsi_reset_gate": False,   # rsi_reset_gate OFF until data validates thresholds
+                 "wall_dedup": False,   # cluster near-duplicate wall edges before nextR/nextS (codex Option 2) — OFF live until the June 4-5 backtest confirms it cuts the cramped over-trigger without flooding
+
                  "family_caps": True, "observation_gate": True}   # daily per-family caps + observe-only families (review)
 def load_flags():
     f = dict(DEFAULT_FLAGS)
@@ -1068,8 +1101,16 @@ def main():
     is_wall = lambda lab: not ("EMA" in lab or "VWAP" in lab)
     R_refs = [v for lo,hi,_ in HTF_R for v in (lo,hi)] + [p for p,_,lab in ptR if is_wall(lab)]
     S_refs = [v for lo,hi,_ in HTF_S for v in (lo,hi)] + [p for p,_,lab in ptS if is_wall(lab)]
-    nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
-    nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
+    if FL.get("wall_dedup", False):
+        # codex Option 2: cluster near-duplicate wall edges (SMC OB density saturates the map) and take each
+        # cluster's NEAR edge — so a zone price is currently INSIDE stops reading as the next wall a few pips
+        # away (the cramped-gate over-trigger). Flag-gated; default OFF leaves live geometry unchanged.
+        _wtol = dyn_tolp
+        nextR = next_wall(R_refs, price, "R", _wtol, 3*PIP)
+        nextS = next_wall(S_refs, price, "S", _wtol, 3*PIP)
+    else:
+        nextR = min([r for r in R_refs if r > price + 3*PIP], default=None)
+        nextS = max([s for s in S_refs if s < price - 3*PIP], default=None)
 
     print(f"\n[{_dt.datetime.now().astimezone():%Y-%m-%d %H:%M:%S %Z}]  PRICE {price}  TF={BASE_TF}m  VS={VS:.2f}  range10={rng10:.0f}p  atr={atr:.1f}p  lastBody={body_pips:.0f}p({'bull' if bull else 'bear'}) strong={strong} vol_ok={vol_ok}")
     print(f"resTL@{res_at}  supTL@{sup_at}  range15={range15:.0f}p tight={tight}  dblTop={dtop} dblBot={dbot}  VWAP={vw}{f' [{vw_lo}/{vw_up}]' if vw_up else ''}  EMA50/100/200={em.get(50)}/{em.get(100)}/{em.get(200)}  session={'ON' if sess_ok else 'off'}")
