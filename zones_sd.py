@@ -356,8 +356,14 @@ def build_classic_zones(tf_bars, cur_price, pip=0.10):
       sr[]    = ACTIVE support/resistance LEVELS (support below price / resistance above), nearest 3/side.
     Mirrors draw_review.py's classification exactly (origin-candle S/D zones; a strong level candle →
     support/resistance ZONE not a generic buy/sell zone; KL = key_level and not flipped and not strong)."""
-    DEDUP = 150 * pip   # zones/levels within ~150 pips are the same wall (was hardcoded 15 = 150 gold-pips)
-    COVER = 50 * pip    # an S/R level within ~50 pips of a zone band is redundant
+    # Dedup/cover tolerances scale with the instrument's ATR (its actual range), NOT a fixed pip count — a
+    # 150-pip dedup is right for gold (600+ pips/day) but collapses FX (EURUSD's whole range is ~160 pips).
+    # ATR of the highest TF (first tf_bars entry): gold 4h ATR ~$20 → DEDUP ~$14 (≈ the old $15); EURUSD 4h
+    # ATR ~30p → DEDUP ~21p, so zones 50–60p apart stay distinct. Falls back to pip-based if no bars.
+    _hb = tf_bars[0][1] if (tf_bars and tf_bars[0][1]) else []
+    _atr = (sum(b["high"] - b["low"] for b in _hb[-14:]) / len(_hb[-14:])) if _hb else 0.0
+    DEDUP = (0.7 * _atr) if _atr > 0 else (150 * pip)
+    COVER = (0.25 * _atr) if _atr > 0 else (50 * pip)
     zones = []; sr = []
     for tf, b in tf_bars:
         if not b:
