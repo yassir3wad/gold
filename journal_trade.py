@@ -26,7 +26,8 @@ def csv_upsert(row):
     if not found:
         rows.append(row)
     with open(CSV, "w", newline="") as f:
-        w = _csv.DictWriter(f, fieldnames=CSV_COLS); w.writeheader()
+        w = _csv.DictWriter(f, fieldnames=CSV_COLS)
+        w.writeheader()
         for r in rows:
             w.writerow({c: r.get(c, "") for c in CSV_COLS})
 
@@ -46,22 +47,24 @@ def reset_scale():
 def shots(folder, tfs, prefix):
     """Screenshot the chart across multiple timeframes (HTF context + 1m execution); restore 1m after."""
     taken = []
-    for tf in tfs:
-        expected = "1D" if tf == "D" else tf
-        # set TF and CONFIRM it applied (the 1m fast-cron can reset it mid-capture) — retry up to 4x
-        for _ in range(4):
-            tv("timeframe", tf)
-            time.sleep(2.5)     # let TradingView re-render + load the new TF
-            if str(tv("state").get("resolution")) == expected:
-                break
-        reset_scale()           # auto-fit the price scale for THIS timeframe (critical for HTFs)
-        s = tv("screenshot").get("file_path")
-        if s and os.path.exists(s):
-            lab = TF_LABEL.get(tf, tf)
-            shutil.copy(s, os.path.join(folder, f"{prefix}_{lab}.png"))
-            taken.append(lab)
-    tv("timeframe", "1")       # restore execution TF for the fast monitor
-    time.sleep(2)
+    try:
+        for tf in tfs:
+            expected = "1D" if tf == "D" else tf
+            # set TF and CONFIRM it applied (the 1m fast-cron can reset it mid-capture) — retry up to 4x
+            for _ in range(4):
+                tv("timeframe", tf)
+                time.sleep(2.5)     # let TradingView re-render + load the new TF
+                if str(tv("state").get("resolution")) == expected:
+                    break
+            reset_scale()           # auto-fit the price scale for THIS timeframe (critical for HTFs)
+            s = tv("screenshot").get("file_path")
+            if s and os.path.exists(s):
+                lab = TF_LABEL.get(tf, tf)
+                shutil.copy(s, os.path.join(folder, f"{prefix}_{lab}.png"))
+                taken.append(lab)
+    finally:
+        tv("timeframe", "1")       # restore execution TF for the fast monitor
+        time.sleep(2)
     return taken
 
 def arg(flag, default=None):
