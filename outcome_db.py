@@ -179,6 +179,40 @@ def session_breakdown(db=DEFAULT_DB):
     return win_rate_by("session", db)
 
 
+def hourly_distribution(db=DEFAULT_DB):
+    """Aggregate executed-trade win rate + net pips grouped by hour of day (0-23). Win = net pips > 0.
+    Only rows that represent a real executed trade (result in TP1/TP2/SL/timeout/superseded/BE) with a
+    numeric `pips` count. Returns {hour: {n, wins, losses, scratch, win_rate, net}}."""
+    if not os.path.exists(db):
+        return {}
+    executed = ("TP1", "TP2", "SL", "timeout", "superseded", "BE")
+    con = _connect(db)
+    try:
+        marks = ", ".join("?" for _ in executed)
+        # Extract hour from time column (format: 'YYYY-MM-DD HH:MM') using substr(time, 12, 2)
+        sql = (f"SELECT CAST(substr({_q('time')}, 12, 2) AS INTEGER) AS hour, result, pips FROM signals "
+               f"WHERE result IN ({marks})")
+        agg = {}
+        for r in con.execute(sql, list(executed)).fetchall():
+            try:
+                p = float(str(r["pips"]).replace(",", "").strip())
+            except (TypeError, ValueError):
+                continue   # non-numeric pips → not a counted outcome
+            h = r["hour"] if r["hour"] is not None else -1
+            a = agg.setdefault(h, {"n": 0, "wins": 0, "losses": 0, "scratch": 0, "net": 0.0})
+            a["n"] += 1
+            a["net"] += p
+            if p > 0:   a["wins"] += 1
+            elif p < 0: a["losses"] += 1
+            else:       a["scratch"] += 1
+        for a in agg.values():
+            a["win_rate"] = (100.0 * a["wins"] / a["n"]) if a["n"] else 0.0
+            a["net"] = round(a["net"], 1)
+        return agg
+    finally:
+        con.close()
+
+
 if __name__ == "__main__":
     import sys, json
     db = DEFAULT_DB
