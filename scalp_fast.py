@@ -56,6 +56,7 @@ HTF_S = [(4446,4449,"S 4447 (15m EMA50 + 1H/4H lows)"), (4433,4439,"S 4433-39 (1
          (4423,4427,"S 4424-26 (PDL + today-low multi-touch)"), (4398,4406,"S 4400 (4H swing low)"),
          (4375,4385,"BUY ZONE Daily EMA200 (~4380)"), (4360,4368,"S 4366 (4H/Daily low)")]
 CLASSIC = {"zones": [], "sr": []}   # classic supply/demand boxes + S/R levels (zones_sd), loaded by load_zones() — the same zones draw_review draws (drawn==traded)
+FIB_ZONES = []                      # hourly multi-TF golden zones (4H/1H/15m/5m), loaded from zones_<symbol>.json
 def near_htf(price, levels, tol=None):
     if tol is None: tol = ZHALO_P * PIP   # pip-normalised zone halo (gold $4, EURUSD 0.004, …)
     for lo, hi, lab in levels:
@@ -275,8 +276,9 @@ def load_zones():
             subprocess.run(["python3", "refresh_zones.py", "--symbol", SYMBOL], cwd=TVDIR, capture_output=True, timeout=150)
             z = json.load(open(ZONES_FILE)); age = time.time() - z.get("ts", 0)
         except Exception: pass
-    global CLASSIC
+    global CLASSIC, FIB_ZONES
     CLASSIC = {"zones": (z or {}).get("sd_zones", []) or [], "sr": (z or {}).get("sd_sr", []) or []}   # classic supply/demand + S/R (drawn==traded)
+    FIB_ZONES = (z or {}).get("fib_zones", []) or []   # hourly golden-zone analysis (drawn + used as context)
     if z and z.get("htf_r") and age < ZONES_MAX_AGE:
         return ([tuple(x) for x in z["htf_r"]], [tuple(x) for x in z["htf_s"]],
                 z.get("pdh") or PDH, z.get("pdl") or PDL, z.get("asia_h") or ASIA_H, z.get("asia_l") or ASIA_L)
@@ -404,7 +406,8 @@ def key_level_rejection(last, zone, side, wick_p, pip):
 
 def fib_pullback_signal(bars, side, pip, vs=1.0, pxd=2, lookback=80,
                         zone=FIB_PULLBACK_ZONE, min_wave_p=FIB_MIN_WAVE_P,
-                        touch_p=FIB_TOUCH_P, reject_p=FIB_REJECT_P):
+                        touch_p=FIB_TOUCH_P, reject_p=FIB_REJECT_P,
+                        require_rejection=True):
     """Detect a correction pullback into the primary fib pocket of the latest impulse leg.
     SHORT: draw fib from wave top to wave bottom, then reject a pullback into 0.52-0.645.
     LONG: draw fib from wave bottom to wave top, then reject a pullback into 0.52-0.645.
@@ -432,10 +435,16 @@ def fib_pullback_signal(bars, side, pip, vs=1.0, pxd=2, lookback=80,
         pad, wick = touch_p * vs * pip, reject_p * vs * pip
         touched = last["high"] >= zlo - pad and last["low"] <= zhi + pad
         rejected = last["close"] < last["open"] and (last["high"] - last["close"]) >= wick
-        if touched and rejected:
+        if touched and (rejected or not require_rejection):
             return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
                     "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
-                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p)}
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p),
+                    "touched": touched, "rejected": rejected}
+        if not require_rejection:
+            return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
+                    "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p),
+                    "touched": touched, "rejected": rejected}
     else:
         high_i, high_bar = max(enumerate(hist), key=lambda kv: kv[1]["high"])
         prior = hist[:high_i]
@@ -453,10 +462,16 @@ def fib_pullback_signal(bars, side, pip, vs=1.0, pxd=2, lookback=80,
         pad, wick = touch_p * vs * pip, reject_p * vs * pip
         touched = last["low"] <= zhi + pad and last["high"] >= zlo - pad
         rejected = last["close"] > last["open"] and (last["close"] - last["low"]) >= wick
-        if touched and rejected:
+        if touched and (rejected or not require_rejection):
             return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
                     "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
-                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p)}
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p),
+                    "touched": touched, "rejected": rejected}
+        if not require_rejection:
+            return {"side": side, "wave_hi": round(wave_hi, pxd), "wave_lo": round(wave_lo, pxd),
+                    "zone_lo": round(zlo, pxd), "zone_hi": round(zhi, pxd),
+                    "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p),
+                    "touched": touched, "rejected": rejected}
     return None
 
 
@@ -1085,12 +1100,14 @@ def main():
                "--price2",str(sl[-1][1]),"--time2",str(b[sl[-1][0]]['time']))
         print("(trendlines drawn)")
 
+    fib_overlay = FIB_ZONES if FL.get("fib_pullback", True) else []
+
     # --- live overlay: draw the value-area level map + SMC order blocks on the chart so it's VISIBLE.
     # Throttled (OVERLAY_MIN_INTERVAL) and id-tracked so it refreshes in the loop without flickering or
     # wiping your own drawings. Live only — skipped in --dry and in backtest (TV_CHART_OVERRIDE) runs.
     if (FL.get("draw_overlay", True) and dovr is not None and not DRY
-            and not os.environ.get("TV_CHART_OVERRIDE") and prior_vas):
-        _ov = prior_vas[0]
+            and not os.environ.get("TV_CHART_OVERRIDE") and (prior_vas or fib_overlay)):
+        _ov = prior_vas[0] if prior_vas else {}
         _ova = {"vah": _ov.get("vah"), "val": _ov.get("val"), "poc": _ov.get("poc")}
         _ovst = {}
         if vastate is not None:
@@ -1101,7 +1118,7 @@ def main():
         _boxes = (smc_context().get("smc", {}) or {}).get("boxes", []) if (smcmod and FL.get("smc_confluence", False)) else []
         _n = dovr.draw_overlay(os.environ.get("TV_CHART", ""), price, _ova, _ovst, _ov.get("sp"), _boxes,
                                band=OVERLAY_OB_BAND_P * PIP, t0=b[0]["time"], t1=last["time"],
-                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"))
+                               min_interval=OVERLAY_MIN_INTERVAL, va_date=_ov.get("date"), fibs=fib_overlay)
         if _n >= 0:
             print(f"(overlay drawn: {_n} shapes)")
 

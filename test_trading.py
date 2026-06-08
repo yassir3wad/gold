@@ -401,6 +401,19 @@ def test_fib_pullback_signal():
           and sf.fib_grade_boost("C-into-zone") == "C-into-zone")
 
 
+def test_refresh_fib_zones_builder():
+    import refresh_zones as rz
+    short_bars = [
+        _bar(109, 108, c=108.5), _bar(110, 109, c=109.5), _bar(108, 106, c=106.5),
+        _bar(106, 104, c=104.5), _bar(104, 102, c=102.5), _bar(102, 100, c=100.5),
+        _bar(103, 101, c=102.5), _bar(104, 102, c=103.5), _bar(105.9, 104.5, o=105.5, c=104.8),
+    ]
+    zones = rz.build_fib_zones({"240": short_bars}, pip=0.1, decimals=2)
+    z = next((x for x in zones if x["tf"] == "4H" and x["side"] == "SHORT"), None)
+    check("refresh fib: hourly builder stores 4H golden zone",
+          z is not None and z["zone_lo"] == 105.2 and z["zone_hi"] == 106.45 and z["ratio"] == "0.52-0.645")
+
+
 def test_key_level_trade_helpers():
     classic = {"zones": [
         {"role": "buy zone", "lo": 4250.0, "hi": 4260.0, "tf": "1H", "kl": True},
@@ -539,7 +552,8 @@ def main():
                test_reversal_context_floor, test_pivots, test_chop_15m, test_rsi_series, test_line_and_proj, test_near_htf,
                test_calc_vp, test_scalp_num, test_build_digest, test_preflight_status,
                test_simulate_outcome, test_kl_upgrade, test_downgrade_grade, test_merge_classic_keeps_all,
-               test_fib_pullback_signal, test_key_level_trade_helpers, test_merge_smc_ob_zones, test_count_distinct_at):
+               test_fib_pullback_signal, test_refresh_fib_zones_builder, test_key_level_trade_helpers,
+               test_merge_smc_ob_zones, test_count_distinct_at):
         try:
             fn()
         except Exception as e:

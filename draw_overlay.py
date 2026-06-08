@@ -21,11 +21,12 @@ SP_C  = "rgba(255,170,60,0.85)"    # orange
 OB_DEMAND_C = "rgba(0,200,90,0.85)"   # green (bullish OB below price)
 OB_SUPPLY_C = "rgba(240,70,70,0.85)"  # red (bearish OB above price)
 OB_NEUTRAL_C = "rgba(150,150,150,0.8)"
+FIB_C = "rgba(255,170,60,0.88)"       # orange fib correction pocket
 # NOTE: Auto Trendlines are NOT drawn here — the TradingView indicator already draws them. We only READ
 # them (multi-TF) for confluence; see smc.read_trendlines / scalp_fast.
 
 
-def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None):
+def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None, fibs=None):
     """Return a list of draw specs (pure). Each spec:
       {type:'hline', kind, price, label, color}              — a horizontal level
       {type:'rect',  kind, price(hi), price2(lo), label, color}  — a zone/box
@@ -59,6 +60,19 @@ def overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=None)
         else:                  # straddles price
             kind, color = "OB", OB_NEUTRAL_C
         out.append({"type": "rect", "kind": kind, "price": hi, "price2": lo, "label": "OB", "color": color})
+    for fib in (fibs or []):
+        zlo, zhi = fib.get("zone_lo"), fib.get("zone_hi")
+        if zlo is None or zhi is None:
+            continue
+        if zhi < zlo:
+            zlo, zhi = zhi, zlo
+        tf = fib.get("tf") or ""
+        ratio = fib.get("ratio") or "fib"
+        side = fib.get("side") or ""
+        lab = " ".join(x for x in (tf, "fib", ratio, side) if x)
+        out.append({"type": "rect", "kind": "FIB-pocket", "price": zhi, "price2": zlo, "label": lab, "color": FIB_C})
+        out.append({"type": "hline", "kind": "FIB-low", "price": zlo, "label": f"{lab} low", "color": FIB_C})
+        out.append({"type": "hline", "kind": "FIB-high", "price": zhi, "label": f"{lab} high", "color": FIB_C})
     return out
 
 
@@ -106,7 +120,7 @@ def _recent(chart, min_interval, state_path=STATE):
     return (time.time() - ts) < min_interval
 
 
-def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None, state_path=STATE):
+def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None, t1=None, min_interval=0, va_date=None, fibs=None, state_path=STATE):
     """Refresh the overlay on `chart`: remove our previous shapes, draw the current specs, record new ids.
     `t0`/`t1` = bar-time anchors (hlines/rects need a time); pass the visible range's start/end.
     `min_interval` (s) throttles redraws so the live loop doesn't flicker the chart every tick; returns -1
@@ -114,7 +128,7 @@ def draw_overlay(chart, price, va, va_states, sp_zones, smc_boxes, band, t0=None
     if _recent(chart, min_interval, state_path=state_path):
         return -1
     _clear_ours(chart, state_path=state_path)
-    specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date)
+    specs = overlay_specs(price, va, va_states, sp_zones, smc_boxes, band, va_date=va_date, fibs=fibs)
     new_ids = []
     for s in specs:
         lab = s["label"]   # shapes are tracked by entity id (STATE), so no visible tag is needed

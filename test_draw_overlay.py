@@ -18,10 +18,11 @@ BOXES = [
     {"high": 4490.0, "low": 4486.0},   # above price -> supply, within band
     {"high": 4600.0, "low": 4595.0},   # far above -> dropped (outside band)
 ]
+FIBS = [{"tf": "4H", "side": "SHORT", "ratio": "0.52-0.645", "zone_lo": 4307.31, "zone_hi": 4320.56}]
 
 
 def specs():
-    return D.overlay_specs(4460.0, VA, STATES, SP, BOXES, band=35.0, va_date="2026-06-05")
+    return D.overlay_specs(4460.0, VA, STATES, SP, BOXES, band=35.0, va_date="2026-06-05", fibs=FIBS)
 
 
 def test_va_lines():
@@ -52,6 +53,15 @@ def test_order_blocks_near_price_only():
     check("demand vs supply different colors", demand["color"] != supply["color"])
 
 
+def test_fib_overlay():
+    s = specs()
+    fib = [x for x in s if x["kind"].startswith("FIB")]
+    check("fib overlay draws pocket + two boundary lines", len(fib) == 3)
+    pocket = next(x for x in fib if x["kind"] == "FIB-pocket")
+    check("fib pocket spans zone", pocket["price"] == 4320.56 and pocket["price2"] == 4307.31)
+    check("fib label carries source TF", "4H" in pocket["label"] and "0.52-0.645" in pocket["label"])
+
+
 def test_no_va_no_lines():
     s = D.overlay_specs(4460.0, {"vah": None, "val": None, "poc": None}, {}, [], BOXES, band=35.0)
     check("no VA -> no VA hlines, still draws nearby OBs", all(x["kind"] not in ("POC","VAH","VAL") for x in s) and any(x["kind"].startswith("OB") for x in s))
@@ -70,7 +80,7 @@ def test_throttle_state():
 
 
 def main():
-    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_no_va_no_lines, test_throttle_state):
+    for fn in (test_va_lines, test_sp_zone, test_order_blocks_near_price_only, test_fib_overlay, test_no_va_no_lines, test_throttle_state):
         try: fn()
         except Exception as e:
             check(f"{fn.__name__} raised", False); print(f"  !! {fn.__name__}: {e}")

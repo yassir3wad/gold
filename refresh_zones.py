@@ -35,6 +35,9 @@ MERGE = 12 * PIP   # max cluster SPAN (pip-scaled): levels within this window fo
 PAD = 4 * PIP      # zone half-width padding around the clustered span (pip-scaled; tight so a zone has a precise edge to react to)
 MAX_W = 25 * PIP   # hard ceiling on final zone width — if a merged zone exceeds this, recenter to mid ± MAX_W/2 (anti-blowup safety net)
 DECIMALS = max(0, int(round(-math.log10(PIP)))) + 1   # price rounding precision per instrument (gold 2, EUR 5, US30 1, JPY 3)
+FIB_PULLBACK_ZONE = (0.52, 0.645)
+FIB_TFS = [('240', '4H', 120), ('60', '1H', 180), ('15', '15m', 220), ('5', '5m', 260)]
+FIB_MIN_WAVE_P = 80
 
 def tv(*a):
     r = subprocess.run(["node", "src/cli/index.js", *a], cwd=TVDIR, capture_output=True, text=True, timeout=45)
@@ -48,14 +51,65 @@ def pivots(b, L=3, R=3):
         if all(b[i]['low'] <= b[i-k]['low'] for k in range(1, L+1)) and all(b[i]['low'] <= b[i+k]['low'] for k in range(1, R+1)): sl.append(b[i]['low'])
     return sh, sl
 
+def fib_golden_zone(bars, side, pip=PIP, decimals=DECIMALS, zone=FIB_PULLBACK_ZONE, min_wave_p=FIB_MIN_WAVE_P):
+    """Return the latest wave's golden-zone context for drawing/stored analysis. No rejection required."""
+    if len(bars) < 8 or side not in ("LONG", "SHORT"):
+        return None
+    hist = bars[:-1]
+    if side == "SHORT":
+        low_i, low_bar = min(enumerate(hist), key=lambda kv: kv[1]["low"])
+        prior = hist[:low_i]
+        if not prior:
+            return None
+        high_i, high_bar = max(enumerate(prior), key=lambda kv: kv[1]["high"])
+        if low_i <= high_i:
+            return None
+        wave_hi, wave_lo = high_bar["high"], low_bar["low"]
+        wave_start, wave_end = high_bar.get("time"), low_bar.get("time")
+        z1, z2 = (wave_lo + r * (wave_hi - wave_lo) for r in zone)
+    else:
+        high_i, high_bar = max(enumerate(hist), key=lambda kv: kv[1]["high"])
+        prior = hist[:high_i]
+        if not prior:
+            return None
+        low_i, low_bar = min(enumerate(prior), key=lambda kv: kv[1]["low"])
+        if high_i <= low_i:
+            return None
+        wave_hi, wave_lo = high_bar["high"], low_bar["low"]
+        wave_start, wave_end = low_bar.get("time"), high_bar.get("time")
+        z1, z2 = (wave_hi - r * (wave_hi - wave_lo) for r in zone)
+    wave_p = (wave_hi - wave_lo) / pip
+    if wave_p < min_wave_p:
+        return None
+    zlo, zhi = min(z1, z2), max(z1, z2)
+    return {"side": side, "wave_hi": round(wave_hi, decimals), "wave_lo": round(wave_lo, decimals),
+            "zone_lo": round(zlo, decimals), "zone_hi": round(zhi, decimals),
+            "ratio": f"{zone[0]:.3g}-{zone[1]:.3g}", "wave_pips": round(wave_p),
+            "wave_start": wave_start, "wave_end": wave_end}
+
+def build_fib_zones(tf_bars, pip=PIP, decimals=DECIMALS):
+    out = []
+    for tf, label, _ in FIB_TFS:
+        bars = tf_bars.get(tf) or []
+        for side in ("LONG", "SHORT"):
+            z = fib_golden_zone(bars, side, pip=pip, decimals=decimals)
+            if z:
+                z["tf"] = label
+                out.append(z)
+    return out
+
 def main():
     price = tv('quote').get('last')
     if price is None: print("no price"); return
     cands = []   # (price, source-tag)
     pdh = pdl = None
-    for tf, n, tag in [('D', 40, 'D'), ('240', 60, '4H'), ('60', 90, '1H'), ('15', 100, '15m')]:
+    tf_bars = {}
+    for tf, n, tag in [('D', 40, 'D'), ('240', 120, '4H'), ('60', 180, '1H'), ('15', 220, '15m'), ('5', 260, '5m')]:
         tv('timeframe', tf); b = tv('ohlcv', '-n', str(n)).get('bars', [])
         if not b: continue
+        tf_bars[tf] = b
+        if tf == '5':
+            continue
         sh, sl = pivots(b)
         for p in sh[-6:]: cands.append((round(p, DECIMALS), tag))
         for p in sl[-6:]: cands.append((round(p, DECIMALS), tag))
@@ -65,6 +119,7 @@ def main():
             pdh, pdl = round(b[-2]['high'], DECIMALS), round(b[-2]['low'], DECIMALS)
             cands += [(pdh, 'PDH'), (pdl, 'PDL')]
     tv('timeframe', '1')
+    fib_zones = build_fib_zones(tf_bars)
     rstep = 100 * PIP   # round-number increment, pip-scaled (gold $10, EURUSD 0.01, US30 100, JPY 1.00)
     base = round(price / rstep) * rstep
     for k in (-2, -1, 0, 1, 2): cands.append((round(base + k*rstep, 5), 'round'))
@@ -164,6 +219,7 @@ def main():
            'asia_h': asia_h, 'asia_l': asia_l, 'london_h': london_h, 'london_l': london_l, 'ny_h': ny_h, 'ny_l': ny_l,
            'asia_end': asia_end, 'london_end': london_end, 'ny_end': ny_end,
            'htf_r': [[z[0], z[1], z[2]] for z in R], 'htf_s': [[z[0], z[1], z[2]] for z in S],
+           'fib_zones': fib_zones,
            'smc': smc_block, 'sd_zones': classic['zones'], 'sd_sr': classic['sr']}
     json.dump(out, open(ZONES_FILE, 'w'), indent=1)
     print(f"wrote zones.json  asia={asia_h}/{asia_l}(end{asia_end}) london={london_h}/{london_l}(end{london_end}) ny={ny_h}/{ny_l}(end{ny_end})  src={'indicator' if sess else 'fallback-UTC'}")
