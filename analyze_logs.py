@@ -70,7 +70,7 @@ def _spread_for(sym, spreads, default):
     return spreads.get((sym or "").upper(), default)
 
 
-OUTCOMES_DB = os.path.join(TVDIR, "outcomes.db")
+OUTCOMES_DB = os.environ.get("OUTCOMES_DB") or os.path.join(TVDIR, "outcomes.db")
 
 
 def _load_rows_db(symbol=None, days=None):

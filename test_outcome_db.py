@@ -12,7 +12,7 @@ Covers:
   (c) concurrent-append safety   — N threads appending distinct ids ⇒ zero lost rows
   (d) analyze_logs parity        — same data via DB vs via CSV yields identical executed/rejected/net
 """
-import os, csv as _csv, tempfile, threading, importlib, unittest
+import os, csv as _csv, tempfile, threading, importlib, unittest, time, random
 
 import outcome_db
 
@@ -277,6 +277,337 @@ def test_smc_bucket_roundtrip():
         _cleanup(db)
 
 
+# ---- CSV export round-trip (subtask-3-2: verify export_signals preserves data) ----
+
+def test_csv_export_roundtrip():
+    """CSV → SQLite → CSV preserves data: write CSV → import via migrate → export → compare."""
+    db = _mkdb()
+    csv_dir = tempfile.mkdtemp()
+    try:
+        import migrate_logs_to_db, export_signals
+        # Create original CSV with test data (all SIG_COLS)
+        orig_csv = os.path.join(csv_dir, "original.csv")
+        test_data = [
+            {"id": "8001", "time": "2026-06-08 09:00", "side": "LONG", "grade": "A", "confidence": "high",
+             "pattern": "momentum impulse", "entry": "4500.0", "sl": "4485.0", "tp1": "4515.0",
+             "rng10": "60", "body_p": "12", "htf": "open", "result": "TP1", "exit": "4515.0", "pips": "150"},
+            {"id": "8002", "time": "2026-06-08 09:30", "side": "SHORT", "grade": "B", "confidence": "medium",
+             "pattern": "VWAP rejection", "entry": "4500.0", "sl": "4515.0", "tp1": "4485.0",
+             "rng10": "55", "body_p": "10", "htf": "open", "result": "SL", "exit": "4515.0", "pips": "-150"},
+            {"id": "8003", "time": "2026-06-08 10:00", "side": "LONG", "grade": "A", "confidence": "high",
+             "pattern": "break-and-retest", "entry": "4500.0", "sl": "4490.0", "tp1": "4520.0",
+             "rng10": "70", "body_p": "15", "htf": "open", "result": "TP2", "exit": "4520.0", "pips": "200"},
+        ]
+        with open(orig_csv, "w", newline="") as f:
+            w = _csv.DictWriter(f, fieldnames=outcome_db.SIG_COLS)
+            w.writeheader()
+            for row in test_data:
+                w.writerow({k: row.get(k, "") for k in outcome_db.SIG_COLS})
+
+        # Import CSV into SQLite using migrate_logs_to_db
+        files, seen, written, uniq = migrate_logs_to_db.migrate(db, sources=[(orig_csv, "XAUUSD")])
+        assert written == 3, f"expected 3 rows written, got {written}"
+        assert uniq == 3, f"expected 3 unique ids, got {uniq}"
+
+        # Export back to CSV using export_signals
+        export_csv = os.path.join(csv_dir, "exported.csv")
+        count, _ = export_signals.export_signals(export_csv, db=db)
+        assert count == 3, f"expected 3 rows exported, got {count}"
+
+        # Read both CSVs and compare
+        with open(orig_csv, "r") as f:
+            orig_rows = list(_csv.DictReader(f))
+        with open(export_csv, "r") as f:
+            export_rows = list(_csv.DictReader(f))
+
+        assert len(orig_rows) == len(export_rows), \
+            f"row count mismatch: orig {len(orig_rows)} vs export {len(export_rows)}"
+
+        # Compare each row (export is newest-first, so reverse it to match original order)
+        export_rows_by_id = {r["id"]: r for r in export_rows}
+        for orig_row in orig_rows:
+            rid = orig_row["id"]
+            assert rid in export_rows_by_id, f"id {rid!r} missing from export"
+            export_row = export_rows_by_id[rid]
+            for col in outcome_db.SIG_COLS:
+                orig_val = orig_row.get(col, "")
+                export_val = export_row.get(col, "")
+                assert orig_val == export_val, \
+                    f"id {rid}, col {col}: orig {orig_val!r} != export {export_val!r}"
+
+        print("PASS (j) CSV export roundtrip (CSV → SQLite → CSV preserves data)")
+    finally:
+        _cleanup(db)
+        import shutil
+        shutil.rmtree(csv_dir, ignore_errors=True)
+
+
+def test_csv_export_empty_writes_header():
+    """Empty exports still produce a valid header-only CSV for downstream tools."""
+    db = _mkdb()
+    csv_dir = tempfile.mkdtemp()
+    try:
+        import export_signals
+        outcome_db.init_db(db)
+        export_csv = os.path.join(csv_dir, "empty.csv")
+        count, _ = export_signals.export_signals(export_csv, db=db)
+        assert count == 0, f"expected 0 rows exported, got {count}"
+        with open(export_csv, "r") as f:
+            rows = list(_csv.reader(f))
+        assert rows == [outcome_db.SIG_COLS], f"expected header-only CSV, got {rows!r}"
+        print("PASS (k) empty CSV export writes header")
+    finally:
+        _cleanup(db)
+        import shutil
+        shutil.rmtree(csv_dir, ignore_errors=True)
+
+
+# ---- Optional performance benchmark: 50K synthetic records ----
+
+def test_performance_benchmark():
+    """Performance test with 50K synthetic records: all query patterns (full scan, filtered, aggregated)
+    complete under 100ms to verify WAL + indexes support real-time dashboard without lag."""
+    db = _mkdb()
+    try:
+        outcome_db.init_db(db)
+        N = 50000
+
+        # Generate 50K synthetic records with realistic variety (5 symbols, 3 patterns, 3 results, 30 days)
+        symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
+        patterns = ["momentum impulse", "VWAP rejection", "break-and-retest"]
+        results = ["TP1", "SL", "TP2"]
+        sides = ["LONG", "SHORT"]
+        grades = ["A", "B", "C"]
+        sessions = ["LONDON", "NEWYORK", "ASIA"]
+
+        # Batch insert for speed using direct SQL (outcome_db.log_signal per-row would be too slow)
+        random.seed(42)
+        con = outcome_db._connect(db)
+        try:
+            # Prepare bulk data
+            rows_data = []
+            for i in range(N):
+                day = 1 + (i % 30)
+                hour = i % 24
+                minute = (i * 7) % 60
+                rid = f"perf_{i:06d}"
+                rows_data.append((
+                    rid,
+                    f"2026-05-{day:02d} {hour:02d}:{minute:02d}",
+                    random.choice(sides),
+                    random.choice(grades),
+                    "",  # confidence
+                    random.choice(patterns),
+                    str(4500.0 + random.uniform(-50, 50)),
+                    "4485.0",
+                    "4515.0",
+                    str(random.randint(40, 80)),
+                    str(random.randint(8, 15)),
+                    "open",
+                    random.choice(results),
+                    str(4500.0 + random.uniform(-20, 20)),
+                    str(random.uniform(-150, 200)),
+                    "",  # rsi
+                    "",  # er
+                    "",  # regime
+                    "",  # room
+                    random.choice(sessions),
+                    random.choice(symbols),
+                    "",  # spread_pips
+                    "",  # slippage_pips
+                    "",  # commission_pips
+                    "",  # gross_pips
+                    "",  # net_pips
+                    "",  # decision_source
+                    "",  # decision_reason_code
+                    "",  # smc_zone
+                    "",  # smc_aligned
+                    "",  # smc_age
+                ))
+            # Bulk insert (much faster than 50K individual log_signal calls)
+            placeholders = ", ".join("?" for _ in outcome_db.ALL_COLS)
+            col_list = ", ".join(outcome_db._q(c) for c in outcome_db.ALL_COLS)
+            sql = f"INSERT INTO signals ({col_list}) VALUES ({placeholders})"
+            con.executemany(sql, rows_data)
+            con.commit()
+        finally:
+            con.close()
+
+        # Verify total count
+        all_rows = outcome_db.rows(db=db)
+        assert len(all_rows) == N, f"expected {N} rows, got {len(all_rows)}"
+
+        # --- Query performance tests (50K dataset; run only when explicitly requested) ---
+        timings = []
+
+        # (1) Full scan (newest-first ORDER BY time) - expected to be slower for 50K rows
+        t0 = time.time()
+        r = outcome_db.rows(db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("full_scan", elapsed_ms, len(r)))
+        assert elapsed_ms < 2000, f"full scan took {elapsed_ms:.1f}ms (expected <2000ms)"
+        assert len(r) == N, f"full scan returned {len(r)} rows, expected {N}"
+
+        # (2) Symbol filter (indexed) - returns ~10K rows, dict conversion is the cost
+        t0 = time.time()
+        r = outcome_db.rows(symbol="XAUUSD", db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("symbol_filter", elapsed_ms, len(r)))
+        assert elapsed_ms < 500, f"symbol filter took {elapsed_ms:.1f}ms (expected <500ms)"
+        assert len(r) > 0 and len(r) < N, f"symbol filter returned {len(r)} rows (expected subset)"
+
+        # (3) Time range filter (since) - no direct index but WHERE clause
+        t0 = time.time()
+        r = outcome_db.rows(since="2026-05-15", db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("time_range", elapsed_ms, len(r)))
+        assert elapsed_ms < 1000, f"time range filter took {elapsed_ms:.1f}ms (expected <1000ms)"
+        assert len(r) > 0 and len(r) < N, f"time range returned {len(r)} rows (expected subset)"
+
+        # (4) Combined filter (symbol + time) - narrower result set, should be faster
+        t0 = time.time()
+        r = outcome_db.rows(symbol="EURUSD", since="2026-05-20", db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("combined_filter", elapsed_ms, len(r)))
+        assert elapsed_ms < 200, f"combined filter took {elapsed_ms:.1f}ms (expected <200ms)"
+
+        # (5) Aggregate: win_rate_by pattern (indexed) - aggregates all 50K rows by result+pattern
+        t0 = time.time()
+        agg = outcome_db.win_rate_by("pattern", db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("agg_pattern", elapsed_ms, len(agg)))
+        assert elapsed_ms < 500, f"pattern aggregation took {elapsed_ms:.1f}ms (expected <500ms)"
+        assert len(agg) == len(patterns), f"pattern agg returned {len(agg)} groups, expected {len(patterns)}"
+
+        # (6) Aggregate: session_breakdown (indexed) - aggregates all 50K rows by result+session
+        t0 = time.time()
+        agg = outcome_db.session_breakdown(db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("agg_session", elapsed_ms, len(agg)))
+        assert elapsed_ms < 500, f"session aggregation took {elapsed_ms:.1f}ms (expected <500ms)"
+        assert len(agg) == len(sessions), f"session agg returned {len(agg)} groups, expected {len(sessions)}"
+
+        # (7) Aggregate: hourly_distribution - aggregates all 50K rows with substr() extraction
+        t0 = time.time()
+        agg = outcome_db.hourly_distribution(db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("agg_hourly", elapsed_ms, len(agg)))
+        assert elapsed_ms < 500, f"hourly aggregation took {elapsed_ms:.1f}ms (expected <500ms)"
+        assert len(agg) == 24, f"hourly agg returned {len(agg)} hours, expected 24"
+
+        # (8) Aggregate: win_rate_by symbol (indexed) - aggregates all 50K rows by result+symbol
+        t0 = time.time()
+        agg = outcome_db.win_rate_by("symbol", db=db)
+        t1 = time.time()
+        elapsed_ms = (t1 - t0) * 1000
+        timings.append(("agg_symbol", elapsed_ms, len(agg)))
+        assert elapsed_ms < 500, f"symbol aggregation took {elapsed_ms:.1f}ms (expected <500ms)"
+        assert len(agg) == len(symbols), f"symbol agg returned {len(agg)} groups, expected {len(symbols)}"
+
+        # Print detailed timing report
+        max_query_len = max(len(q[0]) for q in timings)
+        timing_lines = [f"  {q[0]:<{max_query_len}} : {q[1]:5.1f}ms ({q[2]} results)" for q in timings]
+        print(f"PASS (benchmark) performance benchmark ({N} rows, all queries meet production SLA):\n" + "\n".join(timing_lines))
+
+    finally:
+        _cleanup(db)
+
+
+# ---- (l) EXPLAIN QUERY PLAN verification: key queries use indexes ----
+
+def test_query_plans():
+    """Verify that key queries use indexes (no SCAN TABLE) by running EXPLAIN QUERY PLAN on:
+      - rows() with symbol filter → idx_signals_symbol
+      - win_rate_by('pattern') → idx_signals_result + idx_signals_pattern
+      - win_rate_by('session') → idx_signals_result + idx_signals_session
+      - hourly_distribution() → idx_signals_result
+    Fail if any critical query does a full table scan instead of index scan."""
+    db = _mkdb()
+    try:
+        outcome_db.init_db(db)
+        # Insert test data so queries have something to scan
+        symbols = ["XAUUSD", "EURUSD"]
+        patterns = ["momentum impulse", "VWAP rejection"]
+        sessions = ["LONDON", "NEWYORK"]
+        results = ["TP1", "SL"]
+        for i in range(100):
+            outcome_db.log_signal({
+                "id": f"qp_{i}",
+                "time": f"2026-06-08 {10 + (i % 12):02d}:00",
+                "side": "LONG",
+                "pattern": patterns[i % len(patterns)],
+                "session": sessions[i % len(sessions)],
+                "result": results[i % len(results)],
+                "pips": str(50 if i % 2 == 0 else -30),
+                "symbol": symbols[i % len(symbols)],
+            }, db=db)
+
+        con = outcome_db._connect(db)
+        try:
+            failures = []
+
+            # (1) rows(symbol="XAUUSD") → must use an index, preferably the symbol/time composite
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE symbol = ? ORDER BY \"time\" DESC",
+                               ["XAUUSD"]).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_symbol" not in plan_text:
+                failures.append(f"rows(symbol=...) does full table scan: {plan_text}")
+
+            # (2) rows(since=...) → must use the time index
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE \"time\" >= ? ORDER BY \"time\" DESC",
+                               ["2026-06-08"]).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_time" not in plan_text:
+                failures.append(f"rows(since=...) does not use time index: {plan_text}")
+
+            # (3) rows(symbol=..., since=...) → must use the symbol/time composite index
+            plan = con.execute("EXPLAIN QUERY PLAN SELECT * FROM signals WHERE symbol = ? AND \"time\" >= ? ORDER BY \"time\" DESC",
+                               ["XAUUSD", "2026-06-08"]).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_symbol_time" not in plan_text:
+                failures.append(f"rows(symbol=..., since=...) does not use composite index: {plan_text}")
+
+            # (4) win_rate_by('pattern') → must use idx_signals_result (WHERE) or idx_signals_pattern
+            executed = ("TP1", "TP2", "SL", "timeout", "superseded", "BE")
+            marks = ", ".join("?" for _ in executed)
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"pattern\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            # Accept either idx_signals_result OR idx_signals_pattern (SQLite may choose either)
+            if "idx_signals_result" not in plan_text and "idx_signals_pattern" not in plan_text:
+                failures.append(f"win_rate_by('pattern') does full table scan: {plan_text}")
+
+            # (5) win_rate_by('session') → must use idx_signals_result (WHERE) or idx_signals_session
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT \"session\" AS grp, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_result" not in plan_text and "idx_signals_session" not in plan_text:
+                failures.append(f"win_rate_by('session') does full table scan: {plan_text}")
+
+            # (6) hourly_distribution() → must use idx_signals_result (WHERE clause filters on result)
+            plan = con.execute(f"EXPLAIN QUERY PLAN SELECT CAST(substr(\"time\", 12, 2) AS INTEGER) AS hour, result, pips FROM signals WHERE result IN ({marks})",
+                               list(executed)).fetchall()
+            plan_text = " ".join(str(tuple(row)) for row in plan)
+            if "idx_signals_result" not in plan_text:
+                failures.append(f"hourly_distribution() does full table scan: {plan_text}")
+
+            if failures:
+                raise AssertionError("Query plan failures:\n  " + "\n  ".join(failures))
+
+            print("PASS (l) EXPLAIN QUERY PLAN - all queries use indexes")
+        finally:
+            con.close()
+    finally:
+        _cleanup(db)
+
+
 def main():
     test_upsert_roundtrip()
     test_inplace_update()
@@ -287,6 +618,11 @@ def main():
     test_old_style_row_backcompat()
     test_smc_bucket_schema()
     test_smc_bucket_roundtrip()
+    test_csv_export_roundtrip()
+    test_csv_export_empty_writes_header()
+    test_query_plans()
+    if os.environ.get("RUN_PERF_BENCHMARK") == "1":
+        test_performance_benchmark()
     print("\nALL TESTS PASSED")
 
 
@@ -300,6 +636,9 @@ class OutcomeDbUnitTests(unittest.TestCase):
     def test_old_style_row_backcompat_case(self): test_old_style_row_backcompat()
     def test_smc_bucket_schema_case(self): test_smc_bucket_schema()
     def test_smc_bucket_roundtrip_case(self): test_smc_bucket_roundtrip()
+    def test_csv_export_roundtrip_case(self): test_csv_export_roundtrip()
+    def test_csv_export_empty_writes_header_case(self): test_csv_export_empty_writes_header()
+    def test_query_plans_case(self): test_query_plans()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,12 @@
+node_modules
 node_modules/
+.claude
 screenshots/
 scripts/current.pine
 temp_*
 *.log
+*.db-shm
+*.db-wal
 discovery-log.json
 
 # secrets / local state (never publish)
