@@ -24,15 +24,22 @@ this contextual read.
 
 ---
 
+## ⛔ HARD GATE — DO THE HTF READ *FIRST*, AND KEEP REFRESHING IT (failed this 2× — non-negotiable)
+**BEFORE the FIRST `replay_step` / any execution on a day, you MUST have done the top-down HTF read THIS session:
+switch to 4H → 1H → 15m, read structure/EMA/VWAP/SMC on each, set the bias + level map.** Do NOT start stepping
+the execution TF off 3m/SBS alone — that is the exact mistake. THEN, while walking, **refresh on cadence: 15m every
+15m of price, 1h every hour, 4h every 4h** (restore 3m + verify replay after each), AND always refresh the 15m
+before acting on a setup. If you catch yourself executing without a current HTF read → STOP and do it.
+
 ## THE LOOP (every decision)
-1. **CONTEXT** — build the multi-TF picture and the level map (once at session start; refresh ~hourly or on a regime shift).
+1. **CONTEXT** — build the multi-TF picture + level map **FIRST** (top-down 4H→1H→15m; see the HARD GATE above). Refresh on cadence.
 2. **DAY TYPE** — classify the regime; it sets which playbook is allowed.
 3. **LOCATION** — is price AT a meaningful level? If mid-range/no-man's-land → **WAIT**.
 4. **SIGNAL** — does a recognised setup trigger at that level, in the allowed direction?
 5. **SCORE** — confluence + R:R. Approve / Wait / Reject.
 6. **EXECUTE & MANAGE** — entry, stop, targets, then breakeven / trail / stand-aside.
 
-Re-check on a fixed cadence (e.g. every 15m of price) AND when price reaches a mapped level.
+Re-check on the cadence (15m/15m, 1h/hr, 4h/4h) AND when price reaches a mapped level.
 
 ---
 
