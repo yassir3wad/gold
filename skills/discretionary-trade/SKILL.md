@@ -129,8 +129,18 @@ beyond it. Invalid → don't trade the first touch, drop it from the map.
 
 ## STEP 6 — EXECUTE & MANAGE
 
-- **Entry:** on the trigger (break of the rejection candle / BOS retest) — at the level, not chasing mid-move.
-- **Stop:** beyond the invalidation (other side of the OB/zone/wick + buffer). Define it before entry.
+**ORDER BLOCKS ARE PRECISE — enter FROM the OB, stop BEYOND it (do not eyeball the level).** When an SMC order
+block / KLZ / supply-demand box is at your level, read its exact bounds (`data boxes` on the Smart Money study)
+and:
+- **Entry:** wait for price to TAP INTO the OB and reject — short from the OB's body, long from the OB's body —
+  NOT below/above it chasing a break. (My May-26 error: shorted 4535 *below* a 4542–4550 supply OB, so price
+  ran UP into the OB to fill it — the real rejection point — and stopped me, then faded as planned.)
+- **Stop:** beyond the FAR edge of the OB + buffer (above a supply OB / below a demand OB). NEVER inside the OB —
+  a stop inside the OB is guaranteed to be taken by the OB-fill stop-run before the move resolves.
+- In a tight coil/range at a level, the stop must clear the WHOLE coil (and any OB) + buffer, not just the last cap.
+
+- **Entry (general):** on the trigger (break of the rejection candle / BOS retest) — at the level, not chasing mid-move.
+- **Stop:** beyond the invalidation (far side of the OB/zone/wick + buffer). Define it before entry.
 - **Targets:** T1 = nearest liquidity (VWAP / POC / VAH-VAL / PDH-PDL / 2R); T2 = next structure. R:R ≥ 1:2.
 - **Manage:** move to **breakeven** once price approaches T1 and stalls (this turns rejected-at-resistance trades
   into scratches, not losses). Trail behind structure on trend days. **Stand aside** after 2 failed trades or in
@@ -148,16 +158,38 @@ Reason:
 
 ---
 
-## DISCIPLINE / LESSONS (from the forward tests — do not skip)
+## DISCIPLINE / LESSONS (from the forward tests — do not skip; add new lessons here every time)
+- **Order blocks are precise — enter FROM the OB, stop BEYOND it.** (May 26: shorted 4535 below a 4542–4550
+  supply OB with stop 4543 *inside* it → price ran up into the OB to fill it, stopped me, then faded as planned.
+  −80p on a directionally-correct trade.) Read the OB bounds; enter on the tap+reject; stop past the far edge.
+- **Coil/range stops must clear the WHOLE coil + any OB + buffer**, not just the last cap. Tight coils stop-run
+  the recent high/low before resolving. A stop one tick past the recent cap is a donation.
 - **Day type is everything and you cannot know it at the open.** A clean-looking pullback can chop all day
   (May 13: 2 reasonable longs → scratch + −100p). When in doubt, smaller or no trade.
 - **Track fills with DATA, not eyeballing** — TP/SL hit between checks; a later snapshot can misrepresent a
-  closed trade (May 20: I misread a +320p winner as stopped). Pull bars-up-to-now to know exact fills.
+  closed trade (May 20: I misread a +320p winner as stopped). Pull bars-up-to-cursor to know exact fills.
 - **No-hindsight only** — decide on bars up to NOW; never use future bars. Then forward-verify.
 - **Use ALL the tools consistently** — VWAP and volume confirmation especially (a low-volume support bounce is a
-  trap). The May-13 loss bought support without volume confirmation.
-- **Sample, not anecdote** — one good day (+320) doesn't prove edge; one bad day (−100) doesn't disprove it.
+  trap; May-13 loss bought support without volume). Don't skip the order-block / SMC read when one is at the level.
+- **Sample, not anecdote** — one good day (+320) doesn't prove edge; one bad day (−100/−80) doesn't disprove it.
   Judge across many days, net of ~3p/trade cost.
+
+## OPERATIONAL NOTES — replay/chart stability (LEARNED THE HARD WAY — follow exactly)
+- **Repeated timeframe switching DESTABILISES the replay** — it silently STOPS and the chart reverts to LIVE
+  data (wrong date/prices). So: read TPO on **30m ONCE** at session start, read SMC on 15m/1h/4h sparingly
+  (only on the hourly context refresh), and otherwise **stay on 5m**. Minimise TF changes.
+- **After ANY TF switch or replay action, VERIFY before trusting data:** check `replay status` shows
+  `is_replay_started: true` with a `current_date` on the right day, and that `ohlcv` bars are the expected date
+  + 5-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
+  again and step back to your point.
+- **`indicator toggle --visible false` does NOT reliably repaint** (the study often stays visible). To actually
+  remove a heavy indicator from the 5m chart, **`indicator remove <id>`** it (you keep its already-read levels).
+  TPO especially: read its VAs once, then REMOVE it.
+- **Foreground the app** (`osascript -e 'tell application "TradingView" to activate'`) before TF switches/HTF
+  screenshots — backgrounded windows don't repaint, giving stale captures.
+- **Screenshots: `--region full` only** (price + time axes visible), incl. your own review shots.
+- **Manage open trades with data, not images** — pull `ohlcv` up to the cursor each checkpoint to know exact
+  TP/SL fills (intra-checkpoint fills are invisible to a periodic screenshot).
 
 ## Reading the indicators (practical — both are READ, not computed)
 - **SMC = Smart Money Concepts indicator, read on 15m / 1h / 4h** (HTF context). Visible on chart; boxes/labels
@@ -165,4 +197,8 @@ Reason:
 - **VA = TPO indicator, read on 30m, ONE call** → `data_get_pine_lines` verbose `study_filter="TPO"`: yellow POC,
   lime VAH/VAL pairs for all visible prior sessions. Restore the 5m execution TF after.
 - Execution is **5m**. SMC/VA are HTF context layered onto the 5m read; you do NOT trade off SMC/TPO on 5m.
+- **PERFORMANCE: hide SMC + TPO on the 5m execution chart** (they're heavy and irrelevant to 5m) — keep only
+  VWAP/EMA/Auto-Trendlines/Volume/RSI for fast 5m screenshots. **Show SMC when reading 15m/1h/4h, show TPO when
+  reading 30m, then hide both again and restore 5m.** Toggle via `indicator toggle <id> --visible true/false`
+  (study ids rotate — resolve fresh from `state` each time).
 - All chart screenshots must be **full-region** (price + time axes visible).
