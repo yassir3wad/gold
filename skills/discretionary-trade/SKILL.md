@@ -174,6 +174,25 @@ Reason:
 
 ---
 
+## MULTI-AGENT REVIEW COMMITTEE (sign-off before any trade fires)
+When a candidate signal forms, convene a panel of role-specialized reviewer agents IN PARALLEL (one Agent call
+each). **Give every agent the full evidence: screenshots of ALL timeframes (4h/1h/15m/5m, SMC shown) + the data
+(level map, prior-day VAs, SMC OBs, bars-up-to-now) + the proposed signal (side/entry/SL/T1/T2/thesis) + this skill.**
+Each judges the chart independently and returns a structured verdict (APPROVE/REJECT/WAIT + reason + confluence score).
+
+| # | Agent | Gets | Validates | Veto |
+|---|-------|------|-----------|------|
+| 1 | **Blind Independent Trader** | charts + data **only, NO thesis** | independently calls LONG/SHORT/NO-TRADE + its own entry/SL/T1/T2 (breaks anchoring) | — |
+| 2 | **Context & Regime** | full set + thesis | HTF structure (4h/1h SMC, BOS/CHoCH, premium/discount) + day-type + session — is it WITH the regime? | — |
+| 3 | **Level & Trigger** | full set + thesis | entry at a real/FRESH level (OB/VAH-VAL-POC/VWAP/PDH-PDL, not accepted-through) + trigger-candle quality + confluence | — |
+| 4 | **Risk & Numbers** | full set + thesis | stop BEYOND the OB/invalidation (not inside) · R:R ≥ 1:2 · target at ACTUAL nearest liquidity · **verifies the price/OB/R:R math** | **HARD** |
+| 5 | **Adversary** | full set + thesis | argue AGAINST — find the trap (stop-hunt, low-vol bounce, into opposite level, over-tested). Default refute. | **HARD** |
+
+**Why this beats a flat panel:** Agent 1 is **blind** (no thesis) → real independence, not five agents grading my plan; merged Context removes overlap; the two hard-veto agents (Numbers, Adversary) catch the exact errors I've made (OB-stop-inside, eyeballed levels, chasing).
+
+**Decision rule:** take the trade ONLY if **Agent-1 (blind) independently agrees on direction + zone, AND ≥3/4 of Agents 2–5 APPROVE, AND neither hard-veto agent rejects.** Else WAIT / no-trade. Log every verdict.
+Optional upgrades: run 1–2 agents on a **different model** (true diversity, not just role-prompting); the human/main loop is the final synthesizer.
+
 ## SIGNAL REFERENCE (the 100-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual.md`)
 Every signal: needs a meaningful level + a trigger, **prefer candle CLOSE over wick**, **R:R ≥ 1:2**, target the
 **nearest liquidity** (VWAP/POC/VAH-VAL/PDH-PDL or 2R). `★` = Excellent for XAUUSD (prioritise). **Track each
