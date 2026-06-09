@@ -6,11 +6,21 @@ description: Trade XAUUSD/forex discretionarily as the AI decision-maker (no cod
 # Discretionary AI Trading — XAUUSD / Forex
 
 **You are the trader.** No python detects the signal for you; you read the chart top-down, recognise the
-setup, score it, decide, execute, and manage. This skill is the rulebook distilled from the XAUUSD/Forex
-Signal Execution Manual (100 signals), the value-area + VWAP frameworks, and the day-type/transition lessons
-from the replay studies. Not financial advice; for systematic analysis and disciplined review.
+setup, score it, decide, execute, and manage. This skill is the rulebook; the **canonical detailed reference is
+`xauusd_forex_ai_signal_execution_manual_refined.md`** (the Claude-Optimized manual — 100 signals, each with
+Description / Claude Analytical Focus / Setup / Trigger / Execution / Invalidation, plus the approval rules,
+confluence scoring, and the structured output schema below). This file is the scannable distillation +
+day-type/transition lessons from the replay studies; open the refined manual for the per-signal depth.
+Not financial advice; for systematic analysis and disciplined review.
 
 Convention: **1.00 in XAUUSD = 10 pips** (e.g. 4578→4566 = 12.0 = 120 pips). Minimum R:R **1:2**.
+
+**Your analytical focus (read every chart through these lenses, in this order):** **Market Structure** (BOS /
+CHoCH → trend & reversal) · **Liquidity** (pools at swing H/L, PDH/PDL, session extremes → sweeps) ·
+**Institutional footprints** (KLZ, OB, breaker, mitigation, FVG) · **Volume Profile** (VAH/VAL/POC, HVN/LVN →
+acceptance vs rejection) · **Session dynamics** (Asian/London/NY + lunch behaviours) · **Volatility** (ATR,
+compression→expansion) · **Risk management** (R:R ≥ 1:2, clear invalidation). Pattern-spotting is secondary to
+this contextual read.
 
 ---
 
@@ -128,9 +138,15 @@ into a strong opposite level · −20 VWAP chop.
 
 **Decision:** **80–100 = strong (take it)** · **65–79 = wait for one more confirmation** · **<65 = reject.**
 
-**Hard rejects (any one):** R:R < 1:2 · no clear invalidation/stop · entry into a strong opposite level ·
-level already accepted through · chopping around VWAP · setup old/over-tested/unclear · mid-value no-edge ·
-**abnormal spread/slippage** · **a high-impact news spike that makes execution unsafe** · **NY-lunch / dead-time chop.**
+**MUST REJECT (any one true → no trade):** R:R < 1:2 · entry in the middle of a balanced value area (no edge) ·
+trades directly into a strong unmitigated opposite level · no clear/logical invalidation · the level is already
+**accepted through** (closed + retested beyond) · **VWAP chop** (non-directional around VWAP) · **stale** setup
+(old / unclear / over-tested) · abnormal spread/slippage · a high-impact news spike that makes execution unsafe ·
+NY-lunch / dead-time chop.
+
+**MAY APPROVE only when ALL hold:** the setup is at a **meaningful level** (KLZ/OB/VAH-VAL/PDH-PDL/VWAP) ·
+**market structure (BOS/CHoCH) confirms the direction** · entry/stop/targets are **precisely defined** · R:R ≥ 1:2 ·
+session/volatility/narrative **context fits** the premise. Missing any → WAIT, don't force it.
 
 **News:** never trade the FIRST news spike (whipsaws both ways). If a scheduled high-impact print has a clear
 direction, trade the **pullback continuation** after it (38–50% hold + continuation BOS), not the impulse.
@@ -162,15 +178,28 @@ and:
   into scratches, not losses). Trail behind structure on trend days. **Stand aside** after 2 failed trades or in
   confirmed chop — over-trading a chop day is how small losses become big ones.
 
-**Output each decision in this form:**
+**Output each decision in this structured form** (the refined manual's Claude output schema — always include the
+`reasoning_chain_of_thought` narrative and a `confidence` read; `entry` carries an order `type`):
+```json
+{
+  "decision": "APPROVE | REJECT | WAIT",
+  "market": "XAUUSD",
+  "signal_name": "<e.g. Order Block Retest>",
+  "direction": "LONG | SHORT | NEUTRAL",
+  "bias": "BULLISH | BEARISH | NEUTRAL",
+  "day_type": "TREND | RANGE | DEAD | REVERSAL",
+  "entry": { "price": 0.0, "type": "MARKET | LIMIT | STOP" },
+  "stop_loss": 0.0, "target_1": 0.0, "target_2": 0.0, "risk_reward": 0.0,
+  "confidence": "HIGH | MEDIUM | LOW",
+  "level_state": "Untested | Tested | Rejected | Accepted | Flipped | Mitigated",
+  "vwap_position": "above | below | chopping", "open_vs_prev_value": "above VAH | inside | below VAL",
+  "reasoning_chain_of_thought": "<narrative: HTF structure → day-type → level → trigger → R:R/stop/target, and why the MUST-REJECT gates are clear and the MAY-APPROVE conditions all hold. Not a bullet list — a reasoned story.>",
+  "confluence_score_details": { "<each + / − line that applied>": 0, "final_score": 0 }
+}
 ```
-Bias: Bullish/Bearish/Neutral | Day type: Trend/Range/Dead/Reversal
-Nearest valid level (and state: Untested/Rejected/Accepted/Flipped):
-VWAP position:  | Open vs prev value:
-Signal: <name> | Direction: LONG/SHORT/WAIT
-Entry / Stop / T1 / T2 / R:R / Confluence score:
-Reason:
-```
+`confidence`: HIGH ≈ score ≥ 80 with blind-agent agreement and no veto; MEDIUM ≈ 65–79 / one soft concern;
+LOW ≈ borderline — pair LOW with WAIT, never APPROVE. A one-line plain-text summary is fine for quick logs, but
+the committee and any forward-test log get the full JSON.
 
 ---
 
@@ -178,7 +207,8 @@ Reason:
 When a candidate signal forms, convene a panel of role-specialized reviewer agents IN PARALLEL (one Agent call
 each). **Give every agent the full evidence: screenshots of ALL timeframes (4h/1h/15m/5m, SMC shown) + the data
 (level map, prior-day VAs, SMC OBs, bars-up-to-now) + the proposed signal (side/entry/SL/T1/T2/thesis) + this skill.**
-Each judges the chart independently and returns a structured verdict (APPROVE/REJECT/WAIT + reason + confluence score).
+Each judges the chart independently and returns the **structured verdict schema above** (decision +
+`reasoning_chain_of_thought` + `confidence` + `confluence_score_details`) so verdicts are directly comparable.
 
 | # | Agent | Gets | Validates | Veto |
 |---|-------|------|-----------|------|
@@ -193,7 +223,7 @@ Each judges the chart independently and returns a structured verdict (APPROVE/RE
 **Decision rule:** take the trade ONLY if **Agent-1 (blind) independently agrees on direction + zone, AND ≥3/4 of Agents 2–5 APPROVE, AND neither hard-veto agent rejects.** Else WAIT / no-trade. Log every verdict.
 Optional upgrades: run 1–2 agents on a **different model** (true diversity, not just role-prompting); the human/main loop is the final synthesizer.
 
-## SIGNAL REFERENCE (the 100-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual.md`)
+## SIGNAL REFERENCE (the 100-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual_refined.md`)
 Every signal: needs a meaningful level + a trigger, **prefer candle CLOSE over wick**, **R:R ≥ 1:2**, target the
 **nearest liquidity** (VWAP/POC/VAH-VAL/PDH-PDL or 2R). `★` = Excellent for XAUUSD (prioritise). **Track each
 zone's state** (new→untested→tested→mitigated→invalidated); trade only live ones.
