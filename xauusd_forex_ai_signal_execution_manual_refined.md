@@ -107,8 +107,8 @@ Claude should use the following scoring system to quantify the strength of a sig
 **Decision Thresholds:**
 
 -   **80-100**: Strong candidate. High confidence for approval.
--   **65-79**: Moderate candidate. Requires extra confirmation or a 
-WAIT decision.
+-   **65-79**: Moderate candidate. Requires extra confirmation or a
+    WAIT decision.
 -   **Below 65**: Weak candidate. REJECT.
 
 # Signal Index
@@ -215,6 +215,8 @@ WAIT decision.
 | 98 | [Pullback to Lower High](#98-pullback-to-lower-high) | Trend / Structure | Very Good | Excellent | Intraday |
 | 99 | [Trend Exhaustion](#99-trend-exhaustion) | Trend / Structure | Excellent | Very Good | Reversal |
 | 100 | [Market Structure Shift](#100-market-structure-shift) | Trend / Structure | Excellent | Excellent | Reversal |
+| 101 | [Swing Breakout Sequence (SBS Alias)](#101-swing-breakout-sequence-sbs--alias) | Breakout / Liquidity / Swing Model | Excellent | Excellent | Scalping/Intraday |
+| 102 | [Candle Range Theory (CRT) Model](#102-candle-range-theory-crt-model) | ICT-Derived / Liquidity / Range Model | Excellent | Excellent | Intraday/Scalping |
 
 # Detailed Execution Instructions (Claude-Optimized)
 
@@ -293,7 +295,7 @@ WAIT decision.
 **Works with Forex Majors:** Very Good  
 **Best Use:** Intraday
 
-**Description:** A retest of a price level that was previously an Order Block but was then broken through by a strong move, causing it to 
+**Description:** A retest of a price level that was previously an Order Block but was then broken through by a strong move, causing it to
 flip its role (e.g., from support to resistance).
 
 **Claude Analytical Focus:**
@@ -1387,7 +1389,7 @@ flip its role (e.g., from support to resistance).
 -   Reject reversal signals while the band-walk persists, as the strong trend is likely to continue.
 -   Reject if price breaks and accepts beyond the VWAP or the inner band, indicating a potential weakening of the trend or a shift in market dynamics.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 35. VWAP Chop/Indecision
 
 **Category:** VWAP  
@@ -1422,7 +1424,7 @@ flip its role (e.g., from support to resistance).
 -   Do not approve trend-following strategies during periods of VWAP chop.
 -   Reject any trade setups that rely on clear directional movement when this signal is active.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 36. Anchored VWAP (AVWAP) Rejection/Support
 
@@ -1471,11 +1473,11 @@ flip its role (e.g., from support to resistance).
 
 **Claude Analytical Focus:**
 -   **Calculate Weekly VWAP**: Claude should be instructed to calculate and display the Weekly VWAP. This line represents the average price paid by participants over the current trading week.
--   **Identify Confluence**: Look for instances where the Weekly VWAP is in close proximity to other important support or resistance levels, such as:  
-    -   Key Level Zones (KLZ)  
-    -   Value Area High (VAH) or Value Area Low (VAL) from previous sessions  
-    -   Previous Day High (PDH) or Previous Day Low (PDL)  
-    -   Order Blocks or Fair Value Gaps  
+-   **Identify Confluence**: Look for instances where the Weekly VWAP is in close proximity to other important support or resistance levels, such as:
+    -   Key Level Zones (KLZ)
+    -   Value Area High (VAH) or Value Area Low (VAL) from previous sessions
+    -   Previous Day High (PDH) or Previous Day Low (PDL)
+    -   Order Blocks or Fair Value Gaps
 -   **Strengthen Primary Signal**: This signal is not a standalone entry but a powerful confirmation. When a primary trading signal (e.g., an Order Block mitigation, a liquidity sweep) occurs at or near the Weekly VWAP, it significantly increases the probability of that primary signal succeeding. Claude should prioritize setups where the Weekly VWAP supports the intended direction of the trade.
 -   **Contextualize Trend**: If the Weekly VWAP is sloping upwards, it indicates a bullish weekly bias, and long setups aligning with it are strengthened. Conversely, a downward sloping Weekly VWAP strengthens short setups.
 
@@ -1498,7 +1500,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the Weekly VWAP directly opposes the direction of the primary signal (e.g., a bullish primary signal occurring at a Weekly VWAP acting as resistance).
 -   Reject if price closes and accepts decisively beyond the Weekly VWAP, indicating a potential shift in the weekly bias.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 38. VWAP-Market Profile Confluence
 
 **Category:** VWAP / Market Profile  
@@ -1531,8 +1533,8 @@ flip its role (e.g., from support to resistance).
 **Invalidation / Reject:**
 -   Reject if price closes and accepts decisively through both confluent levels, indicating that the combined support/resistance has failed.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 39. Double Top Bearish Reversal
 
 **Category:** Classic Pattern  
@@ -1568,8 +1570,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the second top strongly closes above the first top, indicating a continuation of the uptrend rather than a reversal.
 -   Reject if price fails to break the neckline, or if it breaks the neckline but quickly reclaims it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 40. Double Bottom Bullish Reversal
 
 **Category:** Classic Pattern  
@@ -1605,7 +1607,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the second bottom strongly closes below the first bottom, indicating a continuation of the downtrend rather than a reversal.
 -   Reject if price fails to break the neckline, or if it breaks the neckline but quickly reclaims it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 41. Triple Top Bearish Reversal
 
@@ -1680,7 +1682,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if price fails to break the neckline, or if it breaks the neckline but quickly reclaims it, suggesting a false breakdown.
 -   Reject if the "tests" of support become descending, forming a descending triangle, which is typically a continuation pattern.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 43. Head and Shoulders Bearish Reversal
 
 **Category:** Classic Pattern  
@@ -1718,7 +1720,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the pattern forms in a strong uptrend and the neckline is not decisively broken.
 -   Reject if price closes and accepts above the right shoulder, indicating a continuation of the uptrend.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 44. Inverse Head and Shoulders Bullish Reversal
 
@@ -1757,7 +1759,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the pattern forms in a strong downtrend and the neckline is not decisively broken.
 -   Reject if price closes and accepts below the right shoulder, indicating a continuation of the downtrend.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 45. Bull Flag Continuation
 
 **Category:** Classic Pattern  
@@ -1793,8 +1795,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the pullback (flag) retraces more than 61.8% of the pole, or if it breaks significant market structure within the consolidation, indicating a potential reversal rather than continuation.
 -   Reject if price breaks below the lower trendline of the flag and accepts below it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 46. Bear Flag Continuation
 
 **Category:** Classic Pattern  
@@ -1830,7 +1832,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the pullback (flag) retraces more than 61.8% of the pole, or if it breaks significant market structure within the consolidation, indicating a potential reversal rather than continuation.
 -   Reject if price breaks above the upper trendline of the flag and accepts above it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 47. Bull Pennant Continuation
 
@@ -1975,7 +1977,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the breakdown occurs directly into a strong higher timeframe support level (e.g., VAL, PDL, KLZ), which could lead to a quick failure or false breakdown.
 -   Reject if price breaks above the descending trendline of the highs, indicating a failure of the pattern and a potential reversal.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 51. Symmetrical Triangle Breakout
 
 **Category:** Classic Pattern  
@@ -2010,8 +2012,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the breakout candle is too far extended from the entry point, making the risk-reward unfavorable.
 -   Reject if price breaks out but quickly re-enters the triangle, indicating a false breakout.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 52. Rising Wedge Bearish Reversal
 
 **Category:** Classic Pattern  
@@ -2047,8 +2049,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the wedge breaks upward with clear acceptance above the upper trendline, indicating a continuation of the uptrend rather than a reversal.
 -   Reject if price breaks below the lower trendline but quickly reclaims it, indicating a false breakdown.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 53. Falling Wedge Bullish Reversal
 
 **Category:** Classic Pattern  
@@ -2084,7 +2086,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the wedge breaks downward with clear acceptance below the lower trendline, indicating a continuation of the downtrend rather than a reversal.
 -   Reject if price breaks above the upper trendline but quickly reclaims it, indicating a false breakout.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 54. Range Breakout and Retest
 
@@ -2121,7 +2123,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the breakout is only a wick, or if price quickly returns and accepts back inside the original range after the breakout.
 -   Reject if the retest of the broken boundary fails to hold, and price breaks back through it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 55. Rectangle Trading
 
 **Category:** Classic Pattern  
@@ -2157,8 +2159,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the market transitions into a strong trend day or shows clear acceptance outside the rectangle, indicating a breakout.
 -   Reject if price closes and accepts decisively outside the rectangle, as this invalidates the range-bound condition.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 56. Parallel Channel Trading
 
 **Category:** Classic Pattern  
@@ -2194,8 +2196,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the channel slope is too steep, indicating an unsustainable move that is prone to sharp reversals.
 -   Reject if price breaks decisively outside a channel boundary and accepts beyond it, indicating a potential trend reversal or acceleration.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 57. Channel Breakout and Retest
 
 **Category:** Classic Pattern  
@@ -2230,8 +2232,8 @@ flip its role (e.g., from support to resistance).
 **Invalidation / Reject:**
 -   Reject if the breakout lacks a decisive candle close or if the retest fails to hold, and price quickly re-enters the channel.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 58. Exhaustion Reversal
 
 **Category:** Classic Pattern / Institutional  
@@ -2266,8 +2268,8 @@ flip its role (e.g., from support to resistance).
 -   Reject if the extended move is part of a strong news continuation or a clean "band-walk" along VWAP bands, indicating sustained momentum rather than exhaustion.
 -   Reject if the reversal confirmation (rejection candle, CHOCH/BOS) is weak or absent, or if price closes and accepts beyond the key level.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 59. Asian Range Breakout
 
 **Category:** Session  
@@ -2303,7 +2305,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if the breakout occurs during a "dead time" (e.g., late Asian session, before major news) or directly into a strong higher timeframe resistance/support level without clear acceptance.
 -   Reject if the breakout lacks a decisive candle close or if the retest fails to hold, and price quickly re-enters the Asian range.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 60. Asian Range Sweep Reversal
 
@@ -2415,7 +2417,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if price closes and accepts decisively above the London high during the NY session, indicating a genuine bullish continuation rather than a fakeout.
 -   Reject if the re-entry below the London high or the subsequent bearish CHOCH/BOS is not clear or lacks conviction.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 63. NY Session Low Sweep Reversal
 
 **Category:** Session / Liquidity  
@@ -2452,7 +2454,7 @@ flip its role (e.g., from support to resistance).
 -   Reject if price closes and accepts decisively below the London low during the NY session, indicating a genuine bearish continuation rather than a fakeout.
 -   Reject if the re-entry above the London low or the subsequent bullish CHOCH/BOS is not clear or lacks conviction.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 64. NY Open Manipulation Reversal
 
@@ -2501,7 +2503,7 @@ flip its role (e.g., from support to resistance).
 **Works with Forex Majors:** Very Good  
 **Best Use:** Intraday
 
-**Description:** Following a confirmed New York Open Manipulation Reversal (Signal 64), where initial liquidity was swept and price reversed, this signal identifies opportunities to join the newly established trend after a corrective pullback. It assumes that the manipulation has successfully trapped traders, and the market is now ready to continue in the 
+**Description:** Following a confirmed New York Open Manipulation Reversal (Signal 64), where initial liquidity was swept and price reversed, this signal identifies opportunities to join the newly established trend after a corrective pullback. It assumes that the manipulation has successfully trapped traders, and the market is now ready to continue in the
 true directional move.
 
 **Claude Analytical Focus:**
@@ -2533,7 +2535,7 @@ true directional move.
 -   Reject if the pullback extends too deeply (e.g., beyond 50-61.8% of the initial reversal move) or breaks the newly established market structure, indicating a potential failure of the new trend.
 -   Reject if the market enters a period of "lunch chop" (mid-day consolidation) or if the target has already been hit, reducing the potential for further movement.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""))
+    """))
 
 ## 66. NY Lunch Chop Filter
 
@@ -2694,7 +2696,7 @@ true directional move.
 **Works with Forex Majors:** Excellent  
 **Best Use:** Scalping
 
-**Description:** This signal identifies a high-probability reversal setup that occurs within specific 
+**Description:** This signal identifies a high-probability reversal setup that occurs within specific
 high-liquidity trading windows, known as 'killzones' (e.g., London Open, New York Open). Price makes an aggressive move to sweep existing liquidity (e.g., previous session highs/lows, equal highs/lows) before rapidly reversing and initiating a move in the opposite direction. This is a classic institutional 'stop hunt' or 'liquidity grab' before the true directional move.
 
 **Claude Analytical Focus:**
@@ -2725,7 +2727,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if there is no clear reclaim of the swept level within a limited number of candles, or if price closes and accepts decisively beyond the swept level, indicating a genuine breakout.
 -   Reject if the CHOCH/BOS is not clear or lacks conviction.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 71. Clean Breakout and Retest
 
 **Category:** Breakout / Continuation  
@@ -2764,7 +2766,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the breakout is only a wick, or if price quickly returns and accepts back inside the previous range after the breakout, indicating a false breakout.
 -   Reject if the retest of the broken level fails to hold, and price breaks back through it.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 72. Fakeout Reversal
 
@@ -2802,7 +2804,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the initial breakout shows strong volume and sustained acceptance beyond the level, indicating a genuine breakout rather than a fakeout.
 -   Reject if price does not quickly reclaim the level after the breakout, or if the CHOCH/BOS is not clear or lacks conviction.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 73. Momentum Breakout Continuation
 
 **Category:** Breakout / Continuation  
@@ -2841,7 +2843,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the breakout is immediately met by a strong opposing level, indicating potential exhaustion.
 -   Reject if price shows signs of immediate reversal or a deep pullback after the breakout, invalidating the momentum continuation.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 74. Compression Breakout
 
@@ -2952,7 +2954,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if price closes and accepts decisively below the range low (e.g., two consecutive candle closes below the range low), indicating a genuine bearish breakdown rather than a fakeout.
 -   Reject if the re-entry into the range or the subsequent bullish CHOCH/BOS is not clear or lacks conviction.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 77. Key Level Zone (KLZ) Flip
 
 **Category:** Breakout / Continuation  
@@ -2988,7 +2990,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the initial breakout through the KLZ lacks displacement (e.g., small candles, low volume, or just a wick).
 -   Reject if the retest fails to hold and price closes back through the KLZ, indicating a false breakout.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 78. Failed Retest Reversal
 
@@ -3120,7 +3122,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
     -   Previous Day Low (PDL)
     -   Lower VWAP bands
     -   Unmitigated Order Blocks or Fair Value Gaps acting as demand zones.
-    A pin bar forming "in the middle of nowhere" (without confluence) should be disregarded.
+        A pin bar forming "in the middle of nowhere" (without confluence) should be disregarded.
 -   **Confirm Rejection**: The long lower wick represents the rejection of lower prices. Claude should interpret this as buyers overcoming selling pressure at that specific level.
 -   **Look for Follow-Through**: The pin bar itself is a signal, but confirmation is crucial. Claude should look for the subsequent candle to trade and ideally close above the high of the pin bar, indicating that buyers are indeed taking control and continuing to push prices higher.
 
@@ -3143,7 +3145,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pin bar forms without clear confluence at a significant support level (i.e., "in the middle of nowhere").
 -   Reject if the subsequent candle fails to break the pin bar's high or closes below the pin bar's low, indicating a lack of follow-through from buyers.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe, as these conditions can lead to false signals.
-"""
+    """
 ## 82. Bearish Pin Bar Rejection
 
 **Category:** Price Action Candle / Reversal  
@@ -3162,7 +3164,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
     -   Previous Day High (PDH)
     -   Upper VWAP bands
     -   Unmitigated Order Blocks or Fair Value Gaps acting as supply zones.
-    A pin bar forming "in the middle of nowhere" (without confluence) should be disregarded.
+        A pin bar forming "in the middle of nowhere" (without confluence) should be disregarded.
 -   **Confirm Rejection**: The long upper wick represents the rejection of higher prices. Claude should interpret this as sellers overcoming buying pressure at that specific level.
 -   **Look for Follow-Through**: The pin bar itself is a signal, but confirmation is crucial. Claude should look for the subsequent candle to trade and ideally close below the low of the pin bar, indicating that sellers are indeed taking control and continuing to push prices lower.
 
@@ -3185,8 +3187,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pin bar forms without clear confluence at a significant resistance level (i.e., "in the middle of nowhere").
 -   Reject if the subsequent candle fails to break the pin bar's low or closes above the pin bar's high, indicating a lack of follow-through from sellers.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe, as these conditions can lead to false signals.
-"""
-"""
+    """
+    """
 ## 83. Bullish Engulfing Pattern
 
 **Category:** Price Action Candle / Reversal  
@@ -3205,7 +3207,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
     -   Previous Day Low (PDL)
     -   Lower VWAP bands
     -   Unmitigated Order Blocks or Fair Value Gaps acting as demand zones.
-    An engulfing pattern in isolation, without confluence, should be treated with caution.
+        An engulfing pattern in isolation, without confluence, should be treated with caution.
 -   **Confirm Momentum Shift**: The engulfing nature of the second candle indicates a powerful shift in market sentiment. Claude should interpret this as a strong rejection of lower prices and a clear signal that buyers have stepped in aggressively.
 -   **Look for Follow-Through**: While the pattern itself is a strong signal, confirmation is vital. Claude should look for the subsequent candle to continue the bullish momentum, ideally closing higher than the engulfing candle, to validate the reversal.
 
@@ -3229,8 +3231,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pattern forms without clear confluence at a significant support level.
 -   Reject if the subsequent candle fails to continue the bullish momentum or closes below the engulfing candle's low.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 84. Bearish Engulfing Pattern
 
 **Category:** Price Action Candle / Reversal  
@@ -3249,7 +3251,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
     -   Previous Day High (PDH)
     -   Upper VWAP bands
     -   Unmitigated Order Blocks or Fair Value Gaps acting as supply zones.
-    An engulfing pattern in isolation, without confluence, should be treated with caution.
+        An engulfing pattern in isolation, without confluence, should be treated with caution.
 -   **Confirm Momentum Shift**: The engulfing nature of the second candle indicates a powerful shift in market sentiment. Claude should interpret this as a strong rejection of higher prices and a clear signal that sellers have stepped in aggressively.
 -   **Look for Follow-Through**: While the pattern itself is a strong signal, confirmation is vital. Claude should look for the subsequent candle to continue the bearish momentum, ideally closing lower than the engulfing candle, to validate the reversal.
 
@@ -3273,8 +3275,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pattern forms without clear confluence at a significant resistance level.
 -   Reject if the subsequent candle fails to continue the bearish momentum or closes above the engulfing candle's high.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 85. Inside Bar Breakout
 
 **Category:** Price Action / Continuation  
@@ -3310,8 +3312,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the inside bar forms in a choppy, mid-range environment without clear alignment to a prevailing trend or key level.
 -   Reject if the breakout is weak (e.g., small-bodied candle, low volume) or if price quickly returns and accepts back inside the mother bar's range after the breakout.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 86. Outside Bar Reversal
 
 **Category:** Price Action Candle / Reversal  
@@ -3354,7 +3356,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the outside bar forms in the middle of a range without clear confluence at a key level.
 -   Reject if the subsequent candle fails to confirm the direction or reverses against the outside bar's close.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 87. Full-Body Candle Continuation
 
@@ -3396,7 +3398,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the full-body candle closes directly into a major opposing higher timeframe support or resistance level, as this significantly increases the risk of immediate reversal.
 -   Reject if the subsequent pullback is too deep (e.g., breaks below the midpoint of the full-body candle and fails to recover) or invalidates the candle's strength by closing on the opposite side.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 88. Doji Indecision at Key Level
 
 **Category:** Price Action Candle / Indecision  
@@ -3414,7 +3416,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
     -   Order Blocks or Fair Value Gaps
     -   Value Area High/Low (VAH/VAL)
     -   VWAP bands
-    A Doji forming in the middle of a trend or range, without confluence, should be considered insignificant.
+        A Doji forming in the middle of a trend or range, without confluence, should be considered insignificant.
 -   **Interpret Indecision**: Understand that a Doji indicates a temporary balance between buying and selling pressure. It suggests that the market is pausing and deciding its next move, rather than showing strong conviction in either direction.
 -   **Wait for Confirmation**: Claude should be instructed that a Doji alone is not an entry signal. It is a precursor to a potential move. The actual signal comes from the subsequent candle breaking and closing decisively above the Doji's high (for bullish confirmation) or below its low (for bearish confirmation), aligning with the prevailing market context or a potential reversal.
 
@@ -3437,7 +3439,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject standalone Doji signals that do not form at a significant key level or lack subsequent confirmation.
 -   Reject if price chops through the Doji's range without a clear directional break and close.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 89. Wick Rejection with Break of Structure
 
@@ -3475,7 +3477,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the subsequent Break of Structure (BOS) or Change of Character (CHOCH) does not occur, or is weak and lacks conviction.
 -   Reject if the rejection wick is not significant or if price quickly returns to trade beyond the wick's extreme.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 90. Three-Bar Reversal
 
 **Category:** Price Action Candle / Reversal  
@@ -3512,8 +3514,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the confirmation candle is weak, lacks conviction, or fails to close decisively in the new direction.
 -   Reject if price quickly returns and accepts back into the range of the exhaustion candle after the confirmation.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 91. Break of Structure (BOS) - Bullish
 
 **Category:** Trend / Structure / Continuation  
@@ -3550,8 +3552,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if price immediately reverses and closes back below the broken swing high after the BOS, indicating a potential false breakout.
 -   Reject if the subsequent pullback breaks below the low that initiated the BOS, invalidating the bullish structure.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 92. Break of Structure (BOS) - Bearish
 
 **Category:** Trend / Structure / Continuation  
@@ -3588,7 +3590,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if price immediately reverses and closes back above the broken swing low after the BOS, indicating a potential false breakdown.
 -   Reject if the subsequent pullback breaks above the high that initiated the BOS, invalidating the bearish structure.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 93. Change of Character (CHOCH) - Bullish
 
@@ -3627,7 +3629,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if there is no significant displacement (strong, large-bodied candles) after the CHOCH, indicating a weak shift in momentum.
 -   Reject if price immediately reverses and breaks below the low that initiated the CHOCH, invalidating the bullish structural shift.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 ## 94. Change of Character (CHOCH) - Bearish
 
 **Category:** Trend / Structure / Reversal  
@@ -3665,8 +3667,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if there is no significant displacement (strong, large-bodied candles) after the CHOCH, indicating a weak shift in momentum.
 -   Reject if price immediately reverses and breaks above the high that initiated the CHOCH, invalidating the bearish structural shift.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 95. Bullish Trend Continuation Structure
 
 **Category:** Trend / Structure / Continuation  
@@ -3707,8 +3709,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the price breaks and closes below the confirmed higher low (HL), as this invalidates the bullish market structure and suggests a potential trend reversal or deeper correction.
 -   Reject if the rejection from the HL zone is weak or lacks conviction, or if the subsequent BOS/CHOCH does not occur.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 96. Bearish Trend Continuation Structure
 
 **Category:** Trend / Structure / Continuation  
@@ -3749,8 +3751,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the price breaks and closes above the confirmed lower high (LH), as this invalidates the bearish market structure and suggests a potential trend reversal or deeper correction.
 -   Reject if the rejection from the LH zone is weak or lacks conviction, or if the subsequent BOS/CHOCH does not occur.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 97. Buy the Higher Low (HL) in a Bullish Trend
 
 **Category:** Trend / Structure / Continuation  
@@ -3792,8 +3794,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pullback breaks and closes below the prior confirmed Higher Low (HL), as this invalidates the bullish market structure and suggests a potential trend reversal or deeper correction.
 -   Reject if the rejection from the HL zone is weak or lacks conviction, or if the subsequent minor structural break does not occur.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 98. Sell the Lower High (LH) in a Bearish Trend
 
 **Category:** Trend / Structure / Continuation  
@@ -3835,8 +3837,8 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the pullback breaks and closes above the prior confirmed Lower High (LH), as this invalidates the bearish market structure and suggests a potential trend reversal or deeper correction.
 -   Reject if the rejection from the LH zone is weak or lacks conviction, or if the subsequent minor structural break does not occur.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
-"""
+    """
+    """
 ## 99. Trend Exhaustion Reversal
 
 **Category:** Trend / Structure / Reversal  
@@ -3876,7 +3878,7 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the signs of exhaustion are weak or ambiguous, or if the CHOCH/BOS is not clear or lacks displacement.
 -   Reject if price immediately reverses and breaks back through the CHOCH/BOS level, invalidating the structural shift.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
-"""
+    """
 
 ## 100. Market Structure Shift (MSS) with Displacement
 
@@ -3913,3 +3915,264 @@ high-liquidity trading windows, known as 'killzones' (e.g., London Open, New Yor
 -   Reject if the break of the swing point is weak, lacks displacement, or is immediately retraced, indicating a potential false break.
 -   Reject if price fails to pull back to a valid entry zone after the MSS, or if the pullback breaks the newly established structure.
 -   Reject if spread/slippage is abnormal or if a high-impact news spike makes execution unsafe.
+
+## 101. Swing Breakout Sequence (SBS Alias)
+
+**Category:** Breakout / Liquidity / Swing Model  
+**Works with Gold/XAUUSD:** Excellent  
+**Works with Forex Majors:** Excellent  
+**Best Use:** Scalping/Intraday
+
+**Naming Note:** The linked public resources call this concept **Swing Breakout Sequence (SBS)** or **Swing Breakout System**. If the signal generator or chart template uses the term **SBS**, Claude should treat `SBS`, `Swing Breakout Sequence`, and `Swing Breakout System` as the same strategy family unless a separate internal definition is provided.
+
+**Description:** Swing Breakout Sequence is a liquidity-manipulation breakout model built from a defined swing sequence. The model expects repeated failed breakout attempts or liquidity raids around a swing zone, followed by a final directional breakout after the market has trapped early breakout traders and collected liquidity from the prior pullbacks.
+
+**Core Idea for the Agent:**
+-   The market first establishes an initial directional swing.
+-   Price then forms a key pullback swing that becomes a liquidity reference.
+-   A new high/low attempt attracts breakout traders.
+-   Price retraces and takes liquidity from the earlier pullback.
+-   A second liquidity event or reversal point forms.
+-   The valid trade is not the first breakout attempt; it is the continuation after the sequence confirms pressure, liquidity collection, and structure alignment.
+
+**Bullish SBS Sequence:**
+1.  **Point 0:** Initial swing low.
+2.  **Point 1:** Higher high that establishes initial bullish direction.
+3.  **Point 2:** Pullback low that remains above Point 0. This becomes the key liquidity low.
+4.  **Point 3:** New higher high or failed new high that attracts breakout buyers.
+5.  **Point 4:** Retracement that sweeps or breaks the Point 2 liquidity low, ideally without closing in full bearish acceptance below the larger bullish structure.
+6.  **Point 5:** Reversal / second low / double-bottom-style pressure point near or beyond Point 4.
+7.  **Confirmation:** Bullish CHOCH/BOS after Point 5, followed by a break back above the internal swing or sequence breakout line.
+
+**Bearish SBS Sequence:**
+1.  **Point 0:** Initial swing high.
+2.  **Point 1:** Lower low that establishes initial bearish direction.
+3.  **Point 2:** Pullback high that remains below Point 0. This becomes the key liquidity high.
+4.  **Point 3:** New lower low or failed new low that attracts breakout sellers.
+5.  **Point 4:** Retracement that sweeps or breaks the Point 2 liquidity high, ideally without closing in full bullish acceptance above the larger bearish structure.
+6.  **Point 5:** Reversal / second high / double-top-style pressure point near or beyond Point 4.
+7.  **Confirmation:** Bearish CHOCH/BOS after Point 5, followed by a break back below the internal swing or sequence breakout line.
+
+**Claude Analytical Focus:**
+-   **Validate the Full Sequence:** Claude must not approve a random breakout just because the indicator draws an arrow. It should verify that the swing sequence is logical and that the key points are visible on the selected timeframe.
+-   **Liquidity Logic:** Point 2 and Point 4 are the most important liquidity references. The setup is stronger when Point 4 takes liquidity from Point 2 and then fails to accept beyond it.
+-   **Pressure in the Swing Zone:** Repeated attempts to break one side of the swing zone should show pressure building. The final breakout should come after trapped traders are positioned incorrectly.
+-   **Point 5 Quality:** Point 5 should show rejection, equal high/low behavior, double top/bottom pressure, a reversal candle, or lower timeframe market structure shift.
+-   **Confluence:** Prefer SBS that aligns with HTF bias, PDH/PDL, session high/low, VAH/VAL, VWAP band, OB, FVG, or KLZ.
+-   **Indicator Integration:** If using LuxAlgo Swing Breakout Sequence or TradingView SBS, Claude can use the indicator as a detector, but approval still requires manual narrative validation of liquidity, structure, and risk/reward.
+
+**Setup / Conditions:**
+-   Six swing points are detected or can be objectively reconstructed from pivots.
+-   The pattern height is meaningful relative to ATR/spread; avoid tiny sequences inside noise.
+-   The full sequence forms within a reasonable number of bars; stale, overextended, or too-wide sequences are lower quality.
+-   The final Point 5 reversal happens near a meaningful level or after a clear liquidity raid.
+-   Prefer London and New York active sessions for XAUUSD and forex majors.
+
+**Trigger / Confirmation:**
+-   A valid Point 5 forms after the Point 4 liquidity event.
+-   A lower timeframe CHOCH/BOS confirms that price has shifted away from the liquidity sweep.
+-   For bullish SBS: price breaks above the internal swing high after Point 5, then ideally retests it or an FVG/OB created by the displacement.
+-   For bearish SBS: price breaks below the internal swing low after Point 5, then ideally retests it or an FVG/OB created by the displacement.
+-   Prefer candle-close confirmation over wick-only breakout arrows.
+
+**Execution:**
+-   **Entry:** Enter on the confirmed breakout after Point 5, or more conservatively on the retest of the breakout level / FVG / OB created by the confirmation displacement.
+-   **Stop Loss:** Place the stop beyond Point 5 for aggressive entries. For conservative entries, place the stop beyond the sweep extreme or beyond the invalidated liquidity point, with a volatility buffer based on ATR.
+-   **Targets:** Target the next external liquidity pool, Point 3 extreme, sequence measured move, PDH/PDL, session high/low, VWAP, VAH/VAL, POC, or minimum 2R. For bullish setups, prioritize buy-side liquidity above; for bearish setups, prioritize sell-side liquidity below.
+-   **Minimum Risk/Reward:** Maintain at least 1:2. If the distance to the next liquidity target is less than 2R, reject or wait for a better retest entry.
+
+**Invalidation / Reject:**
+-   Reject if the six-point sequence is unclear, forced, or only visible after excessive pivot tuning.
+-   Reject if Point 4 accepts beyond Point 2 with multiple closes and no fast reclaim, because this may indicate a real reversal rather than a liquidity raid.
+-   Reject if Point 5 does not create a clear structure shift.
+-   Reject if the final breakout candle is already too extended and entry would be chasing into the target.
+-   Reject if price is in VWAP chop, middle of value, or directly into a strong opposing OB/KLZ/VAH/VAL.
+-   Reject if high-impact news creates a spike that invalidates normal sequence logic.
+
+**Signal Generator Pseudocode:**
+```text
+for each symbol/timeframe:
+    pivots = detect_pivots(lookback = 2 to 5)
+    keep last 6 alternating swing points
+
+    bullish_sequence =
+        P0 is low
+        P1 is high and P1 > P0
+        P2 is low and P2 > P0
+        P3 is high and P3 >= P1
+        P4 is low and P4 <= P2
+        P5 is low/reversal zone near P4
+        price later breaks internal high after P5
+
+    bearish_sequence =
+        P0 is high
+        P1 is low and P1 < P0
+        P2 is high and P2 < P0
+        P3 is low and P3 <= P1
+        P4 is high and P4 >= P2
+        P5 is high/reversal zone near P4
+        price later breaks internal low after P5
+
+    require:
+        pattern_height_pct >= minimum_threshold
+        sequence_width_bars <= maximum_threshold
+        confirmation_bos == true
+        risk_reward >= 2.0
+
+    emit raw signal:
+        name = "Swing Breakout Sequence (SBS)"
+        direction = bullish ? LONG : SHORT
+        entry_zone = breakout_retest_or_fvg
+        stop = beyond_P5_or_sweep_extreme
+        targets = nearest_liquidity_levels
+```
+
+**Claude Approval Notes:**
+-   APPROVE only when the sequence is visible, the liquidity sweep is logical, and the final breakout has not already consumed the reward.
+-   WAIT when Point 5 is present but BOS/CHOCH has not confirmed.
+-   REJECT when the indicator marks a sequence inside low-volume chop or inside a balanced range with no clear liquidity target.
+
+## 102. Candle Range Theory (CRT) Model
+
+**Category:** ICT-Derived / Liquidity / Range Model  
+**Works with Gold/XAUUSD:** Excellent  
+**Works with Forex Majors:** Excellent  
+**Best Use:** Intraday/Scalping
+
+**Description:** Candle Range Theory maps a higher-timeframe candle as a tradable range on a lower timeframe. The high of the anchor candle becomes the **CRT-High**, and the low becomes the **CRT-Low**. The core model expects price to raid one side of the prior candle range, close back inside the range, then deliver toward the opposite side of the range or the next external liquidity pool.
+
+**Core Idea for the Agent:**
+-   Select a higher-timeframe anchor candle, usually H1, H4, Daily, or Weekly depending on the trading style.
+-   Mark the anchor candle high and low as a range.
+-   Wait for the next candle to sweep one side of that range.
+-   The sweep must fail to accept outside the range.
+-   Drop to a lower timeframe to confirm MSS/CHOCH/CISD.
+-   Enter on retest of the lower timeframe displacement, FVG, OB, or CISD level.
+-   Target the opposite side of the CRT range first, then external liquidity if risk/reward supports continuation.
+
+**Recommended Fractal Pairings:**
+| Trading Style | Higher-Timeframe CRT Candle | Lower-Timeframe Execution |
+|---|---:|---:|
+| XAUUSD scalping | 15m / 30m / 1H | 1m / 3m / 5m |
+| XAUUSD intraday | 1H / 4H | 5m / 15m |
+| Forex intraday | 1H / 4H | 5m / 15m |
+| Swing | Daily / Weekly | 1H / 4H |
+
+**Bullish CRT Model:**
+1.  Higher timeframe is at support, discount, HTF demand, OB, FVG, VAL, PDL, session low, or a clear buy-side continuation context.
+2.  Mark the previous HTF candle high as `CRT-High` and low as `CRT-Low`.
+3.  The next candle raids below `CRT-Low`.
+4.  The raiding candle closes back above `CRT-Low`, showing failed downside acceptance.
+5.  Lower timeframe confirms bullish MSS/CHOCH/CISD.
+6.  Entry is on retest of the bullish displacement/FVG/OB/CISD level.
+7.  Stop is below the liquidity raid low or MSS swing low.
+8.  First target is the CRT mean or `CRT-High`; second target is external buy-side liquidity above.
+
+**Bearish CRT Model:**
+1.  Higher timeframe is at resistance, premium, HTF supply, OB, FVG, VAH, PDH, session high, or a clear sell-side continuation context.
+2.  Mark the previous HTF candle high as `CRT-High` and low as `CRT-Low`.
+3.  The next candle raids above `CRT-High`.
+4.  The raiding candle closes back below `CRT-High`, showing failed upside acceptance.
+5.  Lower timeframe confirms bearish MSS/CHOCH/CISD.
+6.  Entry is on retest of the bearish displacement/FVG/OB/CISD level.
+7.  Stop is above the liquidity raid high or MSS swing high.
+8.  First target is the CRT mean or `CRT-Low`; second target is external sell-side liquidity below.
+
+**Claude Analytical Focus:**
+-   **Anchor Candle Quality:** Prefer anchor candles that close at a meaningful HTF level. Do not use random candles from the middle of a range.
+-   **Range Raid:** The raid must sweep one side of the prior candle range and then close back inside. Wick-only sweeps can be valid only if followed by clear LTF structure confirmation.
+-   **MSS / CHOCH / CISD Confirmation:** CRT is not approved from the HTF sweep alone. Claude should require LTF structure shift or Change in State of Delivery before approving execution.
+-   **Candle 2 Interpretation:** If the reversal candle has small wicks and strong body displacement back into the range, continuation potential is stronger. If it has a huge wick and closes weakly, the move may have already spent its range and Claude should prefer WAIT or target only the range mean.
+-   **Mean Line:** The 50% level of the CRT range is an important reaction point. It can be used as Target 1 or as a decision point for partials.
+-   **Session Timing:** Prefer CRT setups during London, New York AM, or known CRT time filters. Avoid low-liquidity late-session signals unless the setup aligns with HTF context.
+-   **Indicator Integration:** If using CandelaCharts CRT Model, Claude can use alerts such as Model Formation, Sweep, D-Purge, Model Completed, and Model Invalidated as raw detector events only. Approval still requires context, LTF confirmation, and risk/reward validation.
+
+**Setup / Conditions:**
+-   A higher-timeframe candle has closed at or near a meaningful level.
+-   `CRT-High`, `CRT-Low`, and `CRT-Mean` are clearly marked.
+-   The next candle raids one side of the range and closes back inside.
+-   Lower timeframe confirms MSS/CHOCH/CISD in the direction away from the raid.
+-   Entry is not in the middle of value unless the target is only the CRT mean and risk/reward remains valid.
+-   Prefer confluence with PDH/PDL, session high/low, VAH/VAL, VWAP band, FVG, OB, KLZ, SMT divergence, or Turtle Soup-style sweep.
+
+**Trigger / Confirmation:**
+-   **Bullish Trigger:** Sweep below `CRT-Low` + close back above `CRT-Low` + bullish MSS/CHOCH/CISD on LTF.
+-   **Bearish Trigger:** Sweep above `CRT-High` + close back below `CRT-High` + bearish MSS/CHOCH/CISD on LTF.
+-   **Conservative Entry:** Wait for displacement, then enter on retracement into FVG/OB/CISD.
+-   **Aggressive Entry:** Enter after LTF MSS close if stop can be placed cleanly beyond the raid extreme and the target still gives 2R.
+
+**Execution:**
+-   **Entry:** LTF retest of MSS/CISD/FVG/OB after the CRT sweep confirms. Avoid entering immediately on the HTF sweep without LTF confirmation.
+-   **Stop Loss:** Bullish stop below the raid low or MSS swing low. Bearish stop above the raid high or MSS swing high. Add ATR/spread buffer, especially on XAUUSD.
+-   **Target 1:** CRT mean (50%) if the range is wide or if Candle 2 has a large wick.
+-   **Target 2:** Opposite side of the range (`CRT-High` for bullish, `CRT-Low` for bearish).
+-   **Target 3:** External liquidity beyond the opposite side if displacement and session context support continuation.
+-   **Minimum Risk/Reward:** Maintain at least 1:2 to Target 2 or external liquidity. If only the mean target is realistic and below 2R, reject or wait for better entry.
+
+**Invalidation / Reject:**
+-   Reject if the raiding candle closes strongly outside the CRT range and subsequent candles accept outside it.
+-   Reject if there is no LTF MSS/CHOCH/CISD after the sweep.
+-   Reject if the setup forms in the middle of a balanced range without HTF support/resistance context.
+-   Reject if the first target is too close to provide 1:2 risk/reward.
+-   Reject if price already reached the CRT mean or opposite side before entry confirmation.
+-   Reject if Candle 2 already delivered a large move and Candle 3 would be a late chase into retracement/chop.
+-   Reject if the setup conflicts with a strong HTF trend unless it is explicitly traded as a fast liquidity scalp.
+-   Reject around high-impact news if spread, slippage, or candle distortion makes the range unreliable.
+
+**Signal Generator Pseudocode:**
+```text
+for each symbol:
+    choose HTF candle based on strategy profile
+    anchor = previous_closed_htf_candle
+    crt_high = anchor.high
+    crt_low = anchor.low
+    crt_mean = (crt_high + crt_low) / 2
+
+    current_htf = active_or_next_htf_candle
+
+    bullish_crt =
+        current_htf.low < crt_low
+        and current_htf.close > crt_low
+        and htf_context near support/discount/demand
+        and ltf_mss_or_cisd == bullish
+
+    bearish_crt =
+        current_htf.high > crt_high
+        and current_htf.close < crt_high
+        and htf_context near resistance/premium/supply
+        and ltf_mss_or_cisd == bearish
+
+    if bullish_crt:
+        entry_zone = ltf_fvg_or_ob_or_cisd_retest
+        stop = min(raid_low, mss_swing_low) - buffer
+        targets = [crt_mean, crt_high, external_buy_side_liquidity]
+
+    if bearish_crt:
+        entry_zone = ltf_fvg_or_ob_or_cisd_retest
+        stop = max(raid_high, mss_swing_high) + buffer
+        targets = [crt_mean, crt_low, external_sell_side_liquidity]
+
+    require:
+        risk_reward_to_target_2 >= 2.0
+        spread_normal == true
+        news_safe == true
+
+    emit raw signal:
+        name = "Candle Range Theory (CRT)"
+        direction = LONG or SHORT
+        entry_zone, stop, targets, invalidation
+```
+
+**Claude Approval Notes:**
+-   APPROVE when the setup has HTF context, a clean range raid, LTF MSS/CISD, and a realistic path to the opposite side of the CRT range.
+-   WAIT when the sweep happened but the lower timeframe has not confirmed.
+-   REJECT when the sweep becomes real acceptance outside the range or when entry comes after most of the range has already been delivered.
+
+
+## Additional References for Added SBS and CRT Models
+
+[4] TradingView: Swing Breakout System (SBS) by ClayeWeight
+[5] LuxAlgo Library: Swing Breakout Sequence indicator notes
+[6] TradingView Education: Understanding Candle Range Theory
+[7] Inner Circle Trader tutorial: Candle Range Theory (CRT)
+[8] TradingView: CandelaCharts CRT Model indicator notes

@@ -7,7 +7,7 @@ description: Trade XAUUSD/forex discretionarily as the AI decision-maker (no cod
 
 **You are the trader.** No python detects the signal for you; you read the chart top-down, recognise the
 setup, score it, decide, execute, and manage. This skill is the rulebook; the **canonical detailed reference is
-`xauusd_forex_ai_signal_execution_manual_refined.md`** (the Claude-Optimized manual — 100 signals, each with
+`xauusd_forex_ai_signal_execution_manual_refined.md`** (the Claude-Optimized manual — 102 signals, each with
 Description / Claude Analytical Focus / Setup / Trigger / Execution / Invalidation, plus the approval rules,
 confluence scoring, and the structured output schema below). This file is the scannable distillation +
 day-type/transition lessons from the replay studies; open the refined manual for the per-signal depth.
@@ -223,7 +223,7 @@ Each judges the chart independently and returns the **structured verdict schema 
 **Decision rule:** take the trade ONLY if **Agent-1 (blind) independently agrees on direction + zone, AND ≥3/4 of Agents 2–5 APPROVE, AND neither hard-veto agent rejects.** Else WAIT / no-trade. Log every verdict.
 Optional upgrades: run 1–2 agents on a **different model** (true diversity, not just role-prompting); the human/main loop is the final synthesizer.
 
-## SIGNAL REFERENCE (the 100-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual_refined.md`)
+## SIGNAL REFERENCE (the 102-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual_refined.md`)
 Every signal: needs a meaningful level + a trigger, **prefer candle CLOSE over wick**, **R:R ≥ 1:2**, target the
 **nearest liquidity** (VWAP/POC/VAH-VAL/PDH-PDL or 2R). `★` = Excellent for XAUUSD (prioritise). **Track each
 zone's state** (new→untested→tested→mitigated→invalidated); trade only live ones.
@@ -256,6 +256,30 @@ Daily/Weekly-open retest · ★Killzone liquidity sweep (sweep+reclaim+BOS in Lo
 **Breakout / Fakeout** — Clean breakout-retest · ★Failed breakout (break, close back inside, BOS = fade) ·
 Breakout-without-retest (trend-day only) · ★Compression breakout (low-ATR → expansion) · ★False break above/below
 range (sweep range extreme, close inside, BOS) · Break-&-retest of KLZ · Failed retest (retest fails fast, snaps back).
+
+**Liquidity models (#101–102 — on-chart indicators are DETECTORS only; always validate liquidity+structure+R:R manually):**
+- ★**SBS — Swing Breakout Sequence** (the LuxAlgo "Swing Breakout Sequence" indicator on our chart). **READ it off
+  the indicator, don't reconstruct it:** the indicator auto-marks the points **1→5** + **"Swing High"/"Swing Low"**
+  labels + the **shaded liquidity boxes** directly on the chart at whatever TF you're on (visually, and try
+  `data_get_pine_boxes` / `data_get_pine_labels` study_filter="Swing Breakout"). My job is to validate the
+  liquidity/structure/R:R narrative on top — same "read, never compute" rule as SMC/TPO. **TF: SBS is fractal — it
+  forms and is tradable directly on 5m AND 15m** (1H for larger swings); run the whole sequence + post-P5 entry on 5m
+  (scalp), or read the sequence on 15m and drop to 5m for the post-P5 trigger/entry. 6-point
+  liquidity-trap model: **P0** swing → **P1** impulse → **P2** key-liquidity pullback (holds beyond P0) → **P3**
+  new/failed extreme that traps breakout traders → **P4** sweeps P2 liquidity *without accepting beyond* → **P5**
+  reversal point (EQ-high/low, double-top/bottom, reject) → **CHoCH/BOS after P5 = the trigger.** Enter the post-P5
+  break or its FVG/OB retest; stop beyond P5 / the sweep extreme + ATR buffer; target next liquidity / Point-3 / ≥2R.
+  **NOT the first breakout.** Reject if the 6 points are forced/over-tuned, P4 *accepts* beyond P2 (real reversal,
+  not a raid), P5 makes no structure shift, or the breakout already ran to target.
+- ★**CRT — Candle Range Theory** (CandelaCharts CRT; ICT-derived). **TF (our default): anchor on the 1H candle →
+  confirm+enter on 5m** (faster scalp: 15m/30m anchor → 5m). HTF candle = a range: **CRT-High / CRT-Low /
+  CRT-Mean(50%)**. Raid one side → **close back inside** (failed acceptance) → drop to LTF for **MSS/CHoCH/CISD** →
+  enter the LTF displacement/FVG/OB/CISD retest. *Bullish:* HTF at support/discount, sweep < CRT-Low, close back
+  above, LTF bull shift. *Bearish:* mirror at resistance/premium. **T1 = CRT-Mean, T2 = opposite side, T3 = external
+  liquidity;** stop beyond the raid extreme + ATR buffer; ≥2R to T2. Fractal pairs: scalp 15m/30m/1H→1–5m · intraday
+  1H/4H→5–15m · swing D/W→1H/4H. Reject if no LTF confirm, real acceptance outside the range, mid-value/VWAP-chop,
+  or a late chase after the range is already delivered. (NB: this is the engine's busiest family — most live "CRT
+  sweep+reclaim" fires auto-skip on sub-2R; the discretionary edge is selectivity + the LTF-confirmation gate.)
 
 **Candle triggers (use AT a level, never standalone)** — Pin bar (wick ≥2× body) · Engulfing · Inside-bar break ·
 ★Outside-bar reversal (sweeps both sides, strong close) · Marubozu continuation · Doji = warning only ·
