@@ -38,7 +38,8 @@ Re-check on a fixed cadence (e.g. every 15m of price) AND when price reaches a m
 
 ## STEP 1 — CONTEXT (top-down, build the level map)
 
-Read **4H → 1H → 15m** for bias and structure; **5m** is execution only.
+Read **4H → 1H → 15m** for bias and structure; **3m** is execution only (**execution TF = 3m, changed from 5m on
+2026-06**; HTF context unchanged. Everywhere this skill says "execution chart / execution TF / restore execution", it means **3m**).
 
 **REFRESH CADENCE — re-read each TF at its own bar-close rhythm (frequency-matched; not all every 15m):**
 - **15m TF → every 15m** (each execution checkpoint) — 1 TF switch, read SMC structure/OBs on 15m.
@@ -46,13 +47,13 @@ Read **4H → 1H → 15m** for bias and structure; **5m** is execution only.
 - **4h TF → every 4h** (new 4h bar: 00/04/08/12/16/20 UTC) — re-read 4h SMC + structure.
 - **Daily → once per session** (and at each new day).
 - **TPO 30m VAs → once at session start** (prior-day value areas don't change intraday; re-read only at a new
-  day boundary). 5m = continuous execution.
+  day boundary). 3m = continuous execution.
 This keeps the map current while minimising TF switches (most checkpoints = one 15m switch), which protects
-replay stability. After each TF read, restore 5m and **verify the replay is still started + on the right date**.
+replay stability. After each TF read, restore 3m and **verify the replay is still started + on the right date**.
 
 Gather and mark these levels (the "map") — **read them off the indicators; never compute them yourself:**
 - **SMC = the Smart Money Concepts (LuxAlgo) indicator, read on the HIGHER timeframes 15m / 1h / 4h.** SMC is
-  HTF *context*, not a 5m execution tool. On each of 15m, 1h, 4h read: order blocks (supply/demand boxes),
+  HTF *context*, not a 3m execution tool. On each of 15m, 1h, 4h read: order blocks (supply/demand boxes),
   BOS/CHoCH structure, liquidity (EQH/EQL), swing highs/lows, and **premium/discount** (above equilibrium =
   premium → favour shorts; below = discount → favour longs). Read visually AND via `data_get_pine_boxes` /
   `data_get_pine_labels` with `study_filter="Smart Money"` (switch TF to 15m→1h→4h, read each). A 4h demand OB
@@ -89,7 +90,7 @@ Classify from the open behaviour + structure + range/ER + position in the HTF ma
 - Open **inside** value → balanced → **fade VAH/VAL, avoid the middle/POC.**
 
 **The transition rule (codex):** allow the first continuation trade while price still respects the reclaimed
-5m EMA pack. Once repeated tests of the session extreme **fail to expand** and price slips back through the EMA
+3m EMA pack. Once repeated tests of the session extreme **fail to expand** and price slips back through the EMA
 cluster, **downgrade that direction and switch** to failed-high / failed-bounce trades the other way.
 
 ---
@@ -179,8 +180,8 @@ and:
   take a **partial**; **T2/runner = next structure**. **R:R ≥ ~1.5 to T1 WITH a runner** (don't demand 2R-to-T1).
   Mode: MICRO_SCALP (small level-based TP) vs SCALP_TO_RUNNER (TP1 ≈100 pips as space-filter + structure TP2).
 - **Manage:** **breakeven at ~+1R or once a minor structure is cleared — NOT a fixed +40 pips** (a too-tight BE
-  scratches you on gold's noise). Partial at T1 → BE → **trail behind 5m structure / VWAP / EMA** to T2 on trend
-  days. Close the runner if price closes back through VWAP against you, breaks 5m structure against you, or rejects a
+  scratches you on gold's noise). Partial at T1 → BE → **trail behind 3m structure / VWAP / EMA** to T2 on trend
+  days. Close the runner if price closes back through VWAP against you, breaks 3m structure against you, or rejects a
   strong opposing HTF level. **Stand aside** in confirmed chop — but day-type decides: don't quit a good trend day
   after one stop; do stop forcing scalps into a range. (See RECALIBRATION + DAY-TYPE.)
 
@@ -213,7 +214,7 @@ the committee and any forward-test log get the full JSON.
 
 ## MULTI-AGENT REVIEW COMMITTEE (sign-off before any trade fires)
 When a candidate signal forms, convene a panel of role-specialized reviewer agents IN PARALLEL (one Agent call
-each). **Give every agent the full evidence: screenshots of ALL timeframes (4h/1h/15m/5m, SMC shown) + the data
+each). **Give every agent the full evidence: screenshots of ALL timeframes (4h/1h/15m/3m, SMC shown) + the data
 (level map, prior-day VAs, SMC OBs, bars-up-to-now) + the proposed signal (side/entry/SL/T1/T2/thesis) + this skill.**
 Each judges the chart independently and returns the **structured verdict schema above** (decision +
 `reasoning_chain_of_thought` + `confidence` + `confluence_score_details`) so verdicts are directly comparable.
@@ -271,8 +272,8 @@ range (sweep range extreme, close inside, BOS) · Break-&-retest of KLZ · Faile
   labels + the **shaded liquidity boxes** directly on the chart at whatever TF you're on (visually, and try
   `data_get_pine_boxes` / `data_get_pine_labels` study_filter="Swing Breakout"). My job is to validate the
   liquidity/structure/R:R narrative on top — same "read, never compute" rule as SMC/TPO. **TF: SBS is fractal — it
-  forms and is tradable directly on 5m AND 15m** (1H for larger swings); run the whole sequence + post-P5 entry on 5m
-  (scalp), or read the sequence on 15m and drop to 5m for the post-P5 trigger/entry. 6-point
+  forms and is tradable directly on 3m AND 5m/15m** (1H for larger swings); run the whole sequence + post-P5 entry on 3m
+  (scalp), or read the sequence on 5m/15m and drop to 3m for the post-P5 trigger/entry. 6-point
   liquidity-trap model: **P0** swing → **P1** impulse → **P2** key-liquidity pullback (holds beyond P0) → **P3**
   new/failed extreme that traps breakout traders → **P4** sweeps P2 liquidity *without accepting beyond* → **P5**
   reversal point (EQ-high/low, double-top/bottom, reject) → **CHoCH/BOS after P5 = the trigger.** Enter the post-P5
@@ -289,7 +290,7 @@ range (sweep range extreme, close inside, BOS) · Break-&-retest of KLZ · Faile
     rejections while ignoring it. (May-15: the bearish SBS completed ~4561 and called the 4561→4511 drop; I missed it
     because I read SBS once at the open then traded off price/EMA the rest of the day. Don't.)
 - ★**CRT — Candle Range Theory** (CandelaCharts CRT; ICT-derived). **TF (our default): anchor on the 1H candle →
-  confirm+enter on 5m** (faster scalp: 15m/30m anchor → 5m). HTF candle = a range: **CRT-High / CRT-Low /
+  confirm+enter on 3m** (faster scalp: 15m/30m anchor → 3m). HTF candle = a range: **CRT-High / CRT-Low /
   CRT-Mean(50%)**. Raid one side → **close back inside** (failed acceptance) → drop to LTF for **MSS/CHoCH/CISD** →
   enter the LTF displacement/FVG/OB/CISD retest. *Bullish:* HTF at support/discount, sweep < CRT-Low, close back
   above, LTF bull shift. *Bearish:* mirror at resistance/premium. **T1 = CRT-Mean, T2 = opposite side, T3 = external
@@ -339,8 +340,8 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
 - **Pip convention (don't conflate units):** **1.00 price = 10 pips = $1; 100 pips = $10 = 10.0 price points.**
   Gold's normal intraday moves are 250–700+ pips, so a 100-pip ($10) target is MODEST — "not enough room to T1" is
   rarely the blocker on gold; **stop width and chop are.**
-- **Two execution modes (UNDER FORWARD-TEST — formalize after results):** **MICRO_SCALP** (1/3/5m exec, 15m context,
-  score 65+, small TP at the nearest level) vs **SCALP_TO_RUNNER** (5/15m exec, 1H/4H context, score 75+, TP1 ≈100
+- **Two execution modes (UNDER FORWARD-TEST — formalize after results):** **MICRO_SCALP** (1/3m exec, 15m context,
+  score 65+, small TP at the nearest level) vs **SCALP_TO_RUNNER** (3/5m exec, 1H/4H context, score 75+, TP1 ≈100
   pips, structure-based TP2, **no T3**). R:R checked to TP1 *with a runner*. **TP1 = the nearest REAL liquidity level;
   use 100 pips as the space/viability filter, NOT a blind fixed exit** (keeps the "T1 at the actual level" lesson).
 
@@ -366,10 +367,10 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
 ## OPERATIONAL NOTES — replay/chart stability (LEARNED THE HARD WAY — follow exactly)
 - **Repeated timeframe switching DESTABILISES the replay** — it silently STOPS and the chart reverts to LIVE
   data (wrong date/prices). So use the **frequency-matched refresh cadence** (STEP 1): 15m every 15m, 1h every
-  hour, 4h every 4h, TPO 30m once at session start. Otherwise **stay on 5m**. Don't refresh all HTFs every 15m.
+  hour, 4h every 4h, TPO 30m once at session start. Otherwise **stay on 3m**. Don't refresh all HTFs every 15m.
 - **After ANY TF switch or replay action, VERIFY before trusting data:** check `replay status` shows
   `is_replay_started: true` with a `current_date` on the right day, and that `ohlcv` bars are the expected date
-  + 5-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
+  + 3-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
   again and step back to your point.
 - **"Continue your last replay?" modal → dismiss with `ui_keyboard Escape`, NOT the "Continue" button.** After
   `replay start --date`, a modal pops up; clicking **Continue RELOADS the OLD saved session** (wrong date). Escape
@@ -381,7 +382,7 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   one at a time and verify the symbol before trusting a read. `scalp_fast.py` has **no symbol guard** — it will
   silently read the wrong instrument if the chart didn't switch (refresh_zones.py aborts correctly; scalp doesn't).
 - **`indicator toggle --visible false` does NOT reliably repaint** (the study often stays visible). To actually
-  remove a heavy indicator from the 5m chart, **`indicator remove <id>`** it. BUT — **do NOT remove COMMUNITY
+  remove a heavy indicator from the 3m chart, **`indicator remove <id>`** it. BUT — **do NOT remove COMMUNITY
   indicators you'll need next session** (SMC, TPO): they CANNOT be re-added via the API (only the user's manual
   favorites). KEEP TPO/SMC on the chart; just don't switch to their TF except on the refresh cadence. (Removing
   TPO once cost a re-add the user had to do by hand.)
@@ -389,19 +390,19 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   screenshots — backgrounded windows don't repaint, giving stale captures.
 - **HTF screenshots lag the TF switch (stale frame = shows the PREVIOUS TF).** Fix = **double-capture**: switch
   TF, sleep ~6s, take a FIRST throwaway screenshot (triggers the repaint), sleep ~3s, take the SECOND = the fresh
-  one. Verify with md5 that consecutive-TF shots DIFFER. (5m renders fine via replay-step; only TF *switches* lag.)
+  one. Verify with md5 that consecutive-TF shots DIFFER. (3m renders fine via replay-step; only TF *switches* lag.)
 - **Screenshots: `--region full` only** (price + time axes visible), incl. your own review shots.
 - **Manage open trades with data, not images** — pull `ohlcv` up to the cursor each checkpoint to know exact
   TP/SL fills (intra-checkpoint fills are invisible to a periodic screenshot).
 
 ## Reading the indicators (practical — both are READ, not computed)
 - **SMC = Smart Money Concepts indicator, read on 15m / 1h / 4h** (HTF context). Visible on chart; boxes/labels
-  via `data_get_pine_*` with `study_filter="Smart Money"`. Switch TF 15m→1h→4h, read each, then restore 5m.
+  via `data_get_pine_*` with `study_filter="Smart Money"`. Switch TF 15m→1h→4h, read each, then restore 3m.
 - **VA = TPO indicator, read on 30m, ONE call** → `data_get_pine_lines` verbose `study_filter="TPO"`: yellow POC,
-  lime VAH/VAL pairs for all visible prior sessions. Restore the 5m execution TF after.
-- Execution is **5m**. SMC/VA are HTF context layered onto the 5m read; you do NOT trade off SMC/TPO on 5m.
-- **PERFORMANCE: hide SMC + TPO on the 5m execution chart** (they're heavy and irrelevant to 5m) — keep only
-  VWAP/EMA/Auto-Trendlines/Volume/RSI for fast 5m screenshots. **Show SMC when reading 15m/1h/4h, show TPO when
-  reading 30m, then hide both again and restore 5m.** Toggle via `indicator toggle <id> --visible true/false`
+  lime VAH/VAL pairs for all visible prior sessions. Restore the 3m execution TF after.
+- Execution is **3m** (changed from 5m, 2026-06). SMC/VA are HTF context layered onto the 3m read; you do NOT trade off SMC/TPO on 3m.
+- **PERFORMANCE: hide SMC + TPO on the 3m execution chart** (they're heavy and irrelevant to 3m) — keep only
+  VWAP/EMA/Auto-Trendlines/Volume/RSI for fast 3m screenshots. **Show SMC when reading 15m/1h/4h, show TPO when
+  reading 30m, then hide both again and restore 3m.** Toggle via `indicator toggle <id> --visible true/false`
   (study ids rotate — resolve fresh from `state` each time).
 - All chart screenshots must be **full-region** (price + time axes visible).
