@@ -276,6 +276,9 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   TPO once cost a re-add the user had to do by hand.)
 - **Foreground the app** (`osascript -e 'tell application "TradingView" to activate'`) before TF switches/HTF
   screenshots — backgrounded windows don't repaint, giving stale captures.
+- **HTF screenshots lag the TF switch (stale frame = shows the PREVIOUS TF).** Fix = **double-capture**: switch
+  TF, sleep ~6s, take a FIRST throwaway screenshot (triggers the repaint), sleep ~3s, take the SECOND = the fresh
+  one. Verify with md5 that consecutive-TF shots DIFFER. (5m renders fine via replay-step; only TF *switches* lag.)
 - **Screenshots: `--region full` only** (price + time axes visible), incl. your own review shots.
 - **Manage open trades with data, not images** — pull `ohlcv` up to the cursor each checkpoint to know exact
   TP/SL fills (intra-checkpoint fills are invisible to a periodic screenshot).
