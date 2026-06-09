@@ -251,8 +251,10 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   + 5-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
   again and step back to your point.
 - **`indicator toggle --visible false` does NOT reliably repaint** (the study often stays visible). To actually
-  remove a heavy indicator from the 5m chart, **`indicator remove <id>`** it (you keep its already-read levels).
-  TPO especially: read its VAs once, then REMOVE it.
+  remove a heavy indicator from the 5m chart, **`indicator remove <id>`** it. BUT — **do NOT remove COMMUNITY
+  indicators you'll need next session** (SMC, TPO): they CANNOT be re-added via the API (only the user's manual
+  favorites). KEEP TPO/SMC on the chart; just don't switch to their TF except on the refresh cadence. (Removing
+  TPO once cost a re-add the user had to do by hand.)
 - **Foreground the app** (`osascript -e 'tell application "TradingView" to activate'`) before TF switches/HTF
   screenshots — backgrounded windows don't repaint, giving stale captures.
 - **Screenshots: `--region full` only** (price + time axes visible), incl. your own review shots.
