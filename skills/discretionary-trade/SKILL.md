@@ -119,11 +119,17 @@ into a strong opposite level · −20 VWAP chop.
 **Decision:** **80–100 = strong (take it)** · **65–79 = wait for one more confirmation** · **<65 = reject.**
 
 **Hard rejects (any one):** R:R < 1:2 · no clear invalidation/stop · entry into a strong opposite level ·
-level already accepted through · chopping around VWAP · setup old/over-tested/unclear · mid-value no-edge.
+level already accepted through · chopping around VWAP · setup old/over-tested/unclear · mid-value no-edge ·
+**abnormal spread/slippage** · **a high-impact news spike that makes execution unsafe** · **NY-lunch / dead-time chop.**
 
-**Level validity (acceptance kills a level):** a prev VAH/VAL/range edge is INVALID once ≥2 of: two closes
-beyond it · a retest holds beyond it · >30 min spent beyond it · POC migrates beyond it · new value builds
-beyond it. Invalid → don't trade the first touch, drop it from the map.
+**News:** never trade the FIRST news spike (whipsaws both ways). If a scheduled high-impact print has a clear
+direction, trade the **pullback continuation** after it (38–50% hold + continuation BOS), not the impulse.
+
+**Zone/level lifecycle — track each level's STATE; trade only live ones:**
+- **new → untested** (best, +confluence) → **tested once** (still valid) → **tested >2×** (−20, weakening) →
+  **mitigated** (price entered and partially filled the OB/zone) → **invalidated/accepted-through** (DEAD — drop it).
+- A prev VAH/VAL/range edge / OB is **INVALID** once ≥2 of: two closes beyond it · a retest holds beyond it ·
+  >30 min spent beyond it · POC migrates beyond it · new value builds beyond it. Invalid → don't trade first touch, drop from the map.
 
 ---
 
@@ -155,6 +161,55 @@ Signal: <name> | Direction: LONG/SHORT/WAIT
 Entry / Stop / T1 / T2 / R:R / Confluence score:
 Reason:
 ```
+
+---
+
+## SIGNAL REFERENCE (the 100-signal manual, condensed — full detail in `xauusd_forex_ai_signal_execution_manual.md`)
+Every signal: needs a meaningful level + a trigger, **prefer candle CLOSE over wick**, **R:R ≥ 1:2**, target the
+**nearest liquidity** (VWAP/POC/VAH-VAL/PDH-PDL or 2R). `★` = Excellent for XAUUSD (prioritise). **Track each
+zone's state** (new→untested→tested→mitigated→invalidated); trade only live ones.
+
+**SMC / Institutional** — *enter FROM the zone on rejection, stop BEYOND its far edge.*
+- ★KLZ retest · ★Order-Block retest (tap last opposite candle before displacement, reject, LTF BOS) · Breaker
+  retest (broken OB flips polarity) · Mitigation-block retest · ★FVG fill (fill 50–100%, reject) · ★Liquidity
+  sweep / ★Equal-high/low sweep / ★PDH-PDL sweep / Session-high/low sweep (take the level, close back inside,
+  BOS opposite) · ★Stop-hunt reversal (big wick pierces + closes back, next candle confirms) · ★Displacement
+  continuation (impulse+BOS → shallow 38–62% / OB / FVG pullback → continuation).
+
+**Market Profile** — ★VAH/VAL rejection (wick beyond, close back, BOS → POC then opposite) · ★VAH-flip-support /
+VAL-flip-resistance (close+hold beyond, retest) · ★Failed auction above VAH / below VAL (break out, close back
+inside → POC) · POC magnet / Inside-value rotation (RANGE: fade edges to POC) · ★Outside-value acceptance
+(TREND: 2 closes out + retest) · Poor-high/low repair · Single-prints fill · LVN rejection · HVN magnet (target).
+
+**VWAP** — ★Reclaim long (below→2 closes above, retest, BOS) · ★Rejection short (mirror) · ★Pullback long/short
+(trend; pullback to VWAP rejects) · Band-2 reversal (extreme + CHoCH, not first touch) · ★Band-walk ride (trend;
+enter pullbacks to band1/VWAP) · ★VWAP chop filter = **NO TRADE** · ★Anchored-VWAP retest · VWAP+VA confluence.
+
+**Patterns** — Double/Triple top-bottom · H&S / inverse · ★Bull/Bear flag (pole+flag, break+retest, pole-projection
+target) · Pennants · Triangles (asc/desc/sym) · Wedges (rising=bearish break / falling=bullish) · Rectangle
+breakout / reversal · Channel bounce / breakout · ★Parabolic exhaustion (fade only after CHoCH).
+
+**Sessions** — Asian-range breakout · ★Asian-range fakeout (sweep + reclaim + BOS) · London-open sweep · ★London
+high/low sweep in NY (NY takes London extreme, reclaims, BOS = fade) · ★NY-open manipulation (first 15–45m sweep+
+fail+BOS) → ★NY-AM continuation (pullback to VWAP/KLZ/FVG) · ★NY-lunch chop = **NO TRADE** · London-close reversal ·
+Daily/Weekly-open retest · ★Killzone liquidity sweep (sweep+reclaim+BOS in London/NY killzone).
+
+**Breakout / Fakeout** — Clean breakout-retest · ★Failed breakout (break, close back inside, BOS = fade) ·
+Breakout-without-retest (trend-day only) · ★Compression breakout (low-ATR → expansion) · ★False break above/below
+range (sweep range extreme, close inside, BOS) · Break-&-retest of KLZ · Failed retest (retest fails fast, snaps back).
+
+**Candle triggers (use AT a level, never standalone)** — Pin bar (wick ≥2× body) · Engulfing · Inside-bar break ·
+★Outside-bar reversal (sweeps both sides, strong close) · Marubozu continuation · Doji = warning only ·
+★**Rejection wick + BOS** (the core trigger) · Three-candle reversal.
+
+**Trend / Structure** — BOS (continuation; enter the pullback after) · ★CHoCH (first reversal: break of last
+LH/HL; enter retest/FVG/OB) · HH-HL / LL-LH trend · ★**Pullback to Higher-Low / Lower-High** (the core
+trend-continuation: buy HL in uptrend / sell LH in downtrend on break of the pullback extreme) · Trend exhaustion
+(fade after CHoCH) · ★Market-Structure-Shift (CHoCH + displacement → pullback to FVG/OB).
+
+**DATA I track each scan:** candle anatomy (dir/body/wick) · swing H/L · BOS/CHoCH/MSS · ATR + volatility
+**compression→expansion** · sessions (Asian/London/NY + **killzones** + NY-lunch) · daily/weekly open · PDH/PDL ·
+prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each zone's lifecycle state.
 
 ---
 
