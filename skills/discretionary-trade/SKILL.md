@@ -171,25 +171,33 @@ and:
   a stop inside the OB is guaranteed to be taken by the OB-fill stop-run before the move resolves.
 - In a tight coil/range at a level, the stop must clear the WHOLE coil (and any OB) + buffer, not just the last cap.
 
-- **Entry (general):** on the trigger (break of the rejection candle / BOS retest) — at the level, not chasing mid-move.
-- **Stop:** beyond the invalidation (far side of the OB/zone/wick + buffer). Define it before entry.
-- **Targets:** T1 = nearest liquidity (VWAP / POC / VAH-VAL / PDH-PDL / 2R); T2 = next structure. R:R ≥ 1:2.
-- **Manage:** move to **breakeven** once price approaches T1 and stalls (this turns rejected-at-resistance trades
-  into scratches, not losses). Trail behind structure on trend days. **Stand aside** after 2 failed trades or in
-  confirmed chop — over-trading a chop day is how small losses become big ones.
+- **Entry (general):** on the trigger (break of the rejection candle / BOS retest) — at the level, **prefer a LIMIT
+  at the level over market-on-rejection** (better fill + tighter stop). Not chasing mid-move.
+- **Stop:** beyond the invalidation (far side of the OB/zone/**whole swing** / SBS swing extreme + buffer), **size
+  DOWN for a wider stop** rather than tightening it into the noise. Define it before entry. (See RECALIBRATION.)
+- **Targets (two only, no T3 on scalps):** **T1 = nearest REAL liquidity** (VWAP/POC/VAH-VAL/PDH-PDL/SBS-CRT level) →
+  take a **partial**; **T2/runner = next structure**. **R:R ≥ ~1.5 to T1 WITH a runner** (don't demand 2R-to-T1).
+  Mode: MICRO_SCALP (small level-based TP) vs SCALP_TO_RUNNER (TP1 ≈100 pips as space-filter + structure TP2).
+- **Manage:** **breakeven at ~+1R or once a minor structure is cleared — NOT a fixed +40 pips** (a too-tight BE
+  scratches you on gold's noise). Partial at T1 → BE → **trail behind 5m structure / VWAP / EMA** to T2 on trend
+  days. Close the runner if price closes back through VWAP against you, breaks 5m structure against you, or rejects a
+  strong opposing HTF level. **Stand aside** in confirmed chop — but day-type decides: don't quit a good trend day
+  after one stop; do stop forcing scalps into a range. (See RECALIBRATION + DAY-TYPE.)
 
 **Output each decision in this structured form** (the refined manual's Claude output schema — always include the
 `reasoning_chain_of_thought` narrative and a `confidence` read; `entry` carries an order `type`):
 ```json
 {
   "decision": "APPROVE | REJECT | WAIT",
+  "trade_mode": "MICRO_SCALP | SCALP_TO_RUNNER | INTRADAY | NO_TRADE",
   "market": "XAUUSD",
-  "signal_name": "<e.g. Order Block Retest>",
+  "signal_name": "<e.g. Order Block Retest / SBS / CRT>",
   "direction": "LONG | SHORT | NEUTRAL",
   "bias": "BULLISH | BEARISH | NEUTRAL",
   "day_type": "TREND | RANGE | DEAD | REVERSAL",
   "entry": { "price": 0.0, "type": "MARKET | LIMIT | STOP" },
-  "stop_loss": 0.0, "target_1": 0.0, "target_2": 0.0, "risk_reward": 0.0,
+  "stop_loss": 0.0, "target_1": 0.0, "target_2": 0.0, "risk_reward_to_t1": 0.0,
+  "breakeven_trigger": "+1R or cleared minor structure (NOT fixed +40p)",
   "confidence": "HIGH | MEDIUM | LOW",
   "level_state": "Untested | Tested | Rejected | Accepted | Flipped | Mitigated",
   "vwap_position": "above | below | chopping", "open_vs_prev_value": "above VAH | inside | below VAL",
@@ -268,9 +276,18 @@ range (sweep range extreme, close inside, BOS) · Break-&-retest of KLZ · Faile
   liquidity-trap model: **P0** swing → **P1** impulse → **P2** key-liquidity pullback (holds beyond P0) → **P3**
   new/failed extreme that traps breakout traders → **P4** sweeps P2 liquidity *without accepting beyond* → **P5**
   reversal point (EQ-high/low, double-top/bottom, reject) → **CHoCH/BOS after P5 = the trigger.** Enter the post-P5
-  break or its FVG/OB retest; stop beyond P5 / the sweep extreme + ATR buffer; target next liquidity / Point-3 / ≥2R.
-  **NOT the first breakout.** Reject if the 6 points are forced/over-tuned, P4 *accepts* beyond P2 (real reversal,
-  not a raid), P5 makes no structure shift, or the breakout already ran to target.
+  break or its FVG/OB retest; target next liquidity / Point-3 / ≥2R. **NOT the first breakout.** Reject if the 6
+  points are forced/over-tuned, P4 *accepts* beyond P2 (real reversal, not a raid), P5 makes no structure shift, or
+  the breakout already ran to target.
+  - **STOP = beyond the SBS Swing High/Low (point 3 extreme), NOT an arbitrary tight buffer.** The model's
+    invalidation IS the swing extreme it drew — put the stop past it + ATR buffer, and size down. (May-15 proof: I
+    shorted a lower-high with a tight +4-pt stop at 4567; the whipsaw wicked to **4572.64 — which was the SBS Swing
+    High** — stopped me, then price fell to 4511 exactly as the bearish SBS projected. A stop above the SBS swing
+    would have survived and caught the ~500-pip move.)
+  - **CONSULT THE SBS INDICATOR AT EVERY CHECKPOINT** (read its labels/boxes each scan — it's why we added it). When
+    a sequence completes (P5 + breakout) at a level, that IS a primary trigger; don't trade your own eyeballed
+    rejections while ignoring it. (May-15: the bearish SBS completed ~4561 and called the 4561→4511 drop; I missed it
+    because I read SBS once at the open then traded off price/EMA the rest of the day. Don't.)
 - ★**CRT — Candle Range Theory** (CandelaCharts CRT; ICT-derived). **TF (our default): anchor on the 1H candle →
   confirm+enter on 5m** (faster scalp: 15m/30m anchor → 5m). HTF candle = a range: **CRT-High / CRT-Low /
   CRT-Mean(50%)**. Raid one side → **close back inside** (failed acceptance) → drop to LTF for **MSS/CHoCH/CISD** →
@@ -297,6 +314,37 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
 ---
 
 ## DISCIPLINE / LESSONS (from the forward tests — do not skip; add new lessons here every time)
+
+### ★ RECALIBRATION (2026-06 — the big correction; READ FIRST). This is a TRADE machine, not a REJECT machine.
+- **0 trades = the method failing, not discipline.** Across May 11/12/15 forward walks I took 0–2 trades and
+  rejected everything else on perfectionist grounds. **Take good-not-perfect WITH-trend setups:** level + trigger +
+  with the regime + R:R ≥ ~1.5 to T1 **with a runner**. R:R and "clean A+" are **sizing/management tools, not reject
+  buttons** — wide stop? size DOWN, don't reject. Scale: partial at T1, BE, runner to structure. **A losing trade on
+  a valid setup is fine; standing aside all day is the error.**
+- **LET THE COMMITTEE VOTE — don't pre-reject.** For scalps use the **relaxed committee**: Risk no-hard-veto +
+  Adversary finds no hard-invalidation + main confirms (level+trigger+path+R:R). Full 5-agent panel only for
+  large/unclear trades. (I failed by never once convening it — I killed every trade myself first.)
+- **HARD-REJECT only the genuinely bad:** counter-trend with no reversal · no level · no trigger · R:R <1.5 even with
+  a runner · dead VWAP-chop · mid-balanced-value · first news spike · NY-lunch/dead-time.
+- **DAY-TYPE is the master filter — size to it.** Clean **trend-WITH-pullback days = participate / size up** (that's
+  where the edge is). **Chop/range days BLEED** — either 0 trades or whipsaw losses (May 15: −240p shorting a
+  4511–4588 chop). On chop: fewer/smaller or stand aside WITHOUT guilt; don't force scalps into chop.
+- **Stops too tight get wicked on gold — clear the WHOLE swing + ATR buffer, size DOWN.** (May 15: two shorts
+  stopped by 8–10pt wicks past +4–5pt stops, then price went my way.) Prefer the **structure/SBS swing extreme** as
+  the stop reference, never an arbitrary few-point buffer inside the noise.
+- **Breakeven at ~+1R or a cleared minor structure — NOT a fixed +40 pips.** (May 15: a +40-pip BE would have
+  scratched both trades at BE on normal noise wicks; BE-at-~1R correctly kept me in.)
+- **Prefer a LIMIT at the level over market-on-rejection** — better fill, tighter stop, and the moves that just-go
+  without you aren't dragged into at a bad price.
+- **Pip convention (don't conflate units):** **1.00 price = 10 pips = $1; 100 pips = $10 = 10.0 price points.**
+  Gold's normal intraday moves are 250–700+ pips, so a 100-pip ($10) target is MODEST — "not enough room to T1" is
+  rarely the blocker on gold; **stop width and chop are.**
+- **Two execution modes (UNDER FORWARD-TEST — formalize after results):** **MICRO_SCALP** (1/3/5m exec, 15m context,
+  score 65+, small TP at the nearest level) vs **SCALP_TO_RUNNER** (5/15m exec, 1H/4H context, score 75+, TP1 ≈100
+  pips, structure-based TP2, **no T3**). R:R checked to TP1 *with a runner*. **TP1 = the nearest REAL liquidity level;
+  use 100 pips as the space/viability filter, NOT a blind fixed exit** (keeps the "T1 at the actual level" lesson).
+
+### Earlier lessons —
 - **Order blocks are precise — enter FROM the OB, stop BEYOND it.** (May 26: shorted 4535 below a 4542–4550
   supply OB with stop 4543 *inside* it → price ran up into the OB to fill it, stopped me, then faded as planned.
   −80p on a directionally-correct trade.) Read the OB bounds; enter on the tap+reject; stop past the far edge.
@@ -323,6 +371,15 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   `is_replay_started: true` with a `current_date` on the right day, and that `ohlcv` bars are the expected date
   + 5-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
   again and step back to your point.
+- **"Continue your last replay?" modal → dismiss with `ui_keyboard Escape`, NOT the "Continue" button.** After
+  `replay start --date`, a modal pops up; clicking **Continue RELOADS the OLD saved session** (wrong date). Escape
+  keeps your new start. (If it already reverted: `replay stop` → `replay start --date` → Escape.)
+- **`data_get_study_values` + SMC/SBS pine data can FREEZE stale** on the prior frame for a whole replay session
+  (e.g. VWAP/RSI not matching price). **OHLCV + screenshots stay reliable** — cross-check; if frozen, read
+  EMA/VWAP/RSI VISUALLY off a full-region screenshot. (Stepping once sometimes unfreezes it; sometimes not.)
+- **Symbol switching needs the app FOREGROUNDED** and is unreliable from rapid back-to-back scripts; drive switches
+  one at a time and verify the symbol before trusting a read. `scalp_fast.py` has **no symbol guard** — it will
+  silently read the wrong instrument if the chart didn't switch (refresh_zones.py aborts correctly; scalp doesn't).
 - **`indicator toggle --visible false` does NOT reliably repaint** (the study often stays visible). To actually
   remove a heavy indicator from the 5m chart, **`indicator remove <id>`** it. BUT — **do NOT remove COMMUNITY
   indicators you'll need next session** (SMC, TPO): they CANNOT be re-added via the API (only the user's manual
