@@ -30,6 +30,16 @@ Re-check on a fixed cadence (e.g. every 15m of price) AND when price reaches a m
 
 Read **4H → 1H → 15m** for bias and structure; **5m** is execution only.
 
+**REFRESH CADENCE — re-read each TF at its own bar-close rhythm (frequency-matched; not all every 15m):**
+- **15m TF → every 15m** (each execution checkpoint) — 1 TF switch, read SMC structure/OBs on 15m.
+- **1h TF → every hour** (on the hour) — re-read 1h SMC + structure.
+- **4h TF → every 4h** (new 4h bar: 00/04/08/12/16/20 UTC) — re-read 4h SMC + structure.
+- **Daily → once per session** (and at each new day).
+- **TPO 30m VAs → once at session start** (prior-day value areas don't change intraday; re-read only at a new
+  day boundary). 5m = continuous execution.
+This keeps the map current while minimising TF switches (most checkpoints = one 15m switch), which protects
+replay stability. After each TF read, restore 5m and **verify the replay is still started + on the right date**.
+
 Gather and mark these levels (the "map") — **read them off the indicators; never compute them yourself:**
 - **SMC = the Smart Money Concepts (LuxAlgo) indicator, read on the HIGHER timeframes 15m / 1h / 4h.** SMC is
   HTF *context*, not a 5m execution tool. On each of 15m, 1h, 4h read: order blocks (supply/demand boxes),
@@ -234,8 +244,8 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
 
 ## OPERATIONAL NOTES — replay/chart stability (LEARNED THE HARD WAY — follow exactly)
 - **Repeated timeframe switching DESTABILISES the replay** — it silently STOPS and the chart reverts to LIVE
-  data (wrong date/prices). So: read TPO on **30m ONCE** at session start, read SMC on 15m/1h/4h sparingly
-  (only on the hourly context refresh), and otherwise **stay on 5m**. Minimise TF changes.
+  data (wrong date/prices). So use the **frequency-matched refresh cadence** (STEP 1): 15m every 15m, 1h every
+  hour, 4h every 4h, TPO 30m once at session start. Otherwise **stay on 5m**. Don't refresh all HTFs every 15m.
 - **After ANY TF switch or replay action, VERIFY before trusting data:** check `replay status` shows
   `is_replay_started: true` with a `current_date` on the right day, and that `ohlcv` bars are the expected date
   + 5-min spacing. If you see live/wrong-date prices → the replay died → `replay stop` then `replay start --date`
