@@ -334,7 +334,10 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   stopped by 8–10pt wicks past +4–5pt stops, then price went my way.) Prefer the **structure/SBS swing extreme** as
   the stop reference, never an arbitrary few-point buffer inside the noise.
 - **Breakeven at ~+1R or a cleared minor structure — NOT a fixed +40 pips.** (May 15: a +40-pip BE would have
-  scratched both trades at BE on normal noise wicks; BE-at-~1R correctly kept me in.)
+  scratched both trades at BE on normal noise wicks; BE-at-~1R correctly kept me in.) **And place BE a touch BELOW
+  entry / the breakout-or-structure level, NOT exactly at entry** — an exact-entry BE gets nicked by noise wicks.
+  (May 18: TP1 long won +120p, but the runner's BE at the 4565 entry was wicked at 4563.71 — 2p — then price bounced
+  to 4576; a BE at ~4560, below the breakout level, would have kept the runner alive.)
 - **Prefer a LIMIT at the level over market-on-rejection** — better fill, tighter stop, and the moves that just-go
   without you aren't dragged into at a bad price.
 - **Pip convention (don't conflate units):** **1.00 price = 10 pips = $1; 100 pips = $10 = 10.0 price points.**
