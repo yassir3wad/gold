@@ -345,6 +345,21 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   pips, structure-based TP2, **no T3**). R:R checked to TP1 *with a runner*. **TP1 = the nearest REAL liquidity level;
   use 100 pips as the space/viability filter, NOT a blind fixed exit** (keeps the "T1 at the actual level" lesson).
 
+### ★ BOUNCE-HANDLING after a sharp drop (3 losses paid for this — May 15 ×2, May 18 ×1)
+- **DON'T short the FIRST rejection of a sharp-drop/capitulation bounce.** After a hard drop (RSI ≲20, price far
+  below VWAP), the bounce **frequently V-reverses the WHOLE way back to VWAP/EMAs (and beyond)** — it is NOT a
+  lower-high before continuation. Shorting the first rejection = repeatedly stopped by the V (May 15: 4638→bounce
+  stopped me twice; May 18: 4480 capitulation → bounce +550p to VWAP, stopped my 4500 short at 4521, −210p).
+- **To short the resumption, REQUIRE:** the bounce **fully resolves** AND rejects a **MAJOR level** (VWAP / EMA
+  cluster / broken structure / SBS swing high) AND prints a **confirmed lower-high + a CHoCH *down*** on the exec TF.
+  The first stall of a sharp-drop bounce is not enough — wait for the structure break.
+- **Better play on a capitulation (RSI <~20): trade the BOUNCE *LONG*** off the low on a reclaim trigger, targeting
+  VWAP/the mean — that V-bounce IS the move (it's what actually happened all 3 times). This is the recurring
+  "capitulation-low reclaim long" edge (cf. the May-27/28 reviews). Counter to the day-trend, but high-probability
+  to the mean; scalp it (partial at VWAP), don't hold for a full reversal unless structure confirms.
+- Net: after a sharp drop → either **buy the V-bounce to VWAP**, or **wait for VWAP/EMA rejection + LH + CHoCH** to
+  short. Never short the first bounce-rejection.
+
 ### Earlier lessons —
 - **Order blocks are precise — enter FROM the OB, stop BEYOND it.** (May 26: shorted 4535 below a 4542–4550
   supply OB with stop 4543 *inside* it → price ran up into the OB to fill it, stopped me, then faded as planned.
