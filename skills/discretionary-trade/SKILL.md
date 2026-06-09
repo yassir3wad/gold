@@ -219,6 +219,9 @@ prev-day VAH/VAL/POC + single prints/LVN/HVN (TPO) · VWAP + bands 1&2 · each z
   −80p on a directionally-correct trade.) Read the OB bounds; enter on the tap+reject; stop past the far edge.
 - **Coil/range stops must clear the WHOLE coil + any OB + buffer**, not just the last cap. Tight coils stop-run
   the recent high/low before resolving. A stop one tick past the recent cap is a donation.
+- **Set T1 AT the actual nearest-liquidity LEVEL, not a round number beyond it.** (May 26: T1 4520 vs the real
+  VA level 4524 — price hit 4521.6 repeatedly and reverted; a 4-pip-greedy target turned a clean win into a
+  grind. Put T1 a touch INSIDE the level so you actually get filled.)
 - **Day type is everything and you cannot know it at the open.** A clean-looking pullback can chop all day
   (May 13: 2 reasonable longs → scratch + −100p). When in doubt, smaller or no trade.
 - **Track fills with DATA, not eyeballing** — TP/SL hit between checks; a later snapshot can misrepresent a
