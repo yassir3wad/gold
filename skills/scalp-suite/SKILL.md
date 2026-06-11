@@ -63,6 +63,27 @@ Gold convention: `1.00 price = 10 pips`.
 
 For FX, use the instrument scaling table only if explicitly running FX. Do not apply gold targets to EUR/GBP/etc.
 
+## 🔑 Timeframe Roles — 15m DECIDES, 5m EXECUTES 
+
+- **15m = the decision layer:** regime, the level/edge (VWAP/bands, SVP POC/VAH/VAL, confluence), and the SIGNAL (reject /
+  break / confluence). Cleaner structure, fewer false signals. **Monitor and decide here.**
+- **5m = the execution layer:** once 15m confirms a level+signal, drop to 5m to time the entry on the 5m trigger candle with a
+  **tight stop just beyond the 5m structure (~30–50p)** — not the wide 15m-candle stop (~70–150p). Same target, ~2–2.5R instead
+  of ~1R, can size up. (Verified: the 5m-timed VWAP-reject shorts scored best.)
+- **Never trade 5m alone** — pure 5m = noise/false signals/chop-whipsaw. 5m only times a 15m-confirmed level.
+- **15m-only** = stops too wide, some setups unfittable to the ≤50p cap. Use both.
+
+## 🔑 Committee on EVERY bar (MUST) — via levels, re-cycle visuals at edges
+
+Check ALL indicators every bar — but indicator *levels* (SVP POC/VAH/VAL, PAR edges, SBS P5, liquidity) change slowly, so:
+- **Establish the committee levels** with a full hide-before-show cycle (hybrid: data + verified screenshot) at the session
+  open and whenever structure changes / price reaches a new area.
+- **Every bar:** read OHLCV (price) + OFVWAP (data) and assess price against ALL the committee levels. That IS checking every
+  indicator each bar.
+- **Re-cycle the visual committee** (screenshots, staleness-checked) at each **edge/decision point** and when a profile would
+  have shifted. Don't blindly re-screenshot unchanged profiles every bar (unsustainable + stale-frame risk) — but never let a
+  level go stale into a decision.
+
 ## Strategy Router
 
 ### OFVWAP
