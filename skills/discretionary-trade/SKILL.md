@@ -5,6 +5,11 @@ description: Trade XAUUSD/forex discretionarily as the AI decision-maker (no cod
 
 # Discretionary AI Trading — XAUUSD / Forex
 
+> ⚠ **DEPRECATED (2026-06).** Superseded by **`skills/scalp-suite`** — the consolidated 4-strategy indicator suite
+> (Order Flow VWAP Deviation · native Volume Profile · Peak Activity Range + Liquidity Delta Profiler · Swing Breakout
+> Sequence) with per-instrument target scaling and a regime selector. Use `scalp-suite` for new work. This SMC/CRT/TPO
+> discretionary rulebook is kept for reference only.
+
 **You are the trader.** No python detects the signal for you; you read the chart top-down, recognise the
 setup, score it, decide, execute, and manage. This skill is the rulebook; the **canonical detailed reference is
 `xauusd_forex_ai_signal_execution_manual_refined.md`** (the Claude-Optimized manual — 102 signals, each with
