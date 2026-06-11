@@ -142,10 +142,21 @@ Multiple heavy profiles rendering at once is what crashed the chart (VP-Node "me
 ### 🔑 READ PROTOCOL — visual-first; pull data only when it prices the trade
 Default read = **`capture_screenshot` then view it** (zoom to the active swing for fine labels). Screenshots are cheap, current,
 and avoid the no-hindsight/future-label problem.
-- ⚠ **Settle delay:** after `indicator_toggle_visibility`, **wait ~2–3s before `capture_screenshot` (method `cdp`)** — capturing
-  immediately grabs a stale/pre-render frame (the indicator hasn't drawn yet). With the delay, cdp frames are clean and current.
-  (`method: "api"` does NOT return a file — only `cdp` gives a readable path. The profile indicators DO render fine; the earlier
-  "doesn't render" was just capture-too-fast.) Only pull the DATA API when you need exact numbers to place/manage a trade,
+- ⚠ **Settle delay:** after `indicator_toggle_visibility`, **wait ~4s before `capture_screenshot` (method `cdp`)** — capturing
+  immediately grabs a stale/pre-render frame. (`method: "api"` does NOT return a file — only `cdp` gives a readable path.)
+
+### 🔑 HYBRID READ — data + screenshot, with a staleness cross-check (use BOTH, not either alone)
+cdp screenshots are sometimes stale (show the previous indicator / old frame). The fix is to **read data AND screenshot and
+cross-check** — data catches a stale frame:
+1. **Data anchor every read:** OFVWAP `study_values` + current-bar `data_get_ohlcv` (exact price). Plus `pine_lines`/`pine_tables`
+   for any line/table-based indicator (reliable).
+2. **Screenshot the indicator** (4s settle), then **validate the frame is fresh:** does its header OHLC / last price match
+   `data_get_ohlcv`? **Match → trust the visual** (profile shape, SBS sequence, PAR/LDP). **Mismatch → STALE → re-capture** (or
+   fall back to data/lines for that indicator). Never act on a frame whose price doesn't match the data.
+3. **Cross-check level vs data:** e.g., SVP POC should sit near where price/volume cluster on OHLCV; SBS P5 near a recent swing.
+   Visual+data agreement = high confidence; disagreement = bad read, re-do.
+This is the standing method: **both reads, every decision** — data for precision + staleness detection, screenshot for the
+visual structure the API can't give. Only pull the DATA API when you need exact numbers to place/manage a trade,
 and only the cheap reads:
 - **Expensive / no-API → ALWAYS visual:** SBS labels (~hundreds), **PAR boxes (~hundreds)**, and the **Volume Profile**
   (now native **Session Volume Profile HD** — no data API at all). Read sequence / range / profile off the (zoomed) chart.
