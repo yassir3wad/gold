@@ -1,60 +1,87 @@
 ---
 name: swing-breakout
-description: Scalp using ONLY Swing Breakout Sequence [LuxAlgo] (SBS) — a 5-point FAILED-breakout / trapped-trader pattern. Trade the breakout that resolves after P5; SL just beyond P5 (not the full sequence); TP1 70–100p (gold, scaled per instrument). REGIME-DEPENDENT: strong edge on TREND days, liability on RANGE days (verified). 15m cleaner than 5m. Part of the scalp-suite.
+description: Mechanical Swing Breakout Sequence scalp checklist using the SBS TradingView layout. Trend-day only. Trades confirmed resolution after P5. Skip range/chop.
 ---
 
-# Swing Breakout Sequence [LuxAlgo] (SBS) — Scalp
+# Swing Breakout Sequence Scalp
 
-**Single indicator: Swing Breakout Sequence [LuxAlgo].** PEPPERSTONE feed. This is one of the four `scalp-suite`
-strategies — **the trend-day specialist.** Use it *only* when the regime is directional (see §Regime).
+Use this strategy alone. Open the `SBS` layout.
 
-## 1. What it actually is (from source)
-**Not classic BOS/CHoCH.** SBS marks a **5-point FAILED-breakout sequence** inside a swing zone:
-- **P1** breakout attempt → **P2** pullback back into the zone → **P3** 2nd attempt (beyond P1) → **P4** pullback (taps
-  P2 liquidity) → **P5** reversal structure (double top/bottom).
-- Premise: after **two failed breakouts**, the **trapped traders** fuel the *next* (3rd) move. You trade that resolution.
-- Plots **Swing High / Swing Low** + labeled points **1–5**.
-- **Inputs:** `Swing Length` (bigger = larger swings, fewer sequences) · `Internal Length` · "P4 beyond P2" · "Show P5" ·
-  "Require equal H/L at P5". (Defaults: Swing Length 5, Internal 2.)
+## Setup
 
-## 2. Entry / stop / targets
-- **Entry:** after the **5-point sequence completes at P5**, enter on the **confirming breakout close** beyond the
-  sequence extreme (or a retest-hold). Reversal or continuation — trade the direction it resolves.
-- **STOP — the P5 rule (critical):** SL **just beyond P5** (the reversal point), **NOT** the full sequence high/low.
-  The full-sequence structural stop is huge (~400p on gold = ~8× the cap); the P5 stop is far tighter (~70–120p).
-  **Gold ≤50p gate:** if even the P5 stop is >50p → **size down** (keep $-risk fixed) or take it as wider-intraday. Never
-  widen to the structural extreme; never squeeze into noise.
-- **Targets:** **TP1 70–100p (gold)**, scaled per instrument (see scalp-suite table: EUR 15/5p, GBP 25/15p, etc.).
-  **TP2 = next swing / structure.** BE +40p (gold) / ~1R (FX). No TP3.
+- Feed: `PEPPERSTONE:XAUUSD` for gold.
+- Layout: `SBS`.
+- Preferred TF: `15m`.
+- Optional timing TF: `5m` only after trend is confirmed.
+- Gold convention: `1.00 price = 10 pips`.
 
-## 3. ⚠ REGIME — the most important rule (VERIFIED on real bars)
-SBS is **strongly regime-dependent:**
-- **TREND / expansion day → its edge.** Verified **gold Jun 8 (strong trend-down): SBS short caught +500p+.**
-- **RANGE / chop day → a liability.** Verified **gold Jun 9 (range 4273–4351): SBS chops / no clean trade** — the
-  breakout never resolves; signals revert inside the range.
-- **→ Only deploy SBS when the day is directional.** On range days, stand aside / use mean-reversion (OFVWAP-5m / VP /
-  PAR+LDP). This is *why* SBS led the trend-heavy estimate week — and why it would bleed in a range-heavy one.
+## Regime Gate
 
-## 4. Timeframe (5m vs 15m)
-- **15m = cleaner** (less whipsaw) — the verified default.
-- **5m = earlier entries + tighter stops on trends, but MORE chop on ranges** (more small failed sequences). Use 5m to
-  *time* the entry on a confirmed trend day; avoid 5m SBS on chop. (5m tick-verification still pending — see §6.)
+Use SBS only on:
 
-## 5. Reading it via MCP
-- `data_get_pine_labels {study_filter:"Swing Breakout"}` → the sequences (labels 1–5 + Swing High/Low + prices).
-- ⚠ **Label cap:** the API returns ~50 labels **oldest-first**, so the CURRENT sequence is excluded by default. To read
-  the live sequence, pull **`max_labels`≈360+** (heavier on 5m) and filter to the live price range. (No "max sequences"
-  input exists; remove/re-add doesn't help.)
-- SBS is **light** (unlike the profile indicators) → it can co-exist with OFVWAP; never needs trimming.
-- Standard suite hygiene: backtest tab `eFMec2F9`; if replay/screenshots break, **relaunch (`tv_launch`)**.
+- Trend day.
+- Expansion day.
+- Clear directional structure.
 
-## 6. Validation status
-- **15m: VERIFIED** — Jun 8 (trend) **+500p short** (P5 stop ~100p, sized down); Jun 9 (range) **chop/no-trade**. The
-  regime-dependence is the confirmed headline.
-- **5m: pending** — needs a focused session with budget for the `max_labels` dump (the read prerequisite). Structurally:
-  earlier+tighter on trends, choppier on ranges. Logs: `screenshots/verified-gold-jun08-09/RESULTS.md`.
+Reject SBS on:
 
-## One-liner
-**SBS = the trend-day breakout. Trade the move that resolves after the 5-point (P1–P5) failed-breakout sequence; SL just
-beyond P5 (size down if >50p); TP1 70–100p (scaled), TP2 next swing. ONLY on trend/expansion days — on range days it
-chops, so stand aside. 15m cleaner; 5m earlier-but-choppier.**
+- Range day.
+- Chop shelf.
+- Mid-value rotation.
+
+## Pattern
+
+SBS is a 5-point failed-breakout/trapped-trader sequence:
+
+```text
+P1 attempt -> P2 pullback -> P3 second attempt -> P4 pullback -> P5 reversal/resolution point
+```
+
+## Entry
+
+Valid entry:
+
+1. P1-P5 sequence is complete.
+2. Candle closes in resolving direction.
+3. Optional retest holds.
+4. Entry is not late after target path is mostly traveled.
+
+## Stop
+
+- SL goes beyond P5/sequence invalidation.
+- If P5 stop is too wide for scalp, skip or classify separately as wider intraday.
+- Never use the full sequence extreme if it makes the scalp invalid.
+- Never place SL inside noise to force R:R.
+
+## Targets
+
+- Gold TP1: `70-100p` if clean.
+- TP2: next swing/structure only.
+- BE after TP1 or after +40p with minor structure cleared.
+
+## Reject
+
+- No completed P5.
+- No confirming close.
+- Range/chop regime.
+- TP1 blocked before minimum.
+- Stop too wide.
+- API labels stale/unreadable.
+
+## Reading (visual-first)
+
+- **Read SBS from a screenshot** (zoom to the active swing), NOT `data_get_pine_labels`: the label API returns hundreds of
+  points including FUTURE-drawn sequences and caps by draw-order (not no-hindsight). Identify the live 5-point sequence and
+  **P5 visually**, then watch price vs the P5 line via `data_get_ohlcv` for the closed-candle break. Pull data only to price the trade.
+
+## Backtest
+
+One day, one strategy, one layout.
+
+Log:
+
+```text
+time, regime, sequence_state, trigger, decision, entry, SL, TP1, TP2, result, pips
+```
+
+Verify TP/SL with OHLCV only.
