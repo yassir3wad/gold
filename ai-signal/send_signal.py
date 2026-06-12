@@ -43,20 +43,50 @@ def _fmt(sig: dict) -> str:
     return "\n".join(str(x) for x in L)
 
 
+def _fmt_prepare(sig: dict) -> str:
+    """Heads-up 'get ready' alert — a setup is forming but NOT yet triggered."""
+    L = []
+    L.append(f"⏳ GOLD — SETUP FORMING (get ready)")
+    if sig.get("setup"):   L.append(f"Setup: {sig['setup']}")
+    if sig.get("regime"):  L.append(f"Regime: {sig['regime']}")
+    if sig.get("price"):   L.append(f"Price now: {sig['price']}")
+    if sig.get("watch"):   L.append(f"Watching: {sig['watch']}")
+    # Either/both directional triggers, written out so the user can pre-stage.
+    if sig.get("long_trigger"):  L.append(f"\n🟢 LONG if: {sig['long_trigger']}")
+    if sig.get("short_trigger"): L.append(f"🔴 SHORT if: {sig['short_trigger']}")
+    if sig.get("note"):    L.append(f"\n{sig['note']}")
+    L.append("\n(heads-up only — no entry yet; the ENTER signal follows on the confirmed close)")
+    return "\n".join(str(x) for x in L)
+
+
 def send(sig: dict, dry_run: bool = False) -> bool:
-    if sig.get("decision", "").upper() != "ENTER":
-        print(f"[skip] decision={sig.get('decision')} (only ENTER is sent)")
+    decision = sig.get("decision", "").upper()
+
+    # PREPARE = pre-alert: a fresh setup is imminent (coiled at a breakout/reject level),
+    # not yet a confirmed closed-candle entry. Sent so the user can get ready.
+    if decision == "PREPARE":
+        title = f"AI Scalp PREPARE — {sig.get('symbol','XAUUSD').split(':')[-1]}"
+        body = _fmt_prepare(sig)
+        shot = sig.get("screenshot")
+        if shot and os.path.exists(shot):
+            return bool(tg.send_photo(shot, caption=f"{title}\n\n{body}", dry_run=dry_run))
+        return bool(tg.send_alert(title, body, dry_run=dry_run))
+
+    if decision != "ENTER":
+        print(f"[skip] decision={sig.get('decision')} (only ENTER / PREPARE are sent)")
         return False
     title = f"AI Scalp Signal — {sig.get('symbol','XAUUSD').split(':')[-1]}"
     body = _fmt(sig)
-    ok_txt = tg.send_alert(title, body, dry_run=dry_run)
-    ok_img = True
     shot = sig.get("screenshot")
+    # Single Telegram message: image on top, full signal text as the caption.
+    # (Telegram caption limit is 1024 chars; the signal body is well under that.)
     if shot and os.path.exists(shot):
-        ok_img = tg.send_photo(shot, caption=f"{sig.get('direction','')} {sig.get('entry','')}", dry_run=dry_run)
-    elif shot:
+        caption = f"{title}\n\n{body}"
+        return bool(tg.send_photo(shot, caption=caption, dry_run=dry_run))
+    if shot:
         print(f"[warn] screenshot not found: {shot}", file=sys.stderr)
-    return bool(ok_txt and ok_img)
+    # No screenshot -> fall back to a text-only alert.
+    return bool(tg.send_alert(title, body, dry_run=dry_run))
 
 
 if __name__ == "__main__":

@@ -39,8 +39,12 @@ If any field is unknown, `WAIT`.
 1. Use real-volume feed, preferably `PEPPERSTONE:XAUUSD` for gold.
 2. One strategy per session. No mixed triggers.
 3. Regime first:
-   - `TREND`: prefer SBS or with-trend VWAP pullbacks.
-   - `RANGE`: prefer OFVWAP band fades, VP edges, PAR/LDP sweeps.
+   - `TREND`: prefer with-trend entries (SBS, VWAP pullbacks). **BIDIRECTIONAL OK** — the counter-move / correction IS a
+     tradeable scalp *with a clean closed-candle trigger*: short the corrective leg down (e.g. a VWAP-rejection-from-below, or a
+     momentum break of the lower band) toward the next support, then look for the with-trend long at the pullback bottom.
+     **Scalp the structure both ways.** Caveats: never enter mid-move without a trigger (no chasing the correction mid-air);
+     keep the counter-move tight (TP at the next node/band) and don't hold it into the trend resuming.
+   - `RANGE`: prefer OFVWAP band fades, VP edges, PAR/LDP sweeps (both edges).
    - `CHOP/DEAD`: no trade.
 4. Trade only at a real location: band, VWAP, VP edge/node, PAR edge, BSL/SSL, SBS P5/sequence level.
 5. Trigger must be a closed candle or confirmed indicator label/box. Wick alone is not enough.
@@ -160,28 +164,17 @@ Multiple heavy profiles rendering at once is what crashed the chart (VP-Node "me
 - This applies to every indicator on the `backtest` layout (treat all as exclusive — hide-before-show), which prevents the
   stacking crash that led to separating them in the first place.
 
-### 🔑 READ PROTOCOL — visual-first; pull data only when it prices the trade
-Default read = **`capture_screenshot` then view it** (zoom to the active swing for fine labels). Screenshots are cheap, current,
-and avoid the no-hindsight/future-label problem.
-- ⚠ **Settle delay:** after `indicator_toggle_visibility`, **wait ~4s before `capture_screenshot` (method `cdp`)** — capturing
-  immediately grabs a stale/pre-render frame. (`method: "api"` does NOT return a file — only `cdp` gives a readable path.)
+### 🔑 READ PROTOCOL — IMAGE for each indicator; add DATA where possible
+**Take a screenshot of EVERY committee indicator (image is the baseline read for each — OFVWAP included), and pull DATA on top
+wherever the API provides it.** Data gives exact numbers and validates the image isn't stale.
 
-### 🔑 HYBRID READ — data + screenshot, with a staleness cross-check (use BOTH, not either alone)
-cdp screenshots are sometimes stale (show the previous indicator / old frame). The fix is to **read data AND screenshot and
-cross-check** — data catches a stale frame:
-1. **Data anchor every read:** OFVWAP `study_values` + current-bar `data_get_ohlcv` (exact price). Plus `pine_lines`/`pine_tables`
-   for any line/table-based indicator (reliable).
-2. **Screenshot the indicator** (4s settle), then **validate the frame is fresh:** does its header OHLC / last price match
-   `data_get_ohlcv`? **Match → trust the visual** (profile shape, SBS sequence, PAR/LDP). **Mismatch → STALE → re-capture** (or
-   fall back to data/lines for that indicator). Never act on a frame whose price doesn't match the data.
-3. **Cross-check level vs data:** e.g., SVP POC should sit near where price/volume cluster on OHLCV; SBS P5 near a recent swing.
-   Visual+data agreement = high confidence; disagreement = bad read, re-do.
-This is the standing method: **both reads, every decision** — data for precision + staleness detection, screenshot for the
-visual structure the API can't give. Only pull the DATA API when you need exact numbers to place/manage a trade,
-and only the cheap reads:
-- **Expensive / no-API → ALWAYS visual:** SBS labels (~hundreds), **PAR boxes (~hundreds)**, and the **Volume Profile**
-  (now native **Session Volume Profile HD** — no data API at all). Read sequence / range / profile off the (zoomed) chart.
-- **Cheap + precise → data, only when it matters:** OFVWAP `data_get_study_values` (VWAP/band levels for entry/SL) and the
-  **current bar `data_get_ohlcv`** (exact price for fills/stops).
-- Rule of thumb: **screenshot to SEE the setup (location, is-there-a-signal); data to PRICE it.** Eyeball is fine for "at the
-  band? / sequence resolving?"; exact entry/SL/TP come from OHLCV + OFVWAP values.
+1. **Image for EACH indicator** — hide-before-show → **wait ~4s** → `capture_screenshot --region full` (`cdp`; `method:"api"`
+   returns NO file). Read the visual: OFVWAP VWAP/bands, **SVP HD** POC/VAH/VAL, **SBS** P1–P5/P5, **PAR** range, **LDP** signals.
+2. **Data on top, where it exists:** OFVWAP `data_get_study_values`, price `data_get_ohlcv` / `quote_get`, and `pine_lines` /
+   `pine_tables` for any line/table indicator. SVP HD / heavy profiles have **no data API → image only** (that's fine).
+3. **Staleness check (mandatory):** every screenshot's last price must match `quote_get` / OHLCV. **Match → trust it.
+   Mismatch → STALE → re-capture** (or fall back to data). Never act on a frame whose price doesn't match the data.
+4. **Cross-check:** the visual level should agree with the data (SVP POC near the price/volume cluster; SBS P5 near a recent swing).
+
+**Rule: image = SEE the setup on every indicator; data = PRICE it (exact entry/SL/TP) + confirm the frame is fresh.**
+One indicator visible at a time (hide-before-show) throughout.
